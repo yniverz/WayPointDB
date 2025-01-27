@@ -142,14 +142,37 @@ def get_current_user():
         return User.query.get(session["user_id"])
     return None
 
+# def login_required(f):
+#     """Decorator to ensure the user is logged in (session-based) for HTML routes."""
+#     @wraps(f)
+#     def decorated_function(*args, **kwargs):
+#         if "user_id" not in session:
+#             return redirect(url_for("login"))
+#         return f(*args, **kwargs)
+#     return decorated_function
+
 def login_required(f):
     """Decorator to ensure the user is logged in (session-based) for HTML routes."""
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if "user_id" not in session:
             return redirect(url_for("login"))
+        
+        # Store on Flask's g object so we can inject into templates
+        g.current_user = get_current_user()
+        
         return f(*args, **kwargs)
     return decorated_function
+
+@app.context_processor
+def inject_user():
+    """
+    This context processor runs before every template render.
+    It returns a dict of variables to add to the Jinja context.
+    """
+    return {
+        "current_user": getattr(g, "current_user", None)
+    }
 
 #
 # --- API Key Authentication for the REST Endpoints --- #
@@ -457,7 +480,7 @@ def account():
 
         return redirect(url_for("account"))
 
-    return render_template("account.jinja", user=user)
+    return render_template("account.jinja")
 
 #
 # ----------------- WSGI Entry Point ----------------- #
