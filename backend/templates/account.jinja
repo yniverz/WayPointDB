@@ -1,0 +1,42 @@
+{% extends "layout.jinja" %}
+
+{% block title %}
+    Account
+{% endblock %}
+
+{% block content %}
+    <h2>Account Settings</h2>
+    <p>
+        <strong>Current Email:</strong> {{ user.email }}<br/>
+        <strong>API Key:</strong>
+        {% if user.api_key %}
+            {{ user.api_key }}
+        {% else %}
+            <em>No key generated yet</em>
+        {% endif %}
+    </p>
+
+    <form method="POST" action="{{ url_for('account') }}">
+        <!-- Button to generate a new key -->
+        <button type="submit" name="generate_key" value="1">Generate New API Key</button>
+    </form>
+
+    <hr/>
+
+    <h3>Update Email / Password</h3>
+    <form method="POST" action="{{ url_for('account') }}">
+        <label for="new_email">New Email (optional):</label>
+        <input type="text" id="new_email" name="new_email">
+        <br/><br/>
+
+        <label for="new_password">New Password (optional):</label>
+        <input type="password" id="new_password" name="new_password">
+        <br/><br/>
+
+        <button type="submit" name="update_account" value="1">Update Account</button>
+    </form>
+
+    <p>
+        <a href="{{ url_for('dashboard') }}">Back to Dashboard</a>
+    </p>
+{% endblock %}
