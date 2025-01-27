@@ -2,6 +2,7 @@ import os
 import uuid
 from functools import wraps
 from datetime import datetime
+from flask_restx import reqparse
 
 from flask import (
     Flask,
@@ -179,9 +180,17 @@ gps_model = api.model("GPSData", {
     "speed_accuracy": fields.Float(description="Speed accuracy"),
 })
 
+batch_parser = api.parser()
+batch_parser.add_argument(
+    "api_key",
+    type=str,
+    required=True,
+    help="API key for user authentication",
+    location="args"
+)
+
 batch_gps_model = api.model("BatchGPSData", {
     "gps_data": fields.List(fields.Nested(gps_model), required=True, description="List of GPS data points"),
-    "api_key": fields.String(required=True, description="API key for authentication")
 })
 
 @ns.route("/batch")
@@ -189,7 +198,7 @@ class GPSBatch(Resource):
     def get(self):
         return "Please use POST to submit GPS data", 405
 
-    @api.expect(batch_gps_model)
+    @api.expect(batch_parser, batch_gps_model)
     @api_key_required
     def post(self):
         """Submit batch GPS data (requires a valid API key)."""
