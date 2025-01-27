@@ -1,0 +1,17 @@
+{% extends "layout.jinja" %}
+
+{% block title %}
+    Login
+{% endblock %}
+
+{% block content %}
+    <form method="POST" action="{{ url_for('login') }}">
+        <label for="email">Email:</label>
+        <input type="text" id="email" name="email" required>
+
+        <label for="password">Password:</label>
+        <input type="password" id="password" name="password" required>
+
+        <button type="submit">Log In</button>
+    </form>
+{% endblock %}
