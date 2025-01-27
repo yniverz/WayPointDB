@@ -1,0 +1,4 @@
+Flask
+waitress
+psycopg2
+gunicorn
