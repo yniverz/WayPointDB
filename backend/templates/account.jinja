@@ -7,10 +7,10 @@
 {% block content %}
     <h2>Account Settings</h2>
     <p>
-        <strong>Current Email:</strong> {{ user.email }}<br/>
+        <strong>Current Email:</strong> {{ current_user.email }}<br/>
         <strong>API Key:</strong>
-        {% if user.api_key %}
-            {{ user.api_key }}
+        {% if current_user.api_key %}
+            {{ current_user.api_key }}
         {% else %}
             <em>No key generated yet</em>
         {% endif %}
@@ -35,8 +35,4 @@
 
         <button type="submit" name="update_account" value="1">Update Account</button>
     </form>
-
-    <p>
-        <a href="{{ url_for('dashboard') }}">Back to Dashboard</a>
-    </p>
 {% endblock %}
