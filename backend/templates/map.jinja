@@ -21,6 +21,10 @@
   <div id="map"></div>
 </div>
 
+<p>
+    <a href="{{ url_for('dashboard') }}">Back to Dashboard</a>
+</p>
+
 <script>
   var map;
   var polylineLayer;
@@ -29,7 +33,7 @@
 
   function initMap() {
     // Create Leaflet map
-    map = L.map('map').setView([0, 0], 10);
+    map = L.map('map').setView([{{ last_point.latitude }}, {{ last_point.longitude }}], 10);
 
     // Add OpenStreetMap tile layer
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {

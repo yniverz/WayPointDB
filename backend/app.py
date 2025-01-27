@@ -297,8 +297,17 @@ def login():
 @login_required
 def map():
     """Displays a Map with a polyline of the user's GPS points."""
+
+    # get the last point based on timestamp for the user
+    user = get_current_user()
+    if not user:
+        return "Unauthorized", 401
     
-    return render_template("map.jinja")
+    last_point = GPSData.query.filter_by(user_id=user.id).order_by(GPSData.timestamp.desc()).first()
+    if not last_point:
+        last_point = {"latitude": 52.516310, "longitude": 13.378208}
+    
+    return render_template("map.jinja", last_point=last_point)
 
 @app.route("/gps_data")
 @login_required
