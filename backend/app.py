@@ -1,11 +1,14 @@
 import os
+import time
 import uuid
+import json
 from functools import wraps
 from datetime import datetime
 from flask_restx import reqparse
 
 from flask import (
     Flask,
+    jsonify,
     render_template,
     request,
     redirect,
@@ -18,6 +21,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_restx import Api, Resource, fields
 from jinja2 import ChoiceLoader, FileSystemLoader
+import psycopg2
 from werkzeug.security import generate_password_hash, check_password_hash
 
 #
@@ -26,7 +30,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
 # Generate a random secret key for session encryption
-app.config["SECRET_KEY"] = uuid.uuid4().hex
+app.config["SECRET_KEY"] = "test" # uuid.uuid4().hex
 
 # Custom Jinja loader to allow .jinja suffix
 class CustomLoader(FileSystemLoader):
@@ -90,6 +94,28 @@ class GPSData(db.Model):
 
     user = db.relationship("User", backref=db.backref("gps_data", lazy=True))
 
+    def to_dict(self):
+        """Return a dictionary representation of this GPSData record."""
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "timestamp": self.timestamp.isoformat() if self.timestamp else None,
+            "latitude": self.latitude,
+            "longitude": self.longitude,
+            "horizontal_accuracy": self.horizontal_accuracy,
+            "altitude": self.altitude,
+            "vertical_accuracy": self.vertical_accuracy,
+            "heading": self.heading,
+            "heading_accuracy": self.heading_accuracy,
+            "speed": self.speed,
+            "speed_accuracy": self.speed_accuracy,
+        }
+    
+    @staticmethod
+    def list_to_json(gps_data_list):
+        """Convert a list of GPSData objects to a JSON string."""
+        return json.dumps([data.to_dict() for data in gps_data_list])
+
 #
 # ----------------- Helpers & Decorators ----------------- #
 #
@@ -138,12 +164,13 @@ def get_user_by_api_key(api_key):
 def api_key_required(f):
     """
     REST endpoints should use this decorator to require an API key.
-    The key must be passed in request header:  X-API-KEY: <value>
+    The API key can be passed as a query parameter: ?api_key=<value>
+    # The key must be passed in request header:  X-API-KEY: <value>
     """
     @wraps(f)
     def decorated(*args, **kwargs):
-        # api_key = request.headers.get("X-API-KEY")
         api_key = flask.request.args.get("api_key")
+        # api_key = request.headers.get("X-API-KEY")
         user = get_user_by_api_key(api_key)
         if not user:
             return {"error": "Invalid or missing API key"}, 401
@@ -159,10 +186,10 @@ def api_key_required(f):
 api = Api(
     app,
     version="1.0",
-    title="GPS Tracker API",
-    description="API documentation for GPS tracking",
-    prefix="/api",
-    doc="/api/docs"
+    title="GPS Tracker API V1",
+    description="API V1 documentation for GPS tracking",
+    prefix="/api/v1",
+    doc="/api/v1/docs"
 )
 
 ns = api.namespace("gps", description="GPS Data operations")
@@ -244,7 +271,7 @@ class GPSBatch(Resource):
 
 @app.route("/")
 def home():
-    """Simple home route. If logged in, show dashboard, else prompt login."""
+    """Simple home route. If logged in, show stuff, else prompt login."""
     user = get_current_user()
     if user:
         return redirect(url_for("dashboard"))
@@ -260,11 +287,108 @@ def login():
         user = User.query.filter_by(email=email).first()
         if user and check_password_hash(user.password, password):
             session["user_id"] = user.id
-            return redirect(url_for("dashboard"))
+            return redirect(url_for("home"))
         else:
             return "Invalid credentials", 401
 
     return render_template("login.jinja")
+
+@app.route("/map")
+@login_required
+def map():
+    """Displays a Map with a polyline of the user's GPS points."""
+    
+    return render_template("map.jinja")
+
+@app.route("/gps_data")
+@login_required
+def get_gps_data():
+    """Fetch GPS data efficiently using psycopg2 for querying."""
+    
+    time0 = time.time()
+
+    # Get bounds from request
+    ne_lat = request.args.get("ne_lat", type=float)
+    ne_lng = request.args.get("ne_lng", type=float)
+    sw_lat = request.args.get("sw_lat", type=float)
+    sw_lng = request.args.get("sw_lng", type=float)
+    zoom = request.args.get("zoom", type=int, default=10)
+
+    if None in [ne_lat, ne_lng, sw_lat, sw_lng]:
+        return jsonify({"error": "Invalid or missing bounds"}), 400
+    
+    time1 = time.time()
+
+    user = get_current_user()  # Uses session authentication
+    if not user:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    time2 = time.time()
+
+    # **Connect to the PostgreSQL database using psycopg2**
+    conn = psycopg2.connect(
+        dbname=DB_NAME,
+        user=DB_USER,
+        password=DB_PASS,
+        host=DB_HOST
+    )
+    cursor = conn.cursor()
+
+    # **Optimized SQL query for fetching points within bounds**
+    query = """
+        SELECT id, user_id, timestamp, latitude, longitude, horizontal_accuracy, 
+               altitude, vertical_accuracy, heading, heading_accuracy, speed, speed_accuracy
+        FROM gps_data
+        WHERE user_id = %s 
+        AND latitude BETWEEN %s AND %s 
+        AND longitude BETWEEN %s AND %s
+        ORDER BY timestamp;
+    """
+    cursor.execute(query, (user.id, sw_lat, ne_lat, sw_lng, ne_lng))
+    rows = cursor.fetchall()
+
+    time3 = time.time()
+
+    # **Convert rows into dictionary format**
+    gps_data = []
+    for row in rows:
+        gps_data.append({
+            "id": row[0],
+            "user_id": row[1],
+            "timestamp": row[2].isoformat() if row[2] else None,
+            "latitude": row[3],
+            "longitude": row[4],
+            "horizontal_accuracy": row[5],
+            "altitude": row[6],
+            "vertical_accuracy": row[7],
+            "heading": row[8],
+            "heading_accuracy": row[9],
+            "speed": row[10],
+            "speed_accuracy": row[11],
+        })
+
+    # **Reduce data if zoomed out to prevent overload**
+    if zoom < 8:  # Example threshold for zoom level
+        filtered_data = []
+        step = max(1, len(gps_data) // 100)  # Keep ~100 points max
+        for i in range(0, len(gps_data), step):
+            filtered_data.append(gps_data[i])
+        gps_data = filtered_data
+
+    time4 = time.time()
+
+    # **Close database connection**
+    cursor.close()
+    conn.close()
+
+    res = jsonify(gps_data)
+
+    time5 = time.time()
+
+    print(f"Time taken: {time5 - time0:.3f}s")
+    print(f"Time breakdown: {time1 - time0:.3f}s, {time2 - time1:.3f}s, {time3 - time2:.3f}s, {time4 - time3:.3f}s, {time5 - time4:.3f}s")
+
+    return res
 
 @app.route("/logout")
 def logout():

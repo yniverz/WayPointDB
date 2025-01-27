@@ -1,0 +1,129 @@
+{% extends "base.jinja" %}
+
+{% block title %}
+    GPS Map
+{% endblock %}
+
+{% block content %}
+
+<!-- Leaflet.js CSS & JS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<style>
+  #map {
+    height: 600px;
+    width: 100%;
+  }
+</style>
+
+<div class="container mt-4">
+  <div id="map"></div>
+</div>
+
+<script>
+  var map;
+  var polylineLayer;
+  var markerLayer;
+  var lastBounds = null;  // Store last bounds to prevent redundant requests
+
+  function initMap() {
+    // Create Leaflet map
+    map = L.map('map').setView([0, 0], 10);
+
+    // Add OpenStreetMap tile layer
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    polylineLayer = L.layerGroup().addTo(map);
+    markerLayer = L.layerGroup().addTo(map);
+
+    // Fetch GPS data when map moves
+    map.on('moveend', fetchGPSData);
+
+    // Initial fetch
+    fetchGPSData();
+  }
+
+  function fetchGPSData() {
+    var bounds = map.getBounds();
+    if (!bounds) return;
+
+    var zoomLevel = map.getZoom();
+    var northEast = bounds.getNorthEast();
+    var southWest = bounds.getSouthWest();
+
+    // Prevent redundant requests for the same area
+    if (lastBounds && lastBounds.equals(bounds)) {
+      return;
+    }
+    lastBounds = bounds;
+
+    var url = `/gps_data?ne_lat=${northEast.lat}&ne_lng=${northEast.lng}&sw_lat=${southWest.lat}&sw_lng=${southWest.lng}&zoom=${zoomLevel}`;
+    
+    fetch(url)
+      .then(response => response.json())
+      .then(data => {
+        updateMap(data);
+      })
+      .catch(error => console.error("Error fetching GPS data:", error));
+  }
+
+  function updateMap(gpsData) {
+    polylineLayer.clearLayers();
+    markerLayer.clearLayers();
+
+    if (gpsData.length === 0) return;
+
+    var coordinates = gpsData.map(record => ({
+      lat: record.latitude,
+      lng: record.longitude,
+      speed: record.speed,
+      altitude: record.altitude,
+      timestamp: record.timestamp
+    }));
+
+    // Create line segments with color-coded speed
+    for (let i = 0; i < coordinates.length - 1; i++) {
+      let speed = coordinates[i].speed || 0;
+      let color = getSpeedColor(speed);
+
+      let segment = L.polyline([coordinates[i], coordinates[i + 1]], { color: color, weight: 4 }).addTo(polylineLayer);
+    }
+
+    // Create markers for each point
+    coordinates.forEach(coord => {
+      let marker = L.circleMarker([coord.lat, coord.lng], {
+        radius: 5,
+        fillColor: "black",
+        color: "white",
+        weight: 1,
+        opacity: 1,
+        fillOpacity: 0.7
+      }).addTo(markerLayer);
+
+      // Bind popup with speed and timestamp
+      marker.bindPopup(`
+        <b>Timestamp:</b> ${coord.timestamp} <br>
+        <b>Speed:</b> ${coord.speed ? coord.speed.toFixed(2) + " m/s" : "N/A"} <br>
+        <b>Altitude:</b> ${coord.altitude ? coord.altitude.toFixed(2) + " m" : "N/A"}
+      `);
+    });
+
+    // Center map on first point if it's the first load
+    if (!lastBounds) {
+      map.setView([coordinates[0].lat, coordinates[0].lng], 12);
+    }
+  }
+
+  function getSpeedColor(speed) {
+    if (speed <= 1) return "blue";  // Slow
+    if (speed <= 5) return "yellow"; // Medium
+    return "red";  // Fast
+  }
+
+  document.addEventListener("DOMContentLoaded", initMap);
+</script>
+
+{% endblock %}
