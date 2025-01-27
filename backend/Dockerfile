@@ -17,4 +17,4 @@ COPY . .
 EXPOSE 8500
 
 # Run Waitress
-CMD ["python", "app.py"]
+CMD ["python","-u", "app.py"]
