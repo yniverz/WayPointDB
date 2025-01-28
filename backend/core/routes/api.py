@@ -7,7 +7,6 @@ from ..utils import api_key_required
 
 # Create a dedicated namespace for the GPS routes
 api_ns = Namespace("gps", description="GPS Data operations")
-# gps_ns = api.namespace("gps", description="GPS Data operations")
 
 gps_model = api_ns.model("GPSData", {
     "timestamp": fields.String(required=True),
@@ -79,6 +78,3 @@ class GPSBatch(Resource):
 
         db.session.commit()
         return {"message": "GPS data added successfully"}, 201
-
-# Finally, add the gps namespace to the main API
-# api.add_namespace(gps_ns, path="gps")

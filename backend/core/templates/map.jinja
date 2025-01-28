@@ -32,8 +32,13 @@ GPS Map
     }
 
     @keyframes spin {
-        0% { transform: translate(-50%, -50%) rotate(0deg); }
-        100% { transform: translate(-50%, -50%) rotate(360deg); }
+        0% {
+            transform: translate(-50%, -50%) rotate(0deg);
+        }
+
+        100% {
+            transform: translate(-50%, -50%) rotate(360deg);
+        }
     }
 </style>
 
@@ -54,20 +59,20 @@ GPS Map
     function initMap() {
         map = L.map('map').setView([{{ last_point.latitude }}, {{ last_point.longitude }}], 10);
 
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; OpenStreetMap contributors'
-        }).addTo(map);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
 
-        polylineLayer = L.layerGroup().addTo(map);
-        markerLayer = L.layerGroup().addTo(map);
+    polylineLayer = L.layerGroup().addTo(map);
+    markerLayer = L.layerGroup().addTo(map);
 
-        map.on('movestart', () => clearTimeout(fetchTimeout));
-        map.on('moveend', () => fetchTimeout = setTimeout(fetchGPSData, delay));
+    map.on('movestart', () => clearTimeout(fetchTimeout));
+    map.on('moveend', () => fetchTimeout = setTimeout(fetchGPSData, delay));
 
-        fetchGPSData();
+    fetchGPSData();
     }
 
-    function fetchGPSData(forced=false) {
+    function fetchGPSData(forced = false) {
         var bounds = map.getBounds();
         if (!bounds) return;
 
@@ -109,23 +114,25 @@ GPS Map
             L.polyline([coordinates[i], coordinates[i + 1]], { color: color, weight: 4 }).addTo(polylineLayer);
         }
 
-        coordinates.forEach(coord => {
-            let marker = L.circleMarker([coord.lat, coord.lng], {
-                radius: 5,
-                fillColor: "black",
-                color: "white",
-                weight: 1,
-                opacity: 1,
-                fillOpacity: 0.7
-            }).addTo(markerLayer);
+        if (map.getZoom() > 16) {
+            coordinates.forEach(coord => {
+                let marker = L.circleMarker([coord.lat, coord.lng], {
+                    radius: 5,
+                    fillColor: "black",
+                    color: "white",
+                    weight: 1,
+                    opacity: 1,
+                    fillOpacity: 0.7
+                }).addTo(markerLayer);
 
-            marker.bindPopup(`
+                marker.bindPopup(`
                 <b>Timestamp:</b> ${coord.timestamp} <br>
                 <b>Speed:</b> ${coord.speed ? (coord.speed * 3.6).toFixed(2) + " km/h" : "N/A"} <br>
                 <b>Altitude:</b> ${coord.altitude ? coord.altitude.toFixed(2) + " m" : "N/A"} <br>
                 <button onclick="deletePoint(${coord.id}, this)">Delete</button>
             `);
-        });
+            });
+        }
 
         if (!lastBounds) {
             map.setView([coordinates[0].lat, coordinates[0].lng], 12);
@@ -133,9 +140,9 @@ GPS Map
     }
 
     function getSpeedColor(speed) {
-        if (speed <= 1) return "blue";
-        if (speed <= 5) return "yellow";
-        return "red";
+        let kph = speed * 3.6;
+        let hue = Math.max(0, Math.min(120 - (kph / 200) * 120, 120));
+        return `hsl(${hue}, 100%, 50%)`;
     }
 
     function deletePoint(pointId, button) {
