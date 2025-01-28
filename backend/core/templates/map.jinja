@@ -115,7 +115,7 @@ GPS Map
             L.polyline([coordinates[i], coordinates[i + 1]], { color: color, weight: 4 }).addTo(polylineLayer);
         }
 
-        if (map.getZoom() > 16) {
+        if (map.getZoom() > 18) {
             coordinates.forEach(coord => {
                 let marker = L.circleMarker([coord.lat, coord.lng], {
                     radius: 5,

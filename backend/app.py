@@ -1,10 +1,12 @@
 from waitress import serve
-from core import create_web_app, create_job_app
+from core.background.jobs import QueryPhotonJob
+from core import web_app, job_manager
 import signal
 import sys
 
-app = create_web_app()
-job_manager = create_job_app()
+# cl = QueryPhotonJob([100, 101, 102, 103, 104, 105, 106, 107, 108, 109])
+# job_manager.add_job(cl)
+
 
 def handle_sigterm(*args):
     """
@@ -27,4 +29,4 @@ if __name__ == "__main__":
     signal.signal(signal.SIGTERM, handle_sigterm)
     signal.signal(signal.SIGINT, handle_sigterm)  # optional: handle ctrl+c in dev
 
-    serve(app, host="0.0.0.0", port=8500)
+    serve(web_app, host="0.0.0.0", port=8500)

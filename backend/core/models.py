@@ -48,7 +48,7 @@ class MonthlyStatistic(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     year = db.Column(db.Integer, nullable=False)
-    month = db.Column(db.Date, nullable=False)
+    month = db.Column(db.Integer, nullable=False)
     total_distance_m = db.Column(db.Float, default=0.0)
     visited_countries = db.Column(db.JSON, default=[])
     visited_cities = db.Column(db.JSON, default=[])
