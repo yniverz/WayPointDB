@@ -5,7 +5,7 @@ from flask import Flask
 
 db = SQLAlchemy()
 migrate = Migrate()
-api = Api(
+api_v1 = Api(
     version="1.0",
     title="GPS Tracker API V1",
     description="API V1 documentation for GPS tracking",
@@ -17,4 +17,4 @@ def init_extensions(app: Flask):
     """Initialize all Flask extensions with the app."""
     db.init_app(app)
     migrate.init_app(app, db)
-    api.init_app(app)
+    api_v1.init_app(app)

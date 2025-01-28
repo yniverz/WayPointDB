@@ -3,7 +3,7 @@ from flask import Flask, g
 from jinja2 import ChoiceLoader, FileSystemLoader
 
 from .config import Config
-from .extensions import init_extensions, db, api
+from .extensions import init_extensions, db, api_v1
 from .routes.web import web_bp
 from .routes.api import api_ns
 from .utils import create_default_user
@@ -30,7 +30,7 @@ def create_app(config_class=Config):
 
     # Register Blueprints
     app.register_blueprint(web_bp, url_prefix="")
-    api.add_namespace(api_ns)
+    api_v1.add_namespace(api_ns)
 
     app.context_processor(inject_user)
 
