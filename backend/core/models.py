@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from werkzeug.security import generate_password_hash, check_password_hash
 from .extensions import db
 
@@ -21,7 +21,7 @@ class GPSData(db.Model):
     """Stores GPS data tied to a user."""
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    timestamp = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    timestamp = db.Column(db.DateTime, nullable=False, default=datetime.now(timezone.utc))
     latitude = db.Column(db.Float, nullable=False)
     longitude = db.Column(db.Float, nullable=False)
     horizontal_accuracy = db.Column(db.Float)
@@ -32,20 +32,25 @@ class GPSData(db.Model):
     speed = db.Column(db.Float)
     speed_accuracy = db.Column(db.Float)
 
+    country = db.Column(db.String(255))
+    city = db.Column(db.String(255))
+    state = db.Column(db.String(255))
+    postal_code = db.Column(db.String(255))
+    street = db.Column(db.String(255))
+    street_number = db.Column(db.String(255))
+
+
     user = db.relationship("User", backref=db.backref("gps_data", lazy=True))
 
-    def to_dict(self):
-        return {
-            "id": self.id,
-            "user_id": self.user_id,
-            "timestamp": self.timestamp.isoformat() if self.timestamp else None,
-            "latitude": self.latitude,
-            "longitude": self.longitude,
-            "horizontal_accuracy": self.horizontal_accuracy,
-            "altitude": self.altitude,
-            "vertical_accuracy": self.vertical_accuracy,
-            "heading": self.heading,
-            "heading_accuracy": self.heading_accuracy,
-            "speed": self.speed,
-            "speed_accuracy": self.speed_accuracy,
-        }
+
+class MonthlyStatistic(db.Model):
+    """Stores monthly statistics for a user."""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    year = db.Column(db.Integer, nullable=False)
+    month = db.Column(db.Date, nullable=False)
+    total_distance_m = db.Column(db.Float, default=0.0)
+    visited_countries = db.Column(db.JSON, default=[])
+    visited_cities = db.Column(db.JSON, default=[])
+
+    user = db.relationship("User", backref=db.backref("monthly_stats", lazy=True))
