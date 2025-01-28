@@ -1,3 +1,5 @@
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from flask import Flask
 import requests
 import time
 import geopy.distance
@@ -7,12 +9,16 @@ from . import Config
 from ..extensions import db
 
 
+
 class Job:
+    PARAMETERS: dict[str, object] = {}
+
     def __init__(self):
         """
         Initialize the job with the default configuration.
         """
         self.config = Config
+        self.app: Flask = None
         self.start_time = None
         self.progress = 0 # 0-1
         self.running = False
@@ -21,6 +27,9 @@ class Job:
 
     def set_config(self, config: Config):
         self.config = config
+
+    def set_web_app(self, app: Flask):
+        self.app = app
 
     def run(self):
         """
@@ -40,108 +49,152 @@ class Job:
 
 
 
+
+
+
+
+# class QueryPhotonJob(Job):
+#     def __init__(self):
+#         super().__init__()
+#         self.point_ids = []
+    
+#     def do_request(self, lat, lon):
+#         return requests.get(
+#             f"{self.config.PHOTON_SERVER_HOST}/reverse?lang=en&lat={lat}&lon={lon}",
+#             headers={"X-Api-Key": self.config.PHOTON_SERVER_API_KEY}
+#         )
+    
+#     def do_with_point(self, point_id):
+#         with self.app.app_context():
+#             point: GPSData = GPSData.query.get(point_id)
+
+#             if not point:
+#                 return
+            
+#             response = self.do_request(point.latitude, point.longitude)
+#             data = response.json()
+#             if data and "features" in data and data["features"]:
+#                 feature = data["features"][0]
+#                 point.country = feature["properties"].get("country")
+#                 point.city = feature["properties"].get("city")
+#                 point.state = feature["properties"].get("state")
+#                 point.postal_code = feature["properties"].get("postcode")
+#                 point.street = feature["properties"].get("street")
+#                 point.street_number = feature["properties"].get("housenumber")
+#                 db.session.commit()
+    
+#     def run(self):
+#         total_count = len(self.point_ids)
+#         if total_count == 0:
+#             self.done = True
+#             return
+
+#         with ThreadPoolExecutor(max_workers=int(self.config.BACKGROUND_MAX_THREADS_PER_JOB)) as executor:
+#             future_to_point = {executor.submit(self.do_with_point, point_id): point_id for point_id in self.point_ids}
+#             completed_count = 0
+#             for future in as_completed(future_to_point):
+#                 completed_count += 1
+#                 self.progress = completed_count / total_count
+#                 future.result()  # Raise exceptions if any occurred
+        
+#         self.done = True
+
 class QueryPhotonJob(Job):
-    def __init__(self, point_ids: list[int]):
+    def __init__(self):
         super().__init__()
-        self.point_ids = point_ids
+        self.point_ids = []
     
     def do_request(self, lat, lon):
-        return requests.get(
-            f"{self.config.PHOTON_SERVER_HOST}/reverse?lang=en&lat={lat}&lon={lon}",
+
+        url = f"http{'s' if self.config.PHOTON_SERVER_HTTPS else ''}://{self.config.PHOTON_SERVER_HOST}/reverse?lang=en&lat={lat}&lon={lon}"
+        print(url)
+        print(self.config.PHOTON_SERVER_API_KEY)
+        res = requests.get(
+            url,
             headers={"X-Api-Key": self.config.PHOTON_SERVER_API_KEY}
         )
+
+        print(res)
+        return res
+    
+    
+    def do_with_point(self, point: GPSData):
+        response = self.do_request(point.latitude, point.longitude)
+
+        data = response.json()
+        if data and "features" in data:
+            feature: dict[str, dict] = data["features"][0]
+            point.country = feature["properties"].get("country")
+            point.city = feature["properties"].get("city")
+            point.state = feature["properties"].get("state")
+            point.postal_code = feature["properties"].get("postcode")
+            point.street = feature["properties"].get("street")
+            point.street_number = feature["properties"].get("housenumber")
+            db.session.commit()
 
     def run(self):
         total_count = len(self.point_ids)
         i = 0
         for point_id in self.point_ids:
+            if self.stop_requested:
+                break
+
             point: GPSData = GPSData.query.get(point_id)
             if not point:
                 continue
 
-            response = self.do_request(point.latitude, point.longitude)
-
-            class nil:
-                pass
-                # {
-                #     "features": [
-                #         {
-                #             "geometry": {
-                #                 "coordinates": [9.998645,51.9982968],
-                #                 "type":"Point"
-                #             },
-                #             "type":"Feature",
-                #             "properties": {
-                #                 "osm_id":693697564,
-                #                 "country":"Germany",
-                #                 "city":"Lamspringe",
-                #                 "countrycode":"DE",
-                #                 "postcode":"31195",
-                #                 "county":"Landkreis Hildesheim",
-                #                 "type":"house",
-                #                 "osm_type":"N",
-                #                 "osm_key":"tourism",
-                #                 "street":"Evensener Dorfstraße",
-                #                 "district":"Sehlem",
-                #                 "osm_value":"information",
-                #                 "name":"Geographischer Punkt",
-                #                 "state":"Lower Saxony"
-                #             }
-                #         }
-                #     ],
-                #     "type":"FeatureCollection"
-                # }
-
-                # {
-                #     "features":[{
-                #         "geometry":{
-                #             "coordinates":[--,--],
-                #             "type":"Point"
-                #         },
-                #         "type":"Feature",
-                #         "properties":{
-                #             "osm_id":548867164,
-                #             "extent":[--,--,--,--],
-                #             "country":"Germany",
-                #             "city":"--",
-                #             "countrycode":"DE",
-                #             "postcode":"--",
-                #             "locality":"--",
-                #             "county":"--",
-                #             "type":"house",
-                #             "osm_type":"W",
-                #             "osm_key":"building",
-                #             "housenumber":"--",
-                #             "street":"--",
-                #             "district":"--",
-                #             "osm_value":"residential",
-                #             "state":"--"
-                #         }
-                #     }],
-                #     "type":"FeatureCollection"
-                # }
-
-            data = response.json()
-            if data and "features" in data:
-                feature: dict[str, dict] = data["features"][0]
-                point.country = feature["properties"].get("country")
-                point.city = feature["properties"].get("city")
-                point.state = feature["properties"].get("state")
-                point.postal_code = feature["properties"].get("postcode")
-                point.street = feature["properties"].get("street")
-                point.street_number = feature["properties"].get("housenumber")
-                db.session.commit()
-
+            self.do_with_point(point)
+            
             i += 1
             self.progress = i / total_count
 
         self.done = True
 
 
-class GenerateFullStatisticsJob(Job):
-    def __init__(self, user_id: int):
+
+class PhotonFullJob(QueryPhotonJob):
+    PARAMETERS = {
+        "user": User
+    }
+
+    def __init__(self, user: User):
         super().__init__()
-        self.user_id = user_id
+        self.user_id = user.id
+
+    def run(self):
+        points = GPSData.query.filter_by(user_id=self.user_id).all()
+        point_ids = [point.id for point in points]
+        self.point_ids = point_ids
+        super().run()
+
+class PhotonFillJob(QueryPhotonJob):
+    PARAMETERS = {
+        "user": User
+    }
+
+    def __init__(self, user: User):
+        super().__init__()
+        self.user_id = user.id
+
+    def run(self):
+        points = GPSData.query.filter_by(user_id=self.user_id, country=None).all()
+        point_ids = [point.id for point in points]
+        self.point_ids = point_ids
+        super().run()
+
+
+
+
+
+
+class GenerateFullStatisticsJob(Job):
+    PARAMETERS = {
+        "user": User
+    }
+
+    def __init__(self, user: User):
+        super().__init__()
+        self.user_id = user.id
 
     def get_distance(self, point1: GPSData, point2: GPSData):
         coords1 = (point1.latitude, point1.longitude)
@@ -168,6 +221,9 @@ class GenerateFullStatisticsJob(Job):
         monthly_stats: dict[str, MonthlyStatistic] = {}
         total_count = len(gps_data)
         for data in gps_data:
+            if self.stop_requested:
+                break
+
             key = f"{data.timestamp.year}-{data.timestamp.month}"
             if key not in monthly_stats:
                 monthly_stats[key] = MonthlyStatistic(
@@ -201,6 +257,9 @@ class GenerateFullStatisticsJob(Job):
         i = 0
         total_count = len(monthly_stats)
         for stat in monthly_stats.values():
+            if self.stop_requested:
+                break
+
             db.session.add(stat)
             self.progress = 0.5 + (i / total_count) / 2
 
@@ -210,3 +269,14 @@ class GenerateFullStatisticsJob(Job):
         db.session.commit()
 
         self.done = True
+
+
+
+
+JOB_TYPES: dict[str, Job] = {
+    "full_stats": GenerateFullStatisticsJob,
+}
+
+if len(Config.PHOTON_SERVER_HOST) != 0:
+    JOB_TYPES["photon_full"] = PhotonFullJob
+    JOB_TYPES["photon_fill"] = PhotonFillJob

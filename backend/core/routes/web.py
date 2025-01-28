@@ -8,7 +8,7 @@ from flask import (
 )
 from flask.views import MethodView
 
-from ..background.jobs import GenerateFullStatisticsJob
+from ..background.jobs import JOB_TYPES, GenerateFullStatisticsJob
 from ..background import job_manager
 from ..models import MonthlyStatistic, User, GPSData, db
 from ..utils import login_required, get_current_user
@@ -56,7 +56,35 @@ class JobsView(MethodView):
     def get(self):
         """Example protected dashboard."""
 
-        return render_template("jobs.jinja", jobs = job_manager.get_jobs())
+        return render_template("jobs.jinja", jobs=job_manager.get_jobs(), time_now=time.time(), photon_active=len(Config.PHOTON_SERVER_HOST) != 0)
+    
+    def post(self):
+
+        job_name = request.form.get("jobName")
+
+        if job_name not in JOB_TYPES:
+            return "Invalid job name", 405
+        
+        
+        job = JOB_TYPES[job_name]
+
+        for param in job.PARAMETERS:
+            if param == "user":
+                continue
+
+            if param not in request.form:
+                return f"Missing parameter: {param}", 401
+        
+        needed_params = set(job.PARAMETERS) - {"user"}
+            
+        job_instance = job(user=get_current_user(), **{param: request.form[param] for param in needed_params})
+        
+        job_manager.add_job(job_instance)
+
+        return redirect(url_for("web.jobs"))
+
+
+
     
 class StatsView(MethodView):
     decorators = [login_required]
@@ -278,7 +306,7 @@ class AccountView(MethodView):
 
 # Register the class-based views with the Blueprint
 web_bp.add_url_rule("/", view_func=HomeView.as_view("home"))
-web_bp.add_url_rule("/jobs", view_func=JobsView.as_view("jobs"))
+web_bp.add_url_rule("/jobs", view_func=JobsView.as_view("jobs"), methods=["GET", "POST"])
 web_bp.add_url_rule("/login", view_func=LoginView.as_view("login"), methods=["GET", "POST"])
 web_bp.add_url_rule("/logout", view_func=LogoutView.as_view("logout"))
 web_bp.add_url_rule("/dashboard", view_func=DashboardView.as_view("dashboard"))
