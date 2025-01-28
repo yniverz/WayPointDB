@@ -4,8 +4,6 @@ import uuid
 import json
 from functools import wraps
 from datetime import datetime
-from flask_restx import reqparse
-from rdp import rdp
 from flask import (
     Flask,
     jsonify,
@@ -407,28 +405,6 @@ def get_gps_data():
             filtered_data.append(gps_data[i])
         gps_data = filtered_data
 
-    # if zoom < 12:  # Example threshold for zoom level
-    #     # Convert to (lat, lng) tuples for RDP processing
-    #     path = [(point["latitude"], point["longitude"]) for point in gps_data]
-        
-    #     # Apply RDP algorithm with a simplification tolerance
-    #     simplified_path = rdp(path, epsilon=0.0005)  # Adjust epsilon for more/less simplification
-
-    #     # Map back to the original dictionary format
-    #     simplified_data = []
-    #     for lat, lng in simplified_path:
-    #         for point in gps_data:
-    #             if point["latitude"] == lat and point["longitude"] == lng:
-    #                 simplified_data.append(point)
-    #                 break  # Avoid duplicates
-        
-    #     # If still too many points, downsample further
-    #     if len(simplified_data) > 200:
-    #         step = max(1, len(simplified_data) // 200)
-    #         gps_data = simplified_data[::step]
-    #     else:
-    #         gps_data = simplified_data
-
     time4 = time.time()
 
     # **Close database connection**
@@ -443,6 +419,28 @@ def get_gps_data():
     print(f"Time breakdown: {time1 - time0:.3f}s, {time2 - time1:.3f}s, {time3 - time2:.3f}s, {time4 - time3:.3f}s, {time5 - time4:.3f}s")
 
     return res
+
+@app.route("/delete_point", methods=["DELETE"])
+@login_required
+def delete_point():
+    """Delete a GPS point by ID."""
+    user = get_current_user()
+    if not user:
+        return "Unauthorized", 401
+
+    # get Query String Parameter "id"
+    point_id = request.args.get("id")
+    if not point_id:
+        return "Missing point_id", 400
+
+    point = GPSData.query.filter_by(id=point_id, user_id=user.id).first()
+    if not point:
+        return "Point not found", 404
+
+    db.session.delete(point)
+    db.session.commit()
+
+    return "OK", 200
 
 @app.route("/logout")
 def logout():
