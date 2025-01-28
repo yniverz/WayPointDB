@@ -5,7 +5,7 @@ import json
 from functools import wraps
 from datetime import datetime
 from flask_restx import reqparse
-
+from rdp import rdp
 from flask import (
     Flask,
     jsonify,
@@ -385,27 +385,49 @@ def get_gps_data():
     gps_data = []
     for row in rows:
         gps_data.append({
-            "id": row[0],
-            "user_id": row[1],
-            "timestamp": row[2].isoformat() if row[2] else None,
-            "latitude": row[3],
-            "longitude": row[4],
-            "horizontal_accuracy": row[5],
-            "altitude": row[6],
-            "vertical_accuracy": row[7],
-            "heading": row[8],
-            "heading_accuracy": row[9],
-            "speed": row[10],
-            "speed_accuracy": row[11],
+            "id": row[0], # id
+            "uid": row[1], # user_id
+            "t": row[2].isoformat() if row[2] else None, # timestamp
+            "lat": row[3], # latitude
+            "lon": row[4], # longitude
+            "ha": row[5], # horizontal_accuracy
+            "a": row[6], # altitude
+            "va": row[7], # vertical_accuracy
+            "h": row[8], # heading
+            "ha": row[9], # heading_accuracy
+            "s": row[10], # speed
+            "sa": row[11], # speed_accuracy
         })
 
     # **Reduce data if zoomed out to prevent overload**
-    if zoom < 8:  # Example threshold for zoom level
+    if zoom < 12:  # Example threshold for zoom level
         filtered_data = []
-        step = max(1, len(gps_data) // 100)  # Keep ~100 points max
+        step = max(1, len(gps_data) // 200)  # Keep ~200 points max
         for i in range(0, len(gps_data), step):
             filtered_data.append(gps_data[i])
         gps_data = filtered_data
+
+    # if zoom < 12:  # Example threshold for zoom level
+    #     # Convert to (lat, lng) tuples for RDP processing
+    #     path = [(point["latitude"], point["longitude"]) for point in gps_data]
+        
+    #     # Apply RDP algorithm with a simplification tolerance
+    #     simplified_path = rdp(path, epsilon=0.0005)  # Adjust epsilon for more/less simplification
+
+    #     # Map back to the original dictionary format
+    #     simplified_data = []
+    #     for lat, lng in simplified_path:
+    #         for point in gps_data:
+    #             if point["latitude"] == lat and point["longitude"] == lng:
+    #                 simplified_data.append(point)
+    #                 break  # Avoid duplicates
+        
+    #     # If still too many points, downsample further
+    #     if len(simplified_data) > 200:
+    #         step = max(1, len(simplified_data) // 200)
+    #         gps_data = simplified_data[::step]
+    #     else:
+    #         gps_data = simplified_data
 
     time4 = time.time()
 
