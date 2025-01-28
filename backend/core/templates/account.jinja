@@ -16,7 +16,7 @@
         {% endif %}
     </p>
 
-    <form method="POST" action="{{ url_for('account') }}">
+    <form method="POST" action="{{ url_for('web.account') }}">
         <!-- Button to generate a new key -->
         <button type="submit" name="generate_key" value="1">Generate New API Key</button>
     </form>
@@ -24,7 +24,7 @@
     <hr/>
 
     <h3>Update Email / Password</h3>
-    <form method="POST" action="{{ url_for('account') }}">
+    <form method="POST" action="{{ url_for('web.account') }}">
         <label for="new_email">New Email (optional):</label>
         <input type="text" id="new_email" name="new_email">
         <br/><br/>
