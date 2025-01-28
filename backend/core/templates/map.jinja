@@ -32,17 +32,35 @@ GPS Map
     }
 
     @keyframes spin {
-        0% {
-            transform: translate(-50%, -50%) rotate(0deg);
-        }
+        0% { transform: translate(-50%, -50%) rotate(0deg); }
+        100% { transform: translate(-50%, -50%) rotate(360deg); }
+    }
 
-        100% {
-            transform: translate(-50%, -50%) rotate(360deg);
-        }
+    .date-selector {
+        margin-bottom: 10px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+        justify-content: center;
+    }
+    .date-selector button, .date-selector input {
+        flex: 1 1 auto;
+        min-width: 100px;
     }
 </style>
 
 <div class="container mt-4">
+    <div class="date-selector">
+        <button onclick="adjustDate(-1)">&lt;&lt;</button>
+        <div><input type="date" id="start-date"> to <input type="date" id="end-date"></div>
+        <button onclick="adjustDate(1)">&gt;&gt;</button>
+        <button onclick="setDateRange('today')">Today</button>
+        <button onclick="setDateRange('yesterday')">Yesterday</button>
+        <button onclick="setDateRange('last_week')">Last Week</button>
+        <button onclick="setDateRange('last_month')">Last Month</button>
+        <button onclick="setDateRange('all')">All</button>
+    </div>
     <div id="map">
         <div id="loading-spinner" class="loading-spinner"></div>
     </div>
@@ -59,18 +77,25 @@ GPS Map
     function initMap() {
         map = L.map('map').setView([{{ last_point.latitude }}, {{ last_point.longitude }}], 10);
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors',
-        maxZoom: 19,
-    }).addTo(map);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors',
+            maxZoom: 19,
+        }).addTo(map);
 
-    polylineLayer = L.layerGroup().addTo(map);
-    markerLayer = L.layerGroup().addTo(map);
+        polylineLayer = L.layerGroup().addTo(map);
+        markerLayer = L.layerGroup().addTo(map);
 
-    map.on('movestart', () => clearTimeout(fetchTimeout));
-    map.on('moveend', () => fetchTimeout = setTimeout(fetchGPSData, delay));
+        map.on('movestart', () => clearTimeout(fetchTimeout));
+        map.on('moveend', () => fetchTimeout = setTimeout(fetchGPSData, delay));
 
-    fetchGPSData();
+        loadDateFromURL()
+    }
+
+    function updateURLParams(startDate, endDate) {
+        const params = new URLSearchParams(window.location.search);
+        params.set('start_date', startDate);
+        params.set('end_date', endDate);
+        window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
     }
 
     function fetchGPSData(forced = false) {
@@ -84,15 +109,28 @@ GPS Map
         if (!forced && lastBounds && lastBounds.equals(bounds)) return;
         lastBounds = bounds;
 
-        var url = `/gps_data?ne_lat=${northEast.lat}&ne_lng=${northEast.lng}&sw_lat=${southWest.lat}&sw_lng=${southWest.lng}&zoom=${zoomLevel}`;
-
         document.getElementById("loading-spinner").style.display = "block";
 
-        fetch(url)
-            .then(response => response.json())
-            .then(data => updateMap(data))
-            .catch(error => console.error("Error fetching GPS data:", error))
-            .finally(() => document.getElementById("loading-spinner").style.display = "none");
+        let startDate = document.getElementById("start-date").value;
+        let endDate = document.getElementById("end-date").value;
+
+        fetch("", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                ne_lat: northEast.lat,
+                ne_lng: northEast.lng,
+                sw_lat: southWest.lat,
+                sw_lng: southWest.lng,
+                zoom: zoomLevel,
+                start_date: startDate,
+                end_date: endDate
+            })
+        })
+        .then(response => response.json())
+        .then(data => updateMap(data))
+        .catch(error => console.error("Error fetching GPS data:", error))
+        .finally(() => document.getElementById("loading-spinner").style.display = "none");
     }
 
     function updateMap(gpsData) {
@@ -115,7 +153,7 @@ GPS Map
             L.polyline([coordinates[i], coordinates[i + 1]], { color: color, weight: 4 }).addTo(polylineLayer);
         }
 
-        if (map.getZoom() > 18) {
+        if (map.getZoom() > 18 || coordinates.length < 500) {
             coordinates.forEach(coord => {
                 let marker = L.circleMarker([coord.lat, coord.lng], {
                     radius: 5,
@@ -127,17 +165,42 @@ GPS Map
                 }).addTo(markerLayer);
 
                 marker.bindPopup(`
-                <b>Timestamp:</b> ${coord.timestamp} <br>
-                <b>Speed:</b> ${coord.speed ? (coord.speed * 3.6).toFixed(2) + " km/h" : "N/A"} <br>
-                <b>Altitude:</b> ${coord.altitude ? coord.altitude.toFixed(2) + " m" : "N/A"} <br>
-                <button onclick="deletePoint(${coord.id}, this)">Delete</button>
-            `);
+                    <b>Timestamp:</b> ${coord.timestamp} <br>
+                    <b>Speed:</b> ${coord.speed ? (coord.speed * 3.6).toFixed(2) + " km/h" : "N/A"} <br>
+                    <b>Altitude:</b> ${coord.altitude ? coord.altitude.toFixed(2) + " m" : "N/A"} <br>
+                    <button onclick="deletePoint(${coord.id}, this)">Delete</button>
+                    <button onclick="setDateToPoint('${coord.timestamp}')">Set Date</button>
+                `);
             });
         }
+    }
 
-        if (!lastBounds) {
-            map.setView([coordinates[0].lat, coordinates[0].lng], 12);
-        }
+    function adjustDate(days) {
+        let startDateInput = document.getElementById("start-date");
+        let endDateInput = document.getElementById("end-date");
+        
+        let startDate = new Date(startDateInput.value);
+        let endDate = new Date(endDateInput.value);
+        
+        startDate.setDate(startDate.getDate() + days);
+        endDate.setDate(endDate.getDate() + days);
+        
+        startDateInput.value = startDate.toISOString().split('T')[0];
+        endDateInput.value = endDate.toISOString().split('T')[0];
+        
+        updateURLParams(startDateInput.value, endDateInput.value);
+        fetchGPSData(true);
+    }
+
+    function setDateToPoint(timestamp) {
+        let date = new Date(timestamp);
+        let formattedDate = date.toISOString().split('T')[0];
+
+        document.getElementById("start-date").value = formattedDate;
+        document.getElementById("end-date").value = formattedDate;
+
+        updateURLParams(formattedDate, formattedDate);
+        fetchGPSData(true);
     }
 
     function getSpeedColor(speed) {
@@ -147,10 +210,9 @@ GPS Map
     }
 
     function deletePoint(pointId, button) {
-        fetch(`/delete_point?id=${pointId}`, { method: 'DELETE' })
+        fetch(`/map?id=${pointId}`, { method: 'DELETE' })
             .then(response => {
                 if (response.ok) {
-                    // remove all popups
                     map.closePopup();
                     fetchGPSData(true);
                 } else {
@@ -159,6 +221,53 @@ GPS Map
             })
             .catch(error => console.error("Error deleting point:", error));
     }
+
+    function setDateRange(range) {
+        let today = new Date();
+        let startDate, endDate;
+
+        if (range === 'today') {
+            startDate = endDate = today;
+        } else if (range === 'yesterday') {
+            today.setDate(today.getDate() - 1);
+            startDate = endDate = today;
+        } else if (range === 'last_week') {
+            startDate = new Date(today);
+            startDate.setDate(today.getDate() - 7);
+            endDate = today;
+        } else if (range === 'last_month') {
+            startDate = new Date(today);
+            startDate.setMonth(today.getMonth() - 1);
+            endDate = today;
+        } else if (range === 'all') {
+            startDate = new Date(0);
+            endDate = today;
+        }
+
+        startDate = startDate.toISOString().split('T')[0];
+        endDate = endDate.toISOString().split('T')[0];
+
+        document.getElementById("start-date").value = startDate;
+        document.getElementById("end-date").value = endDate;
+
+        updateURLParams(startDate, endDate);
+        fetchGPSData(true);
+    }
+
+    function loadDateFromURL() {
+        const params = new URLSearchParams(window.location.search);
+        const startDate = params.get('start_date');
+        const endDate = params.get('end_date');
+
+        if (startDate && endDate) {
+            document.getElementById("start-date").value = startDate;
+            document.getElementById("end-date").value = endDate;
+            fetchGPSData(true);
+        } else {
+            setDateRange('today');
+        }
+    }
+
 
     document.addEventListener("DOMContentLoaded", initMap);
 </script>

@@ -108,7 +108,6 @@ class QueryPhotonJob(Job):
 
         url = f"http{'s' if self.config.PHOTON_SERVER_HTTPS else ''}://{self.config.PHOTON_SERVER_HOST}/reverse?lang=en&lat={lat}&lon={lon}"
         print(url)
-        print(self.config.PHOTON_SERVER_API_KEY)
         res = requests.get(
             url,
             headers={"X-Api-Key": self.config.PHOTON_SERVER_API_KEY}
@@ -122,19 +121,15 @@ class QueryPhotonJob(Job):
         response = self.do_request(point.latitude, point.longitude)
 
         data = response.json()
-        if data and "features" in data:
-            feature: dict[str, dict] = data["features"][0]
-            point.country = feature["properties"].get("country")
-            point.city = feature["properties"].get("city")
-            point.state = feature["properties"].get("state")
-            point.postal_code = feature["properties"].get("postcode")
-            point.street = feature["properties"].get("street")
-            point.street_number = feature["properties"].get("housenumber")
-            db.session.commit()
+
+        return (point.id, data)
 
     def run(self):
+        buffer_dump_interval = 100
+
         total_count = len(self.point_ids)
         i = 0
+        buffer: list[tuple[str, dict]] = []
         for point_id in self.point_ids:
             if self.stop_requested:
                 break
@@ -143,10 +138,25 @@ class QueryPhotonJob(Job):
             if not point:
                 continue
 
-            self.do_with_point(point)
+            buffer.append(self.do_with_point(point))
             
             i += 1
             self.progress = i / total_count
+
+            if len(buffer) >= buffer_dump_interval:
+                while buffer:
+                    point_id, data = buffer.pop(0)
+                    if data and "features" in data:
+                        feature: dict[str, dict] = data["features"][0]
+                        point = GPSData.query.get(point_id)
+                        point.country = feature["properties"].get("country")
+                        point.city = feature["properties"].get("city")
+                        point.state = feature["properties"].get("state")
+                        point.postal_code = feature["properties"].get("postcode")
+                        point.street = feature["properties"].get("street")
+                        point.street_number = feature["properties"].get("housenumber")
+                        
+                db.session.commit()
 
         self.done = True
 

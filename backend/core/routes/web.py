@@ -1,4 +1,5 @@
 from collections import defaultdict
+from datetime import datetime
 import uuid
 import time
 import psycopg2
@@ -21,7 +22,7 @@ class HomeView(MethodView):
         """Simple home route."""
         user = get_current_user()
         if user:
-            return redirect(url_for("web.dashboard"))
+            return redirect(url_for("web.map"))
         return redirect(url_for("web.login"))
 
 class LoginView(MethodView):
@@ -43,12 +44,12 @@ class LogoutView(MethodView):
         session.clear()
         return redirect(url_for("web.login"))
 
-class DashboardView(MethodView):
-    decorators = [login_required]
+# class DashboardView(MethodView):
+#     decorators = [login_required]
 
-    def get(self):
-        """Example protected dashboard."""
-        return render_template("dashboard.jinja")
+#     def get(self):
+#         """Example protected dashboard."""
+#         return render_template("dashboard.jinja")
     
 class JobsView(MethodView):
     decorators = [login_required]
@@ -125,7 +126,7 @@ class StatsView(MethodView):
 
         # Convert sets to lists for JSON serialization; also convert meters -> km
         stats_by_year_processed = {}
-        for year, data in sorted(stats_by_year.items()):
+        for year, data in sorted(stats_by_year.items(), reverse=True):
             all_cities.update(data["cities"])
             all_countries.update(data["countries"])
 
@@ -148,7 +149,7 @@ class StatsView(MethodView):
             total_cities=list(all_cities),
             total_countries=list(all_countries),
         )
-
+    
 class MapView(MethodView):
     decorators = [login_required]
 
@@ -159,21 +160,26 @@ class MapView(MethodView):
             # Some default coords
             last_point = {"latitude": 52.516310, "longitude": 13.378208}
         return render_template("map.jinja", last_point=last_point)
-
-class GPSDataView(MethodView):
-    decorators = [login_required]
-
-    def get(self):
+    
+    def post(self):
         """Fetch GPS data using psycopg2 and return JSON."""
 
-        ne_lat = request.args.get("ne_lat", type=float)
-        ne_lng = request.args.get("ne_lng", type=float)
-        sw_lat = request.args.get("sw_lat", type=float)
-        sw_lng = request.args.get("sw_lng", type=float)
-        zoom = request.args.get("zoom", type=int, default=10)
+        data: dict = request.json
+        ne_lat = data.get("ne_lat")
+        ne_lng = data.get("ne_lng")
+        sw_lat = data.get("sw_lat")
+        sw_lng = data.get("sw_lng")
+        zoom = data.get("zoom", 10)
+        start_date = data.get("start_date")
+        end_date = data.get("end_date")
 
         if None in [ne_lat, ne_lng, sw_lat, sw_lng]:
             return jsonify({"error": "Invalid or missing bounds"}), 400
+        
+        ne_lat += 0.01
+        ne_lng += 0.01
+        sw_lat -= 0.01
+        sw_lng -= 0.01
 
         user = get_current_user()
         if not user:
@@ -189,10 +195,46 @@ class GPSDataView(MethodView):
         )
         cursor = conn.cursor()
 
+        max_points_count = 2000
+        date_filter = ""
 
-        max_points_count = 1000
+        if end_date:
+            end_date = end_date + " 23:59:59"
+        
+        if start_date and end_date:
+            date_filter = f"AND timestamp BETWEEN '{start_date}' AND '{end_date}'"
+        elif start_date:
+            date_filter = f"AND timestamp >= '{start_date}'"
+        elif end_date:
+            date_filter = f"AND timestamp <= '{end_date}'"
 
-        if zoom > 18:
+        # calculate time delta
+        time_delta = 0
+        if start_date and end_date:
+            time_delta = (datetime.fromisoformat(end_date) - datetime.fromisoformat(start_date)).total_seconds()
+        
+        if time_delta != 0 and time_delta < 60 * 60 * 24 * 3:
+            query = f"""
+                WITH filtered_data AS (
+                    SELECT id, user_id, timestamp, latitude, longitude, horizontal_accuracy,
+                        altitude, vertical_accuracy, heading, heading_accuracy, speed, speed_accuracy,
+                        ROW_NUMBER() OVER (ORDER BY timestamp) AS row_num
+                    FROM gps_data
+                    WHERE user_id = {user.id}
+                    {date_filter}
+                ),
+                row_count AS (
+                    SELECT COUNT(*) AS total FROM filtered_data
+                )
+                SELECT id, user_id, timestamp, latitude, longitude, horizontal_accuracy,
+                    altitude, vertical_accuracy, heading, heading_accuracy, speed, speed_accuracy
+                FROM filtered_data
+                WHERE row_num % (SELECT GREATEST(1, total / {max_points_count}) FROM row_count) = 1
+                OR (SELECT total FROM row_count) < {max_points_count}
+                ORDER BY timestamp;
+            """
+
+        elif zoom > 18:
             query = f"""
                 SELECT id, user_id, timestamp, latitude, longitude, horizontal_accuracy,
                     altitude, vertical_accuracy, heading, heading_accuracy, speed, speed_accuracy
@@ -200,6 +242,7 @@ class GPSDataView(MethodView):
                 WHERE user_id = {user.id}
                 AND latitude BETWEEN {sw_lat} AND {ne_lat}
                 AND longitude BETWEEN {sw_lng} AND {ne_lng}
+                {date_filter}
                 ORDER BY timestamp;
             """
         else:
@@ -212,6 +255,7 @@ class GPSDataView(MethodView):
                     WHERE user_id = {user.id}
                     AND latitude BETWEEN {sw_lat} AND {ne_lat}
                     AND longitude BETWEEN {sw_lng} AND {ne_lng}
+                    {date_filter}
                 ),
                 row_count AS (
                     SELECT COUNT(*) AS total FROM filtered_data
@@ -242,7 +286,7 @@ class GPSDataView(MethodView):
                 "a": row[6],
                 "va": row[7],
                 "h": row[8],
-                "ha2": row[9],  # note: changed key since we used "ha" above
+                "ha2": row[9],
                 "s": row[10],
                 "sa": row[11],
             })
@@ -253,9 +297,6 @@ class GPSDataView(MethodView):
         print(f"/gps_data: Time to data: {time2 - time1:.3f}s")
 
         return jsonify(gps_data)
-
-class DeletePointView(MethodView):
-    decorators = [login_required]
 
     def delete(self):
         user = get_current_user()
@@ -280,6 +321,49 @@ class ManageUsersView(MethodView):
             return "Access denied", 403
         users = User.query.all()
         return render_template("manage_users.jinja", users=users)
+    
+    def post(self):
+        user = get_current_user()
+        if not user.is_admin:
+            return "Access denied", 403
+        
+        action = request.form.get("action")
+
+        print(request.form)
+
+        if action == "remove_user":
+            user_id = request.form.get("user_id")
+
+            if not user_id:
+                return "Missing user_id", 400
+            
+            if user_id == user.id:
+                return "Cannot delete yourself", 400
+            
+            user = User.query.filter_by(id=user_id).first()
+            if not user:
+                return "User not found", 404
+            db.session.delete(user)
+            db.session.commit()
+
+        elif action == "add_user":
+            email = request.form.get("email")
+            password = request.form.get("password")
+            is_admin = "is_admin" in request.form
+
+            if not email or not password:
+                return "Missing email or password", 400
+
+            existing_user = User.query.filter_by(email=email).first()
+            if existing_user:
+                return "User already exists", 400
+
+            new_user = User(email=email, is_admin=is_admin)
+            new_user.set_password(password)
+            db.session.add(new_user)
+            db.session.commit()
+
+        return redirect(url_for("web.manage_users"))
 
 class AccountView(MethodView):
     decorators = [login_required]
@@ -309,10 +393,8 @@ web_bp.add_url_rule("/", view_func=HomeView.as_view("home"))
 web_bp.add_url_rule("/jobs", view_func=JobsView.as_view("jobs"), methods=["GET", "POST"])
 web_bp.add_url_rule("/login", view_func=LoginView.as_view("login"), methods=["GET", "POST"])
 web_bp.add_url_rule("/logout", view_func=LogoutView.as_view("logout"))
-web_bp.add_url_rule("/dashboard", view_func=DashboardView.as_view("dashboard"))
-web_bp.add_url_rule("/map", view_func=MapView.as_view("map"))
+# web_bp.add_url_rule("/dashboard", view_func=DashboardView.as_view("dashboard"))
+web_bp.add_url_rule("/map", view_func=MapView.as_view("map"), methods=["GET", "POST", "DELETE"])
 web_bp.add_url_rule("/stats", view_func=StatsView.as_view("stats"))
-web_bp.add_url_rule("/gps_data", view_func=GPSDataView.as_view("gps_data"))
-web_bp.add_url_rule("/delete_point", view_func=DeletePointView.as_view("delete_point"), methods=["DELETE"])
-web_bp.add_url_rule("/manage_users", view_func=ManageUsersView.as_view("manage_users"))
+web_bp.add_url_rule("/manage_users", view_func=ManageUsersView.as_view("manage_users"), methods=["GET", "POST"])
 web_bp.add_url_rule("/account", view_func=AccountView.as_view("account"), methods=["GET", "POST"])
