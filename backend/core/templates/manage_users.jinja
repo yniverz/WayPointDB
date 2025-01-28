@@ -6,12 +6,14 @@
 
 {% block content %}
     <h2>User List</h2>
+
     <table border="1" cellpadding="5" cellspacing="0">
         <thead>
             <tr>
                 <th>ID</th>
                 <th>Email</th>
-                <th>Is Admin?</th>
+                <th>Is Admin</th>
+                <th></th>
             </tr>
         </thead>
         <tbody>
@@ -20,8 +22,40 @@
                     <td>{{ user.id }}</td>
                     <td>{{ user.email }}</td>
                     <td>{{ 'Yes' if user.is_admin else 'No' }}</td>
+                    <td>
+                        {% if current_user.id != user.id %}
+                            <form method="POST" style="display:inline;" onsubmit="return confirmDelete('{{ user.email }}')">
+                                <input type="hidden" name="action" value="remove_user">
+                                <input type="hidden" name="user_id" value="{{ user.id }}">
+                                <button type="submit">Remove</button>
+                            </form>
+                        {% else %}
+                            (Cannot remove self)
+                        {% endif %}
+                    </td>
                 </tr>
             {% endfor %}
         </tbody>
     </table>
+    
+    <form method="POST">
+        <h3>Add User</h3>
+        <input type="hidden" name="action" value="add_user">
+        <label for="email">Email:</label>
+        <input type="email" name="email" id="email" required>
+        <label for="password">Password:</label>
+        <input type="password" name="password" id="password" required>
+        <label for="is_admin">Is Admin:</label>
+        <select name="is_admin" id="is_admin">
+            <option value="false">No</option>
+            <option value="true">Yes</option>
+        </select>
+        <button type="submit">Add User</button>
+    </form>
+
+    <script>
+        function confirmDelete(userEmail) {
+            return confirm("Are you sure you want to remove user " + userEmail + "? This action cannot be undone and will REMOVE ALL GPS DATA associated with this user.");
+        }
+    </script>
 {% endblock %}
