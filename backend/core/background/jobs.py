@@ -9,7 +9,12 @@ from ..extensions import db
 
 class Job:
     def __init__(self):
+        """
+        Initialize the job with the default configuration.
+        """
         self.config = Config
+        self.start_time = None
+        self.progress = 0 # 0-1
         self.running = False
         self.done = False
         self.stop_requested = False
@@ -47,6 +52,8 @@ class QueryPhotonJob(Job):
         )
 
     def run(self):
+        total_count = len(self.point_ids)
+        i = 0
         for point_id in self.point_ids:
             point: GPSData = GPSData.query.get(point_id)
             if not point:
@@ -125,6 +132,9 @@ class QueryPhotonJob(Job):
                 point.street_number = feature["properties"].get("housenumber")
                 db.session.commit()
 
+            i += 1
+            self.progress = i / total_count
+
         self.done = True
 
 
@@ -156,25 +166,47 @@ class GenerateFullStatisticsJob(Job):
         # Create a new MonthlyStatistic object for each month
         i = 0
         monthly_stats: dict[str, MonthlyStatistic] = {}
+        total_count = len(gps_data)
         for data in gps_data:
             key = f"{data.timestamp.year}-{data.timestamp.month}"
             if key not in monthly_stats:
                 monthly_stats[key] = MonthlyStatistic(
                     user_id=user.id,
                     year=data.timestamp.year,
-                    month=data.timestamp.month
+                    month=data.timestamp.month,
+
                 )
                 
             if i > 0:
                 prev = gps_data[i - 1]
                 distance = self.get_distance(prev, data)
+                if monthly_stats[key].total_distance_m is None:
+                    monthly_stats[key].total_distance_m = 0.0
                 monthly_stats[key].total_distance_m += distance
+
+            if data.country:
+                if not monthly_stats[key].visited_countries:
+                    monthly_stats[key].visited_countries = []
+                monthly_stats[key].visited_countries = list(set(monthly_stats[key].visited_countries + [data.country]))
+            if data.city:
+                if not monthly_stats[key].visited_cities:
+                    monthly_stats[key].visited_cities = []
+                monthly_stats[key].visited_cities = list(set(monthly_stats[key].visited_cities + [data.city]))
+
             i += 1
 
+            self.progress = (i / total_count) / 2
+
         # Save the monthly statistics
+        i = 0
+        total_count = len(monthly_stats)
         for stat in monthly_stats.values():
             db.session.add(stat)
-        db.session.commit()
+            self.progress = 0.5 + (i / total_count) / 2
 
+            if i % 100 == 0:
+                db.session.commit()
+
+        db.session.commit()
 
         self.done = True

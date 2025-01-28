@@ -42,8 +42,13 @@ def create_web_app(config_class = Config):
 
     return app
 
-def create_job_app(config_class = Config):
+def create_job_app(config_class = Config, app=None):
     job_manager.set_config(config_class)
+    job_manager.set_web_app(app=app)
     thread = threading.Thread(target=job_manager.run)
     thread.start()
     return job_manager
+
+
+web_app = create_web_app()
+job_manager = create_job_app(app=web_app)

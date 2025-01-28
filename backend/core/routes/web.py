@@ -1,3 +1,4 @@
+from collections import defaultdict
 import uuid
 import time
 import psycopg2
@@ -6,6 +7,9 @@ from flask import (
     session, g, jsonify
 )
 from flask.views import MethodView
+
+from ..background.jobs import GenerateFullStatisticsJob
+from ..background import job_manager
 from ..models import MonthlyStatistic, User, GPSData, db
 from ..utils import login_required, get_current_user
 from ..config import Config
@@ -46,18 +50,76 @@ class DashboardView(MethodView):
         """Example protected dashboard."""
         return render_template("dashboard.jinja")
     
+class JobsView(MethodView):
+    decorators = [login_required]
+
+    def get(self):
+        """Example protected dashboard."""
+
+        return render_template("jobs.jinja", jobs = job_manager.get_jobs())
+    
 class StatsView(MethodView):
     decorators = [login_required]
 
     def get(self):
         user = get_current_user()
-        stats: list[MonthlyStatistic] = MonthlyStatistic.query.filter_by(user_id=user.id).all()
 
-        total_distance_m = 0
+        stats = MonthlyStatistic.query.filter_by(user_id=user.id).all()
+
+        # We'll group stats by year
+        stats_by_year = defaultdict(lambda: {
+            "monthly_distances": [0.0] * 12,  # 12 months
+            "cities": set(),
+            "countries": set(),
+            "total_distance": 0.0
+        })
+
         for stat in stats:
-            total_distance_m += stat.total_distance_m
+            year = stat.year
+            # stat.month is a date; we want the month index [0..11]
+            month_idx = stat.month - 1  # January -> 0, etc.
 
-        return render_template("stats.jinja", total_distance_m=total_distance_m)
+            # Accumulate distances (in meters). We'll convert to km later.
+            stats_by_year[year]["monthly_distances"][month_idx] += stat.total_distance_m
+
+            # Update visited cities / countries (they are stored in JSON columns)
+            if stat.visited_cities:
+                stats_by_year[year]["cities"].update(stat.visited_cities)
+            if stat.visited_countries:
+                stats_by_year[year]["countries"].update(stat.visited_countries)
+
+            # Track total distance in meters for each year
+            stats_by_year[year]["total_distance"] += stat.total_distance_m
+
+        # Collect overall unique sets across **all** years
+        all_cities = set()
+        all_countries = set()
+
+        # Convert sets to lists for JSON serialization; also convert meters -> km
+        stats_by_year_processed = {}
+        for year, data in sorted(stats_by_year.items()):
+            all_cities.update(data["cities"])
+            all_countries.update(data["countries"])
+
+            stats_by_year_processed[year] = {
+                "monthly_distances": [dist_m / 1000 for dist_m in data["monthly_distances"]],
+                "cities": list(data["cities"]),
+                "countries": list(data["countries"]),
+                "total_distance": data["total_distance"] / 1000.0,  # store in KM
+            }
+
+        print(stats)
+        print(stats_by_year)
+        print(stats_by_year_processed)
+        print(all_cities)
+        print(all_countries)
+
+        return render_template(
+            "stats.jinja",
+            stats_by_year=stats_by_year_processed,   # Dict of years → aggregated data
+            total_cities=list(all_cities),
+            total_countries=list(all_countries),
+        )
 
 class MapView(MethodView):
     decorators = [login_required]
@@ -216,6 +278,7 @@ class AccountView(MethodView):
 
 # Register the class-based views with the Blueprint
 web_bp.add_url_rule("/", view_func=HomeView.as_view("home"))
+web_bp.add_url_rule("/jobs", view_func=JobsView.as_view("jobs"))
 web_bp.add_url_rule("/login", view_func=LoginView.as_view("login"), methods=["GET", "POST"])
 web_bp.add_url_rule("/logout", view_func=LogoutView.as_view("logout"))
 web_bp.add_url_rule("/dashboard", view_func=DashboardView.as_view("dashboard"))

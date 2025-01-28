@@ -1,11 +1,145 @@
 {% extends "base.jinja" %}
 
 {% block heading %}
-    Statistics
+  Statistics
 {% endblock %}
 
 {% block content %}
-    <p>
-        <strong>Total Distance Traveled:</strong> {{ "{0}".format(total_distance_m/1000).rjust(15) }} km<br/>
-    </p>
+  <h1>Overall Stats</h1>
+  <p><strong>Total Unique Cities Visited:</strong> {{ total_cities|length }}</p>
+  <p><strong>Total Unique Countries Visited:</strong> {{ total_countries|length }}</p>
+  
+  <!-- Button to open a modal listing all cities/countries across all years -->
+  <button type="button"
+          class="btn btn-primary"
+          data-bs-toggle="modal"
+          data-bs-target="#modal-all">
+    Show All Cities & Countries
+  </button>
+
+  <!-- Overall modal -->
+  <div class="modal fade" id="modal-all" tabindex="-1" aria-labelledby="modalLabelAll" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="modalLabelAll">All Cities & Countries</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <h6>Cities</h6>
+          <ul>
+            {% for city in total_cities %}
+              <li>{{ city }}</li>
+            {% endfor %}
+          </ul>
+          
+          <h6>Countries</h6>
+          <ul>
+            {% for country in total_countries %}
+              <li>{{ country }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <hr>
+
+  <!-- Now loop over each year, generating a bar chart and year-specific stats -->
+  {% for year, data in stats_by_year.items() %}
+    <h2>{{ year }}</h2>
+    <p><strong>Total Distance This Year:</strong> {{ data.total_distance|round(2) }} km</p>
+    <p><strong>Cities Visited:</strong> {{ data.cities|length }}</p>
+    <p><strong>Countries Visited:</strong> {{ data.countries|length }}</p>
+
+    <!-- Button to open year-specific modal listing cities/countries -->
+    <button type="button"
+            class="btn btn-secondary"
+            data-bs-toggle="modal"
+            data-bs-target="#modal-{{ year }}">
+      Show Cities & Countries
+    </button>
+
+    <!-- Year-specific modal -->
+    <div class="modal fade" id="modal-{{ year }}" tabindex="-1"
+         aria-labelledby="modalLabel-{{ year }}" aria-hidden="true">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="modalLabel-{{ year }}">
+              Cities & Countries for {{ year }}
+            </h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <h6>Cities</h6>
+            <ul>
+              {% for city in data.cities %}
+                <li>{{ city }}</li>
+              {% endfor %}
+            </ul>
+            <h6>Countries</h6>
+            <ul>
+              {% for country in data.countries %}
+                <li>{{ country }}</li>
+              {% endfor %}
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- The bar chart canvas for this year -->
+    <canvas id="chart-{{ year }}" width="800" height="300"></canvas>
+    <hr>
+  {% endfor %}
+
+  <!-- Include Chart.js (CDN link for simplicity) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // stats_by_year is passed in from the backend as a dictionary
+      // Use the tojson filter to convert to a JSON object
+      var statsByYear = {{ stats_by_year|tojson }};
+
+      // For each year, generate a bar chart
+      for (let year in statsByYear) {
+        let yearData = statsByYear[year];
+        let ctx = document.getElementById("chart-" + year);
+
+        // yearData.monthly_distances is an array of 12 floats (km)
+        new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels: ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],
+            datasets: [{
+              label: "Distance (km)",
+              data: yearData.monthly_distances,
+              backgroundColor: "rgba(75, 192, 192, 0.2)",
+              borderColor: "rgba(75, 192, 192, 1)",
+              borderWidth: 1
+            }]
+          },
+          options: {
+            scales: {
+              y: {
+                beginAtZero: true
+              }
+            },
+            plugins: {
+              legend: {
+                display: false
+              },
+              title: {
+                display: true,
+                text: "Monthly Distance in " + year + " (km)"
+              }
+            }
+          }
+        });
+      }
+    });
+  </script>
 {% endblock %}
