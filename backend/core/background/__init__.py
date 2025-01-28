@@ -3,8 +3,10 @@ import time
 import traceback
 
 from flask import Flask
+
+from backend.core.models import User
 from ..config import Config
-from .jobs import Job
+from .jobs import GenerateFullStatisticsJob, Job, PhotonFillJob
 
 
 
@@ -34,7 +36,7 @@ class JobManager:
             ...
         ]
         """ 
-        return [(job.__class__.__name__, job.done, job.progress*100, job.start_time) for job in self.running_jobs]
+        return [(job.__class__.__name__, job.done, max(0.01, job.progress*100), job.start_time) for job in self.running_jobs]
 
     def run_safely(self, job: Job):
         print(f"Running job {job.__class__.__name__}...")
@@ -48,6 +50,7 @@ class JobManager:
         print(f"Job {job.__class__.__name__} finished in {time.time() - job.start_time:.3f} seconds.")
 
     def run(self):
+        last_day = time.localtime().tm_mday
         while True:
             try:
                 if len(self.threads) < int(self.config.BACKGROUND_MAX_THREADS):
@@ -65,11 +68,26 @@ class JobManager:
                         self.running_jobs.remove(job)
                         self.threads.remove(thread)
 
+                if time.localtime().tm_mday != last_day:
+                    self.check_for_daily_jobs()
+                    last_day = time.localtime().tm_mday
+
             except Exception:
                 print(traceback.format_exc())
 
             time.sleep(0.1)
 
+    def check_for_daily_jobs(self):
+        with self.web_app.app_context():
+            for user in User.query.all():
+                if len(self.config.PHOTON_SERVER_HOST) > 0:
+                    job = PhotonFillJob(user)
+                    self.add_job(job)
+
+                job = GenerateFullStatisticsJob(user)
+                self.add_job(job)
+
+            
 
     def stop(self, blocking=False):
         self.queued_jobs.clear()

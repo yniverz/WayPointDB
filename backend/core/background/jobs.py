@@ -261,7 +261,7 @@ class GenerateFullStatisticsJob(Job):
 
             i += 1
 
-            self.progress = (i / total_count) / 2
+            self.progress = (i / total_count) * 0.9
 
         # Save the monthly statistics
         i = 0
@@ -271,7 +271,7 @@ class GenerateFullStatisticsJob(Job):
                 break
 
             db.session.add(stat)
-            self.progress = 0.5 + (i / total_count) / 2
+            self.progress = 0.9 + (i / total_count) * 0.1
 
             if i % 100 == 0:
                 db.session.commit()
