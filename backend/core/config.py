@@ -7,7 +7,8 @@ class Config:
     DB_NAME = os.getenv("POSTGRES_DB", "mydatabase")
     DB_USER = os.getenv("POSTGRES_USER", "user")
     DB_PASS = os.getenv("POSTGRES_PASSWORD", "password")
+    BACKGROUND_MAX_THREADS = os.getenv("BACKGROUND_MAX_THREADS", 5)
     SQLALCHEMY_DATABASE_URI = f"postgresql://{DB_USER}:{DB_PASS}@{DB_HOST}/{DB_NAME}"
     SQLALCHEMY_TRACK_MODIFICATIONS = False
-
-    # Additional config parameters as needed...
+    PHOTON_SERVER_HOST = os.getenv("PHOTON_SERVER_HOST", "")
+    PHOTON_SERVER_API_KEY = os.getenv("PHOTON_SERVER_API_KEY", "")

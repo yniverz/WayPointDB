@@ -3,7 +3,6 @@ import flask
 from flask import session, redirect, url_for, g
 from functools import wraps
 from .models import User, db
-from werkzeug.security import generate_password_hash
 
 def login_required(f):
     """Decorator to ensure the user is logged in (session-based) for HTML routes."""
@@ -37,11 +36,13 @@ def create_default_user():
     """Create a default admin user if none exists."""
     from .models import User
     db.create_all()
-    admin_email = "admin@example.com"
-    admin_pass = "password"
 
-    existing = User.query.filter_by(email=admin_email).first()
-    if not existing:
+    # if no user with is_admin=True exists, create one
+    existing_admin = User.query.filter_by(is_admin=True).first()
+    if not existing_admin:
+        admin_email = "admin@example.com"
+        admin_pass = "password"
+
         user = User(
             email=admin_email,
             is_admin=True
@@ -49,3 +50,16 @@ def create_default_user():
         user.set_password(admin_pass)
         db.session.add(user)
         db.session.commit()
+
+    # existing = User.query.filter_by(email=admin_email).first()
+    # if not existing:
+    #     admin_email = "admin@example.com"
+    #     admin_pass = "password"
+    #     user = User(
+    #         email=admin_email,
+    #         is_admin=True
+    #     )
+    #     user.set_password(admin_pass)
+    #     db.session.add(user)
+    #     db.session.commit()
+
