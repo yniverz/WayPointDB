@@ -5,7 +5,7 @@
 {% endblock %}
 
 {% block content %}
-    <form method="POST" action="{{ url_for('login') }}">
+    <form method="POST" action="{{ url_for('web.login') }}">
         <label for="email">Email:</label>
         <input type="text" id="email" name="email" required>
 
