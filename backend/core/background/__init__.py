@@ -4,7 +4,7 @@ import traceback
 
 from flask import Flask
 
-from backend.core.models import User
+from ..models import User
 from ..config import Config
 from .jobs import GenerateFullStatisticsJob, Job, PhotonFillJob
 
