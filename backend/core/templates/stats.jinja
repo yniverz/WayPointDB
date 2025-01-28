@@ -1,0 +1,11 @@
+{% extends "base.jinja" %}
+
+{% block heading %}
+    Statistics
+{% endblock %}
+
+{% block content %}
+    <p>
+        <strong>Total Distance Traveled:</strong> {{ "{0}".format(total_distance_m/1000).rjust(15) }} km<br/>
+    </p>
+{% endblock %}

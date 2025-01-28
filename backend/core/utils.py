@@ -37,6 +37,9 @@ def create_default_user():
     from .models import User
     db.create_all()
 
+    # make sure the tables conform to the latest schema
+    db.session.commit()
+
     # if no user with is_admin=True exists, create one
     existing_admin = User.query.filter_by(is_admin=True).first()
     if not existing_admin:

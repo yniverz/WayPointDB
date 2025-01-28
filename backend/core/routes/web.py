@@ -6,7 +6,7 @@ from flask import (
     session, g, jsonify
 )
 from flask.views import MethodView
-from ..models import User, GPSData, db
+from ..models import MonthlyStatistic, User, GPSData, db
 from ..utils import login_required, get_current_user
 from ..config import Config
 
@@ -45,6 +45,19 @@ class DashboardView(MethodView):
     def get(self):
         """Example protected dashboard."""
         return render_template("dashboard.jinja")
+    
+class StatsView(MethodView):
+    decorators = [login_required]
+
+    def get(self):
+        user = get_current_user()
+        stats: list[MonthlyStatistic] = MonthlyStatistic.query.filter_by(user_id=user.id).all()
+
+        total_distance_m = 0
+        for stat in stats:
+            total_distance_m += stat.total_distance_m
+
+        return render_template("stats.jinja", total_distance_m=total_distance_m)
 
 class MapView(MethodView):
     decorators = [login_required]
@@ -62,7 +75,6 @@ class GPSDataView(MethodView):
 
     def get(self):
         """Fetch GPS data using psycopg2 and return JSON."""
-        time0 = time.time()
 
         ne_lat = request.args.get("ne_lat", type=float)
         ne_lng = request.args.get("ne_lng", type=float)
@@ -76,6 +88,8 @@ class GPSDataView(MethodView):
         user = get_current_user()
         if not user:
             return jsonify({"error": "Unauthorized"}), 401
+        
+        time1 = time.time()
 
         conn = psycopg2.connect(
             dbname=Config.DB_NAME,
@@ -84,17 +98,48 @@ class GPSDataView(MethodView):
             host=Config.DB_HOST
         )
         cursor = conn.cursor()
-        query = """
-            SELECT id, user_id, timestamp, latitude, longitude, horizontal_accuracy,
-                   altitude, vertical_accuracy, heading, heading_accuracy, speed, speed_accuracy
-            FROM gps_data
-            WHERE user_id = %s 
-            AND latitude BETWEEN %s AND %s 
-            AND longitude BETWEEN %s AND %s
-            ORDER BY timestamp;
-        """
-        cursor.execute(query, (user.id, sw_lat, ne_lat, sw_lng, ne_lng))
+
+
+        max_points_count = 1000
+
+        if zoom > 18:
+            query = f"""
+                SELECT id, user_id, timestamp, latitude, longitude, horizontal_accuracy,
+                    altitude, vertical_accuracy, heading, heading_accuracy, speed, speed_accuracy
+                FROM gps_data
+                WHERE user_id = {user.id}
+                AND latitude BETWEEN {sw_lat} AND {ne_lat}
+                AND longitude BETWEEN {sw_lng} AND {ne_lng}
+                ORDER BY timestamp;
+            """
+        else:
+            query = f"""
+                WITH filtered_data AS (
+                    SELECT id, user_id, timestamp, latitude, longitude, horizontal_accuracy,
+                        altitude, vertical_accuracy, heading, heading_accuracy, speed, speed_accuracy,
+                        ROW_NUMBER() OVER (ORDER BY timestamp) AS row_num
+                    FROM gps_data
+                    WHERE user_id = {user.id}
+                    AND latitude BETWEEN {sw_lat} AND {ne_lat}
+                    AND longitude BETWEEN {sw_lng} AND {ne_lng}
+                ),
+                row_count AS (
+                    SELECT COUNT(*) AS total FROM filtered_data
+                )
+                SELECT id, user_id, timestamp, latitude, longitude, horizontal_accuracy,
+                    altitude, vertical_accuracy, heading, heading_accuracy, speed, speed_accuracy
+                FROM filtered_data
+                WHERE row_num % (SELECT GREATEST(1, total / {max_points_count}) FROM row_count) = 1
+                OR (SELECT total FROM row_count) < {max_points_count}
+                ORDER BY timestamp;
+            """
+
+        cursor.execute(query)
+
+        time2 = time.time()
+
         rows = cursor.fetchall()
+
         gps_data = []
         for row in rows:
             gps_data.append({
@@ -112,16 +157,11 @@ class GPSDataView(MethodView):
                 "sa": row[11],
             })
 
-        # Reduce data if zoomed out
-        if zoom < 12:
-            filtered_data = []
-            step = max(1, len(gps_data) // 200)
-            for i in range(0, len(gps_data), step):
-                filtered_data.append(gps_data[i])
-            gps_data = filtered_data
-
         cursor.close()
         conn.close()
+
+        print(f"/gps_data: Time to data: {time2 - time1:.3f}s")
+
         return jsonify(gps_data)
 
 class DeletePointView(MethodView):
@@ -180,6 +220,7 @@ web_bp.add_url_rule("/login", view_func=LoginView.as_view("login"), methods=["GE
 web_bp.add_url_rule("/logout", view_func=LogoutView.as_view("logout"))
 web_bp.add_url_rule("/dashboard", view_func=DashboardView.as_view("dashboard"))
 web_bp.add_url_rule("/map", view_func=MapView.as_view("map"))
+web_bp.add_url_rule("/stats", view_func=StatsView.as_view("stats"))
 web_bp.add_url_rule("/gps_data", view_func=GPSDataView.as_view("gps_data"))
 web_bp.add_url_rule("/delete_point", view_func=DeletePointView.as_view("delete_point"), methods=["DELETE"])
 web_bp.add_url_rule("/manage_users", view_func=ManageUsersView.as_view("manage_users"))

@@ -18,14 +18,21 @@ class JobManager:
     def set_config(self, config: Config):
         self.config = config
 
+    def run_safely(self, job: Job):
+        try:
+            job.run()
+        except Exception:
+            print(traceback.format_exc())
+            job.done = True
+
     def run(self):
         while True:
             try:
-                if len(self.threads) < self.config.BACKGROUND_MAX_THREADS:
+                if len(self.threads) < int(self.config.BACKGROUND_MAX_THREADS):
                     if self.queued_jobs:
                         job = self.queued_jobs.pop(0)
                         job.running = True
-                        thread = threading.Thread(target=job.run)
+                        thread = threading.Thread(target=self.run_safely, args=(job,))
                         thread.start()
                         self.threads.append(thread)
                         self.running_jobs.append(job)

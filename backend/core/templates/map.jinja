@@ -60,7 +60,8 @@ GPS Map
         map = L.map('map').setView([{{ last_point.latitude }}, {{ last_point.longitude }}], 10);
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors'
+        attribution: '&copy; OpenStreetMap contributors',
+        maxZoom: 19,
     }).addTo(map);
 
     polylineLayer = L.layerGroup().addTo(map);
