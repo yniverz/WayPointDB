@@ -29,12 +29,12 @@ class JobManager:
         
         Example:
         [
-            ("QueryPhotonJob", False, 0.5),
-            ("QueryPhotonJob", True, 1.0),
+            ("QueryPhotonJob", False, 50.4),
+            ("QueryPhotonJob", True, 100.0),
             ...
         ]
         """ 
-        return [(job.__class__.__name__, job.done, job.progress) for job in self.running_jobs]
+        return [(job.__class__.__name__, job.done, job.progress*100, job.start_time) for job in self.running_jobs]
 
     def run_safely(self, job: Job):
         print(f"Running job {job.__class__.__name__}...")
@@ -78,6 +78,7 @@ class JobManager:
 
     def add_job(self, job: Job):
         job.set_config(self.config)
+        job.set_web_app(self.web_app)
         self.queued_jobs.append(job)
 
 job_manager = JobManager()

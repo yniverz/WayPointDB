@@ -5,11 +5,52 @@
 {% endblock %}
 
 {% block content %}
-    {{ jobs }}
+    <form method="POST">
+        {% if photon_active %}
+        <button type="submit" name="jobName" value="photon_full">Geocode all points</button>
+        <button type="submit" name="jobName" value="photon_fill">Geocode new points</button>
+        {% endif %}
+        <button type="submit" name="jobName" value="full_stats">Generate Statistics</button>
+    </form>
 
+    <h2>Jobs</h2>
+    <table border="1" cellpadding="5" cellspacing="0">
+        <thead>
+            <tr>
+                <th>Job Name</th>
+                <th>Job Done</th>
+                <th>Job Progress</th>
+                <th>Time Elapsed</th>
+                <th>Time Remaining</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for job in jobs %}
+                <tr>
+                    <td>{{ job[0] }}</td>
+                    <td>{{ job[1] }}</td>
+                    <td>{{ job[2]|round(2) }}/100</td>
+                    <td>{{ (time_now - job[3])|round(0) }}s</td>
+                    <td>{{ ((100 - job[2]) * ((time_now - job[3]) / job[2]))|round(0) }}s</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <button id="toggle-refresh">Disable Auto Refresh</button>
+    
     <script>
-    setTimeout(function(){
-       window.location.reload(1);
-    }, 5000);
+    let refreshEnabled = true;
+    document.getElementById("toggle-refresh").addEventListener("click", function() {
+        refreshEnabled = !refreshEnabled;
+        this.textContent = refreshEnabled ? "Disable Auto Refresh" : "Enable Auto Refresh";
+    });
+
+    function autoRefresh() {
+        if (refreshEnabled) {
+            window.location.reload();
+        }
+    }
+    setInterval(autoRefresh, 5000);
     </script>
 {% endblock %}
