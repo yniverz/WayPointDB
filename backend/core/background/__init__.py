@@ -36,7 +36,7 @@ class JobManager:
             ...
         ]
         """ 
-        return [(job.__class__.__name__, job.done, max(0.01, job.progress*100), job.start_time) for job in self.running_jobs]
+        return [(job.id, job.__class__.__name__, job.running, job.progress, job.start_time) for job in self.queued_jobs + self.running_jobs]
 
     def run_safely(self, job: Job):
         print(f"Running job {job.__class__.__name__}...")
@@ -45,7 +45,8 @@ class JobManager:
                 job.run()
         except Exception:
             print(traceback.format_exc())
-            job.done = True
+
+        job.done = True
 
         print(f"Job {job.__class__.__name__} finished in {time.time() - job.start_time:.3f} seconds.")
 
@@ -98,5 +99,19 @@ class JobManager:
         job.set_config(self.config)
         job.set_web_app(self.web_app)
         self.queued_jobs.append(job)
+
+    def cancel_job(self, job_id, blocking=False):
+        print(f"Cancelling job {job_id}...")
+        for job in self.running_jobs:
+            if job.id == job_id:
+                job.stop(blocking)
+                return True
+            
+        for job in self.queued_jobs:
+            if job.id == job_id:
+                self.queued_jobs.remove(job)
+                return True
+
+        return False
 
 job_manager = JobManager()

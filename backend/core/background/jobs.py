@@ -1,10 +1,11 @@
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import uuid
 from flask import Flask
 import requests
 import time
 import geopy.distance
 
-from ..models import GPSData, MonthlyStatistic, User
+from ..models import DailyStatistic, GPSData, User
 from . import Config
 from ..extensions import db
 
@@ -24,6 +25,7 @@ class Job:
         self.running = False
         self.done = False
         self.stop_requested = False
+        self.id = uuid.uuid4().hex
 
     def set_config(self, config: Config):
         self.config = config
@@ -43,61 +45,12 @@ class Job:
 
         if blocking:
             while not self.done:
+                print("Waiting for job to stop...")
                 time.sleep(0.1)
                 pass
 
 
 
-
-
-
-
-
-# class QueryPhotonJob(Job):
-#     def __init__(self):
-#         super().__init__()
-#         self.point_ids = []
-    
-#     def do_request(self, lat, lon):
-#         return requests.get(
-#             f"{self.config.PHOTON_SERVER_HOST}/reverse?lang=en&lat={lat}&lon={lon}",
-#             headers={"X-Api-Key": self.config.PHOTON_SERVER_API_KEY}
-#         )
-    
-#     def do_with_point(self, point_id):
-#         with self.app.app_context():
-#             point: GPSData = GPSData.query.get(point_id)
-
-#             if not point:
-#                 return
-            
-#             response = self.do_request(point.latitude, point.longitude)
-#             data = response.json()
-#             if data and "features" in data and data["features"]:
-#                 feature = data["features"][0]
-#                 point.country = feature["properties"].get("country")
-#                 point.city = feature["properties"].get("city")
-#                 point.state = feature["properties"].get("state")
-#                 point.postal_code = feature["properties"].get("postcode")
-#                 point.street = feature["properties"].get("street")
-#                 point.street_number = feature["properties"].get("housenumber")
-#                 db.session.commit()
-    
-#     def run(self):
-#         total_count = len(self.point_ids)
-#         if total_count == 0:
-#             self.done = True
-#             return
-
-#         with ThreadPoolExecutor(max_workers=int(self.config.BACKGROUND_MAX_THREADS_PER_JOB)) as executor:
-#             future_to_point = {executor.submit(self.do_with_point, point_id): point_id for point_id in self.point_ids}
-#             completed_count = 0
-#             for future in as_completed(future_to_point):
-#                 completed_count += 1
-#                 self.progress = completed_count / total_count
-#                 future.result()  # Raise exceptions if any occurred
-        
-#         self.done = True
 
 class QueryPhotonJob(Job):
     def __init__(self):
@@ -149,6 +102,7 @@ class QueryPhotonJob(Job):
                     if data and "features" in data:
                         feature: dict[str, dict] = data["features"][0]
                         point = GPSData.query.get(point_id)
+                        point.reverse_geocoded = True
                         point.country = feature["properties"].get("country")
                         point.city = feature["properties"].get("city")
                         point.state = feature["properties"].get("state")
@@ -187,7 +141,7 @@ class PhotonFillJob(QueryPhotonJob):
         self.user_id = user.id
 
     def run(self):
-        points = GPSData.query.filter_by(user_id=self.user_id, country=None).all()
+        points = GPSData.query.filter_by(user_id=self.user_id, reverse_geocoded=False).all()
         point_ids = [point.id for point in points]
         self.point_ids = point_ids
         super().run()
@@ -223,50 +177,47 @@ class GenerateFullStatisticsJob(Job):
             self.done = True
             return
         
-        # remove all existing monthly statistics
-        MonthlyStatistic.query.filter_by(user_id=user.id).delete()
+        DailyStatistic.query.filter_by(user_id=user.id).delete()
         
-        # Create a new MonthlyStatistic object for each month
         i = 0
-        monthly_stats: dict[str, MonthlyStatistic] = {}
+        daily_stats: dict[str, DailyStatistic] = {}
         total_count = len(gps_data)
         for data in gps_data:
             if self.stop_requested:
                 break
 
-            key = f"{data.timestamp.year}-{data.timestamp.month}"
-            if key not in monthly_stats:
-                monthly_stats[key] = MonthlyStatistic(
+            key = f"{data.timestamp.year}-{data.timestamp.month}-{data.timestamp.day}"
+            if key not in daily_stats:
+                daily_stats[key] = DailyStatistic(
                     user_id=user.id,
                     year=data.timestamp.year,
                     month=data.timestamp.month,
-
+                    day=data.timestamp.day,
                 )
                 
             if i > 0:
                 prev = gps_data[i - 1]
                 distance = self.get_distance(prev, data)
-                if monthly_stats[key].total_distance_m is None:
-                    monthly_stats[key].total_distance_m = 0.0
-                monthly_stats[key].total_distance_m += distance
-
+                if daily_stats[key].total_distance_m is None:
+                    daily_stats[key].total_distance_m = 0.0
+                daily_stats[key].total_distance_m += distance
+                
             if data.country:
-                if not monthly_stats[key].visited_countries:
-                    monthly_stats[key].visited_countries = []
-                monthly_stats[key].visited_countries = list(set(monthly_stats[key].visited_countries + [data.country]))
+                if not daily_stats[key].visited_countries:
+                    daily_stats[key].visited_countries = []
+                daily_stats[key].visited_countries = list(set(daily_stats[key].visited_countries + [data.country]))
             if data.city:
-                if not monthly_stats[key].visited_cities:
-                    monthly_stats[key].visited_cities = []
-                monthly_stats[key].visited_cities = list(set(monthly_stats[key].visited_cities + [data.city]))
+                if not daily_stats[key].visited_cities:
+                    daily_stats[key].visited_cities = []
+                daily_stats[key].visited_cities = list(set(daily_stats[key].visited_cities + [data.city]))
 
             i += 1
 
             self.progress = (i / total_count) * 0.9
 
-        # Save the monthly statistics
         i = 0
-        total_count = len(monthly_stats)
-        for stat in monthly_stats.values():
+        total_count = len(daily_stats)
+        for stat in daily_stats.values():
             if self.stop_requested:
                 break
 
@@ -275,6 +226,8 @@ class GenerateFullStatisticsJob(Job):
 
             if i % 100 == 0:
                 db.session.commit()
+
+            i += 1
 
         db.session.commit()
 

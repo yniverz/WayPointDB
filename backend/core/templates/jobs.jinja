@@ -7,10 +7,10 @@
 {% block content %}
     <form method="POST">
         {% if photon_active %}
-        <button type="submit" name="jobName" value="photon_full">Geocode all points</button>
-        <button type="submit" name="jobName" value="photon_fill">Geocode new points</button>
+        <button type="submit" name="newJob" value="photon_full">Geocode all points</button>
+        <button type="submit" name="newJob" value="photon_fill">Geocode new points</button>
         {% endif %}
-        <button type="submit" name="jobName" value="full_stats">Generate Statistics</button>
+        <button type="submit" name="newJob" value="full_stats">Generate Statistics</button>
     </form>
     <br>
     <h2>Jobs</h2>
@@ -18,20 +18,27 @@
         <thead>
             <tr>
                 <th>Job Name</th>
-                <th>Done</th>
+                <th>Running</th>
                 <th>Progress</th>
                 <th>Time Elapsed</th>
                 <th>Time Remaining</th>
+                <th>Actions</th>
             </tr>
         </thead>
         <tbody>
             {% for job in jobs %}
                 <tr>
-                    <td>{{ job[0] }}</td>
                     <td>{{ job[1] }}</td>
-                    <td>{{ job[2]|round(2) }}/100</td>
-                    <td>{{ (time_now - job[3])|round(0) }}s</td>
-                    <td>{{ ((100 - job[2]) * ((time_now - job[3]) / job[2]))|round(0) }}s</td>
+                    <td>{{ job[2] }}</td>
+                    <td>{{ job[3]|round(2) }}%</td>
+                    <td>{{ job[4] }}s</td>
+                    <td>{{ job[5] }}s</td>
+                    <td>
+                        <form method="POST" style="display:inline;">
+                            <input type="hidden" name="cancelJob" value="{{ job[0] }}">
+                            <button type="submit">Cancel</button>
+                        </form>
+                    </td>
                 </tr>
             {% endfor %}
         </tbody>

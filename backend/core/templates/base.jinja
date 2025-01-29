@@ -37,6 +37,7 @@
         body.dark-mode {
             background-color: #121212;
             color: #e0e0e0;
+            --bs-body-bg: #1e1e1e;
         }
 
         .dark-mode .content-container {
@@ -114,6 +115,20 @@
             border-radius: 8px;
             border: 1px solid #ced4da;
         }
+
+        /* add basic code for tables */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            border-left: 3px solid #ddd;
+            border-right: 3px solid #ddd;
+            border-top: 3px solid #ddd;
+        }
+
+        th, td {
+            padding: 8px;
+            border-bottom: 3px solid #ddd;
+        }
     </style>
 </head>
 <body>
@@ -134,7 +149,6 @@
                     {% if current_user.is_admin %}
                         <li class="nav-item"><a class="nav-link" href="{{ url_for('web.manage_users') }}">Manage Users</a></li>
                     {% endif %}
-                    <li class="nav-item"><a class="nav-link" href="{{ url_for('web.jobs') }}">Jobs</a></li>
                     <li class="nav-item"><a class="nav-link btn btn-danger text-white px-3" href="{{ url_for('web.logout') }}">Logout</a></li>
                     <!-- Dark Mode Toggle -->
                     <li class="nav-item">

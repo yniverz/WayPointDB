@@ -17,9 +17,11 @@
     </p>
 
     <form method="POST" action="{{ url_for('web.account') }}">
-        <!-- Button to generate a new key -->
         <button type="submit" name="generate_key" value="1">Generate New API Key</button>
     </form>
+    <br/>
+    
+    <button onclick="window.location.href='{{ url_for('web.jobs') }}'">Manage Jobs</button>
 
     <hr/>
 

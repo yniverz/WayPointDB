@@ -1,0 +1,250 @@
+{% extends "base.jinja" %}
+
+{% block heading %}
+<strong>{{ year }}</strong>
+{% endblock %}
+
+{% block content %}
+<style>
+    .stat-container {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        grid-gap: 10px;
+        padding: 10px;
+        border-radius: 20px;
+        box-shadow: 0 0 20px rgba(0, 0, 0, 0.317);
+        margin-bottom: 20px;
+    }
+
+    /* Stack vertically when the container is too small */
+    @media (max-width: 1000px) { 
+        .stat-container {
+            grid-template-columns: 1fr; /* Force single column */
+        }
+    }
+
+    .stat-container div {
+        text-align: center;
+    }
+
+    .stat-container p {
+        font-size: 2em;
+        font-weight: bold;
+        margin-bottom: 0;
+    }
+
+    .stat-container small {
+        font-size: 1em;
+        color: #6c757d;
+    }
+
+    .stat-button {
+        text-decoration: underline;
+        cursor: pointer;
+    }
+
+    .stat-button:hover {
+        color: #007bff;
+    }
+
+    .charts-container {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        grid-gap: 20px;
+    }
+
+    .chart-container {
+        padding: 20px;
+        border-radius: 20px;
+        box-shadow: 0 0 20px rgba(0, 0, 0, 0.317);
+    }
+</style>
+
+<div class="stat-container">
+    <div>
+        <p style="color: #747fff">{{ total_distance }}</p>
+        <small>Total Distance (km) in {{ year }}</small>
+    </div>
+
+    <div>
+        <p style="color: #ffbe00" class="stat-button" data-bs-toggle="modal" data-bs-target="#modal-countries-year">
+            {{ total_countries|length }}
+        </p>
+        <small>Countries Visited</small>
+    </div>
+
+    <div>
+        <p style="color: #a6adbb" class="stat-button" data-bs-toggle="modal" data-bs-target="#modal-cities-year">
+            {{ total_cities|length }}
+        </p>
+        <small>Cities Visited</small>
+    </div>
+</div>
+
+<!-- All-Cities modal -->
+<div class="modal fade" id="modal-cities-year" tabindex="-1" aria-labelledby="modalLabelCitiesAll" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalLabelCitiesAll">All Cities in {{ year }}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <h6>Cities</h6>
+                <ul>
+                {% for city in total_cities %}
+                    <li>{{ city }}</li>
+                {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- All-Countries modal -->
+<div class="modal fade" id="modal-countries-year" tabindex="-1" aria-labelledby="modalLabelCountriesAll" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalLabelCountriesAll">All Countries in {{ year }}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <h6>Countries</h6>
+                <ul>
+                {% for country in total_countries %}
+                    <li>{{ country }}</li>
+                {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<hr>
+
+<div class="charts-container">
+  {% for month, data in stats_by_month.items() %}
+    <div class="chart-container">
+      <!-- Month name (e.g. "January"), or just the month number -->
+      <p style="margin-bottom: 10px;">
+        <strong>
+          {{ month|month_name }} <!-- "month_name" is a custom filter or you can do a dictionary if you like -->
+        </strong>
+        <a style="margin-bottom: 10px; color: #6c757d;" href="/map?start_date={{ year }}-{% if month < 10 %}0{% endif %}{{ month }}-01&end_date={{ year }}-{% if month + 1 < 10 %}0{% endif %}{{ month + 1 }}-01"><strong>[Map]</strong></a>
+      </p>
+      <!-- quick overview for that month -->
+      <div style="display: flex; font-size: 0.8em; color: #6c757d;">
+        <p>{{ data.total_distance|round(2) }} km</p>
+        <p style="margin-left: auto; margin-right: 0;">
+          <span class="stat-button" data-bs-toggle="modal" data-bs-target="#modal-countries-{{ month }}">{{ data.countries|length }}</span> countries,
+          <span class="stat-button" data-bs-toggle="modal" data-bs-target="#modal-cities-{{ month }}">{{ data.cities|length }}</span> cities
+        </p>
+      </div>
+
+      <canvas id="chart-{{ month }}" width="800" height="400"></canvas>
+
+      <!-- Month-specific modals -->
+      <div class="modal fade" id="modal-cities-{{ month }}" tabindex="-1"
+           aria-labelledby="modalLabelCities-{{ month }}" aria-hidden="true">
+        <div class="modal-dialog">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title" id="modalLabelCities-{{ month }}">
+                Cities for {{ month|month_name }} {{ year }}
+              </h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+              <h6>Cities</h6>
+              <ul>
+                {% for city in data.cities %}
+                  <li>{{ city }}</li>
+                {% endfor %}
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal fade" id="modal-countries-{{ month }}" tabindex="-1"
+           aria-labelledby="modalLabelCountries-{{ month }}" aria-hidden="true">
+        <div class="modal-dialog">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title" id="modalLabelCountries-{{ month }}">
+                Countries for {{ month|month_name }} {{ year }}
+              </h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+              <h6>Countries</h6>
+              <ul>
+                {% for country in data.countries %}
+                  <li>{{ country }}</li>
+                {% endfor %}
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  {% endfor %}
+</div>
+
+<!-- Include Chart.js (CDN link for simplicity) -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    // stats_by_month is passed from the backend as a dictionary:
+    // { month_number: { 
+    //      monthly_distances: [... 31 daily distances in km ...], 
+    //      cities: [...], 
+    //      countries: [...], 
+    //      total_distance: float
+    //   }, ... }
+
+    var statsByMonth = {{ stats_by_month|tojson }};
+
+    // For each month, generate a bar chart of daily distances
+    for (let month in statsByMonth) {
+      let monthData = statsByMonth[month];
+      let ctx = document.getElementById("chart-" + month);
+      // monthData.monthly_distances is an array of 31 floats (km)
+      // We'll label days 1..31
+      let dayLabels = Array.from({length: 31}, (_, i) => (i+1).toString());
+
+      new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: dayLabels,
+          datasets: [{
+            label: "Distance (km)",
+            data: monthData.monthly_distances,
+            backgroundColor: "rgba(75, 192, 192, 0.2)",
+            borderColor: "rgba(75, 192, 192, 1)",
+            borderWidth: 1
+          }]
+        },
+        options: {
+          scales: {
+            y: {
+              beginAtZero: true
+            }
+          },
+          plugins: {
+            legend: {
+              display: false
+            },
+            title: {
+              display: false,
+              text: "Daily Distance in Month " + month
+            }
+          }
+        }
+      });
+    }
+  });
+</script>
+{% endblock %}
