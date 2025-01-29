@@ -5,7 +5,7 @@
 {% endblock %}
 
 {% block content %}
-    <h2>Account Settings</h2>
+    <h2>Settings</h2>
     <p>
         <strong>Current Email:</strong> {{ current_user.email }}<br/>
         <strong>API Key:</strong>
@@ -23,16 +23,14 @@
 
     <hr/>
 
-    <h3>Update Email / Password</h3>
+    <h3>Change Email / Password</h3>
     <form method="POST" action="{{ url_for('web.account') }}">
-        <label for="new_email">New Email (optional):</label>
-        <input type="text" id="new_email" name="new_email">
-        <br/><br/>
-
-        <label for="new_password">New Password (optional):</label>
-        <input type="password" id="new_password" name="new_password">
-        <br/><br/>
-
+        <label for="new_email">New Email (optional):</label><br/>
+        <input type="text" id="new_email" name="new_email"><br/>
+        <br/>
+        <label for="new_password">New Password (optional):</label><br/>
+        <input type="password" id="new_password" name="new_password"><br/>
+        <br/>
         <button type="submit" name="update_account" value="1">Update Account</button>
     </form>
 {% endblock %}

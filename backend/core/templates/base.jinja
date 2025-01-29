@@ -90,16 +90,11 @@
         /* ========================== */
 
         button, .btn, .navbar .btn, .nav-item .btn {
-            {# padding: 12px 20px; #}
             font-size: 1rem;
             font-weight: 500;
             border-radius: 8px;
             border: none !important;
             cursor: pointer;
-            {# text-transform: uppercase; #}
-            {# display: inline-flex; #}
-            {# align-items: center; #}
-            {# justify-content: center; #}
             box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.15);
         }
 
@@ -112,6 +107,12 @@
         button:active, .btn:active {
             transform: scale(0.98);
             box-shadow: 0px 2px 6px rgba(0, 0, 0, 0.2);
+        }
+
+        input[type="text"], input[type="email"], input[type="password"], input[type="date"], select {
+            font-size: 1rem;
+            border-radius: 8px;
+            border: 1px solid #ced4da;
         }
     </style>
 </head>
