@@ -308,20 +308,20 @@ class PointsView(MethodView):
 
         action = request.form.get("action", None)
 
-        if action == "delete_point":
-            # Single-delete logic
-            point_id = request.form.get("point_id")
-            if not point_id:
-                return "Missing point_id", 400
+        # if action == "delete_point":
+        #     # Single-delete logic
+        #     point_id = request.form.get("point_id")
+        #     if not point_id:
+        #         return "Missing point_id", 400
 
-            point = GPSData.query.filter_by(id=point_id, user_id=user.id).first()
-            if not point:
-                return "Point not found or not yours", 404
+        #     point = GPSData.query.filter_by(id=point_id, user_id=user.id).first()
+        #     if not point:
+        #         return "Point not found or not yours", 404
 
-            db.session.delete(point)
-            db.session.commit()
+        #     db.session.delete(point)
+        #     db.session.commit()
 
-        elif action == "batch_delete":
+        if action == "batch_delete":
             # Batch delete: get all selected point IDs
             selected_ids = request.form.getlist("selected_points")
             if selected_ids:

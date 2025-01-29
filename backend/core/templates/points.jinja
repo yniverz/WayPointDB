@@ -43,7 +43,7 @@ Points Overview
                     <th>Latitude</th>
                     <th>Longitude</th>
                     <th>Speed (m/s)</th>
-                    <th>Actions</th>
+                    {# <th>Actions</th> #}
                 </tr>
             </thead>
             <tbody>
@@ -58,14 +58,14 @@ Points Overview
                         <td>{{ point.latitude }}</td>
                         <td>{{ point.longitude }}</td>
                         <td>{{ point.speed }}</td>
-                        <td>
+                        {# <td>
                             <!-- Optional: single-delete form; can keep or remove -->
                             <form method="POST" action="{{ url_for('web.points', date=request.args.get('date','')) }}" style="display:inline;">
                                 <input type="hidden" name="action" value="delete_point">
                                 <input type="hidden" name="point_id" value="{{ point.id }}">
                                 <button type="submit">Delete</button>
                             </form>
-                        </td>
+                        </td> #}
                     </tr>
                     {% endfor %}
                 {% else %}

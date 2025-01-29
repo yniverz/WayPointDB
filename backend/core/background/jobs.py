@@ -152,6 +152,57 @@ class PhotonFillJob(QueryPhotonJob):
 
 
 
+class GenerateSpeedDataJob(Job):
+    PARAMETERS = {
+        "user": User
+    }
+
+    def __init__(self, user: User):
+        super().__init__()
+        self.user_id = user.id
+
+    def run(self):
+        user = User.query.get(self.user_id)
+        if not user:
+            self.done = True
+            return
+        
+        # Get all GPS data for the user sorted by timestamp
+        gps_data: list[GPSData] = GPSData.query.filter_by(user_id=user.id).order_by(GPSData.timestamp).all()
+        if not gps_data:
+            self.done = True
+            return
+        
+        i = 0
+        total_count = len(gps_data)
+        for data in gps_data:
+            if self.stop_requested:
+                break
+
+            if data.speed is not None and data.speed > 0:
+                continue
+
+            if i > 0:
+                prev = gps_data[i - 1]
+                distance = geopy.distance.distance((prev.latitude, prev.longitude), (data.latitude, data.longitude)).m
+                time_diff = (data.timestamp - prev.timestamp).total_seconds()
+                if time_diff > 0:
+                    data.speed = distance / time_diff
+                    db.session.add(data)
+
+            if i % 1000 == 0:
+                db.session.commit()
+
+            i += 1
+            self.progress = (i / total_count)
+
+        db.session.commit()
+
+        self.done = True
+
+
+
+
 class GenerateFullStatisticsJob(Job):
     PARAMETERS = {
         "user": User
@@ -225,7 +276,7 @@ class GenerateFullStatisticsJob(Job):
             db.session.add(stat)
             self.progress = 0.9 + (i / total_count) * 0.1
 
-            if i % 100 == 0:
+            if i % 1000 == 0:
                 db.session.commit()
 
             i += 1
@@ -287,6 +338,7 @@ class GenerateWeeklyStatisticsJob(Job):
 
 JOB_TYPES: dict[str, Job] = {
     "full_stats": GenerateFullStatisticsJob,
+    "speed_data": GenerateSpeedDataJob,
 }
 
 if len(Config.PHOTON_SERVER_HOST) != 0:
