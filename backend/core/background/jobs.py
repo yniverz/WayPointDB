@@ -1,4 +1,5 @@
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime
 import uuid
 from flask import Flask
 import requests
@@ -234,6 +235,54 @@ class GenerateFullStatisticsJob(Job):
         self.done = True
 
 
+
+class GenerateWeeklyStatisticsJob(Job):
+    PARAMETERS = {
+        "user": User
+    }
+
+    def __init__(self, user: User):
+        super().__init__()
+        self.user_id = user.id
+
+    def run(self):
+        user = User.query.get(self.user_id)
+        if not user:
+            self.done = True
+            return
+        
+        # regenerate daily stats for past 7 days
+        for i in range(7):
+            date = time.localtime(time.time() - i * 86400)
+            key = f"{date.tm_year}-{date.tm_mon}-{date.tm_mday}"
+            stats = DailyStatistic.query.filter_by(user_id=user.id, year=date.tm_year, month=date.tm_mon, day=date.tm_mday).all()
+            for stat in stats:
+                db.session.delete(stat)
+
+            # get all GPS data for the user on that day
+            start = datetime(date.tm_year, date.tm_mon, date.tm_mday, 0, 0, 0)
+            end = datetime(date.tm_year, date.tm_mon, date.tm_mday, 23, 59, 59)
+            
+            gps_data: list[GPSData] = GPSData.query.filter_by(user_id=user.id).filter(GPSData.timestamp >= start, GPSData.timestamp <= end).all()
+            if not gps_data:
+                continue
+
+            daily_stat = DailyStatistic(
+                user_id=user.id,
+                year=date.tm_year,
+                month=date.tm_mon,
+                day=date.tm_mday,
+            )
+
+            i = 0
+            for data in gps_data:
+                if i > 0:
+                    prev = gps_data[i - 1]
+                    daily_stat.total_distance_m += geopy.distance.distance((prev.latitude, prev.longitude), (data.latitude, data.longitude)).m
+                i += 1
+
+            db.session.add(daily_stat)
+            db.session.commit()
 
 
 JOB_TYPES: dict[str, Job] = {

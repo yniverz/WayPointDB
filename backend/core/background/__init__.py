@@ -6,7 +6,7 @@ from flask import Flask
 
 from ..models import User
 from ..config import Config
-from .jobs import GenerateFullStatisticsJob, Job, PhotonFillJob
+from .jobs import GenerateWeeklyStatisticsJob, Job, PhotonFillJob
 
 
 
@@ -85,7 +85,7 @@ class JobManager:
                     job = PhotonFillJob(user)
                     self.add_job(job)
 
-                job = GenerateFullStatisticsJob(user)
+                job = GenerateWeeklyStatisticsJob(user)
                 self.add_job(job)
 
             
