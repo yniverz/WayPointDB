@@ -38,22 +38,23 @@
         </tbody>
     </table>
     
+    <hr/>
+    
     <form method="POST">
         <h3>Add User</h3>
         <input type="hidden" name="action" value="add_user">
-        <label for="email">Email:</label>
-        <input type="email" name="email" id="email" required>
+        <label for="email">Email:</label><br/>
+        <input type="email" name="email" id="email" required><br>
         <br>
-        <br>
-        <label for="password">Password:</label>
-        <input type="password" name="password" id="password" required>
-        <br>
+        <label for="password">Password:</label><br/>
+        <input type="password" name="password" id="password" required><br>
         <br>
         <label for="is_admin">Is Admin:</label>
         <select name="is_admin" id="is_admin">
             <option value="false">No</option>
             <option value="true">Yes</option>
-        </select>
+        </select><br/>
+        <br>
         <button type="submit">Add User</button>
     </form>
 
