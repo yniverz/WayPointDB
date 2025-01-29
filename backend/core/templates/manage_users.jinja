@@ -10,7 +10,6 @@
     <table border="1" cellpadding="5" cellspacing="0">
         <thead>
             <tr>
-                <th>ID</th>
                 <th>Email</th>
                 <th>Is Admin</th>
                 <th></th>
@@ -19,7 +18,6 @@
         <tbody>
             {% for user in users %}
                 <tr>
-                    <td>{{ user.id }}</td>
                     <td>{{ user.email }}</td>
                     <td>{{ 'Yes' if user.is_admin else 'No' }}</td>
                     <td>

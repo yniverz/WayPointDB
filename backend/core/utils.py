@@ -1,3 +1,4 @@
+import traceback
 import uuid
 import flask
 from flask import session, redirect, url_for, g
@@ -29,7 +30,10 @@ def api_key_required(f):
 def get_current_user():
     """Return the currently logged-in user object (or None) using the session."""
     if "user_id" in session:
-        return User.query.get(session["user_id"])
+        try:
+            return User.query.get(session["user_id"])
+        except:
+            print(traceback.format_exc())
     return None
 
 def create_default_user():
