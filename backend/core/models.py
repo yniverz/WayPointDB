@@ -1,3 +1,4 @@
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from werkzeug.security import generate_password_hash, check_password_hash
 from .extensions import db
@@ -32,6 +33,7 @@ class GPSData(db.Model):
     speed = db.Column(db.Float)
     speed_accuracy = db.Column(db.Float)
 
+    reverse_geocoded = db.Column(db.Boolean, default=False)
     country = db.Column(db.String(255))
     city = db.Column(db.String(255))
     state = db.Column(db.String(255))
@@ -43,14 +45,16 @@ class GPSData(db.Model):
     user = db.relationship("User", backref=db.backref("gps_data", lazy=True))
 
 
-class MonthlyStatistic(db.Model):
-    """Stores monthly statistics for a user."""
+
+class DailyStatistic(db.Model):
+    """Stores daily statistics for a user."""
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     year = db.Column(db.Integer, nullable=False)
     month = db.Column(db.Integer, nullable=False)
+    day = db.Column(db.Integer, nullable=False)
     total_distance_m = db.Column(db.Float, default=0.0)
     visited_countries = db.Column(db.JSON, default=[])
     visited_cities = db.Column(db.JSON, default=[])
 
-    user = db.relationship("User", backref=db.backref("monthly_stats", lazy=True))
+    user = db.relationship("User", backref=db.backref("daily_stats", lazy=True))

@@ -5,24 +5,89 @@
 {% endblock %}
 
 {% block content %}
-  <h1>Overall Stats</h1>
-  <p><strong>Total Unique Cities Visited:</strong> {{ total_cities|length }}</p>
-  <p><strong>Total Unique Countries Visited:</strong> {{ total_countries|length }}</p>
-  
-  <!-- Button to open a modal listing all cities/countries across all years -->
-  <button type="button"
-          class="btn btn-primary"
-          data-bs-toggle="modal"
-          data-bs-target="#modal-all">
-    Show All Cities & Countries
-  </button>
+  <style>
+        .stat-container {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            grid-gap: 10px;
+            padding: 10px;
+            border-radius: 20px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.317);
+        }
+
+        /* Stack vertically when the container is too small */
+        @media (max-width: 1000px) { 
+            .stat-container {
+                grid-template-columns: 1fr; /* Force single column */
+            }
+        }
+
+        .stat-container div {
+            text-align: center;
+        }
+
+        .stat-container p {
+            font-size: 2em;
+            font-weight: bold;
+            margin-bottom: 0;
+        }
+
+        .stat-container small {
+            font-size: 1em;
+            color: #6c757d;
+        }
+
+        .stat-button {
+            text-decoration: underline;
+            cursor: pointer;
+        }
+
+        .stat-button:hover {
+            color: #007bff;
+        }
+
+        .charts-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            grid-gap: 20px;
+        }
+
+        .chart-container {
+            padding: 20px;
+            border-radius: 20px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.317);
+        }
+  </style>
+
+  <div class="stat-container">
+    <div>
+      <p style="color: #747fff">{{ total_distance }}</p>
+      <small>Total Distance Travelled (km)</small>
+    </div>
+    <div>
+      <p style="color: #00aa6e">{{ total_points }}</p>
+      <small>Total Points</small>
+    </div>
+    <div>
+      <p style="color: #00aa6e">{{ total_geocoded }}</p>
+      <small>Total Geocoded Points<br>({{ total_not_geocoded }} with no geo data)</small>
+    </div>
+    <div>
+      <p style="color: #ffbe00" class="stat-button" data-bs-toggle="modal" data-bs-target="#modal-countries">{{ total_countries|length }}</p>
+      <small>Countries Visited</small>
+    </div>
+    <div>
+      <p style="color: #a6adbb" class="stat-button" data-bs-toggle="modal" data-bs-target="#modal-cities">{{ total_cities|length }}</p>
+      <small>Cities Visited</small>
+    </div>
+  </div>
 
   <!-- Overall modal -->
-  <div class="modal fade" id="modal-all" tabindex="-1" aria-labelledby="modalLabelAll" aria-hidden="true">
+  <div class="modal fade" id="modal-cities" tabindex="-1" aria-labelledby="modalLabelAll" aria-hidden="true">
     <div class="modal-dialog">
       <div class="modal-content">
         <div class="modal-header">
-          <h5 class="modal-title" id="modalLabelAll">All Cities & Countries</h5>
+          <h5 class="modal-title" id="modalLabelAll">All Cities</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
         <div class="modal-body">
@@ -32,7 +97,18 @@
               <li>{{ city }}</li>
             {% endfor %}
           </ul>
-          
+        </div>
+      </div>
+    </div>
+  </div>
+   <div class="modal fade" id="modal-countries" tabindex="-1" aria-labelledby="modalLabelAll" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="modalLabelAll">All Countries</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
           <h6>Countries</h6>
           <ul>
             {% for country in total_countries %}
@@ -47,53 +123,68 @@
   <hr>
 
   <!-- Now loop over each year, generating a bar chart and year-specific stats -->
+  <div class="charts-container">
   {% for year, data in stats_by_year.items() %}
-    <h2>{{ year }}</h2>
-    <p><strong>Total Distance This Year:</strong> {{ data.total_distance|round(2) }} km</p>
-    <p><strong>Cities Visited:</strong> {{ data.cities|length }}</p>
-    <p><strong>Countries Visited:</strong> {{ data.countries|length }}</p>
+    <div class="chart-container">
+      <p style="margin-bottom: 10px;"><a href="/stats/{{ year }}"><strong>{{ year }}</strong></a> <a style="color: #6c757d;" href="/map?start_date={{ year }}-01-01&end_date={{ year }}-12-31"><strong>[Map]</strong></a></p>
 
-    <!-- Button to open year-specific modal listing cities/countries -->
-    <button type="button"
-            class="btn btn-secondary"
-            data-bs-toggle="modal"
-            data-bs-target="#modal-{{ year }}">
-      Show Cities & Countries
-    </button>
+      <!-- two elements next to each other horizontally -->
+      <div style="display: flex; font-size: 0.8em; color: #6c757d;">
+        <p>{{ data.total_distance|round(2) }} km</p>
+        <p style="margin-left: auto; margin-right: 0;"><p class="stat-button" data-bs-toggle="modal" data-bs-target="#modal-countries-{{ year }}">{{ data.countries|length }}</p>&nbsp; countries,&nbsp; <p class="stat-button" data-bs-toggle="modal" data-bs-target="#modal-cities-{{ year }}">{{ data.cities|length }}</p>&nbsp; cities</p>
+      </div>
 
-    <!-- Year-specific modal -->
-    <div class="modal fade" id="modal-{{ year }}" tabindex="-1"
-         aria-labelledby="modalLabel-{{ year }}" aria-hidden="true">
-      <div class="modal-dialog">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title" id="modalLabel-{{ year }}">
-              Cities & Countries for {{ year }}
-            </h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-          </div>
-          <div class="modal-body">
-            <h6>Cities</h6>
-            <ul>
-              {% for city in data.cities %}
-                <li>{{ city }}</li>
-              {% endfor %}
-            </ul>
-            <h6>Countries</h6>
-            <ul>
-              {% for country in data.countries %}
-                <li>{{ country }}</li>
-              {% endfor %}
-            </ul>
+      <!-- The bar chart canvas for this year -->
+      <canvas id="chart-{{ year }}" width="800" height="400"></canvas>
+
+      <!-- Year-specific modal -->
+      <div class="modal fade" id="modal-cities-{{ year }}" tabindex="-1"
+          aria-labelledby="modalLabel-{{ year }}" aria-hidden="true">
+        <div class="modal-dialog">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title" id="modalLabel-{{ year }}">
+                Cities for {{ year }}
+              </h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+              <h6>Cities</h6>
+              <ul>
+                {% for city in data.cities %}
+                  <li>{{ city }}</li>
+                {% endfor %}
+              </ul>
+            </div>
           </div>
         </div>
       </div>
-    </div>
 
-    <!-- The bar chart canvas for this year -->
-    <canvas id="chart-{{ year }}" width="800" height="300"></canvas>
-    <hr>
+      <div class="modal fade" id="modal-countries-{{ year }}" tabindex="-1"
+          aria-labelledby="modalLabel-{{ year }}" aria-hidden="true">
+        <div class="modal-dialog">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title" id="modalLabel-{{ year }}">
+                Countries for {{ year }}
+              </h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+              <h6>Countries</h6>
+              <ul>
+                {% for country in data.countries %}
+                  <li>{{ country }}</li>
+                {% endfor %}
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
   {% endfor %}
+  </div>
 
   <!-- Include Chart.js (CDN link for simplicity) -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -133,7 +224,7 @@
                 display: false
               },
               title: {
-                display: true,
+                display: false,
                 text: "Monthly Distance in " + year + " (km)"
               }
             }

@@ -20,10 +20,23 @@ def inject_user():
         "current_user": getattr(g, "current_user", None)
     }
 
+def month_name(value):
+    months = [
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December"
+    ]
+    # The function expects month values 1..12
+    try:
+        return months[value - 1]
+    except (IndexError, TypeError):
+        # Fallback if value is out of range or invalid
+        return "Unknown Month"
+
 def create_web_app(config_class = Config):
     app = Flask(__name__, template_folder="templates")
     app.config.from_object(config_class)
     app.context_processor(inject_user)
+    app.jinja_env.filters["month_name"] = month_name
 
     # Optionally set up a custom Jinja loader:
     app.jinja_loader = ChoiceLoader([FileSystemLoader(os.path.join(os.path.dirname(__file__), "templates"))])

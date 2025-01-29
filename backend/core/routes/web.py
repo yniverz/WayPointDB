@@ -11,7 +11,7 @@ from flask.views import MethodView
 
 from ..background.jobs import JOB_TYPES, GenerateFullStatisticsJob
 from ..background import job_manager
-from ..models import MonthlyStatistic, User, GPSData, db
+from ..models import DailyStatistic, User, GPSData, db
 from ..utils import login_required, get_current_user
 from ..config import Config
 
@@ -57,12 +57,38 @@ class JobsView(MethodView):
     def get(self):
         """Example protected dashboard."""
 
-        return render_template("jobs.jinja", jobs=job_manager.get_jobs(), time_now=time.time(), photon_active=len(Config.PHOTON_SERVER_HOST) != 0)
+        raw_jobs = job_manager.get_jobs()
+        jobs = []
+        for job in raw_jobs:
+            start_time = job[4] or time.time()
+            progress = max(0.01, job[3] * 100)
+
+            time_passed = time.time() - start_time
+            time_left = (100 - job[3]) * ((time.time() - start_time) / progress)
+            
+            jobs.append((job[0], job[1], job[2], progress, time.strftime("%H:%M:%S", time.gmtime(time_passed),), time.strftime("%H:%M:%S", time.gmtime(time_left),)))
+
+        return render_template("jobs.jinja", jobs=jobs, photon_active=len(Config.PHOTON_SERVER_HOST) != 0)
     
     def post(self):
 
-        job_name = request.form.get("jobName")
+        if "newJob" in request.form:
+            return self.do_new_job(request.form)
 
+        if "cancelJob" in request.form:
+            return self.do_cancel_job(request.form)
+        
+        return "Invalid request", 405
+
+    def do_cancel_job(self, params: dict):
+        job_id = params.get("cancelJob")
+        job_manager.cancel_job(job_id, blocking=True)
+
+        return redirect(url_for("web.jobs"))
+
+    def do_new_job(self, params: dict):
+        job_name = params.get("newJob")
+        
         if job_name not in JOB_TYPES:
             return "Invalid job name", 405
         
@@ -73,12 +99,12 @@ class JobsView(MethodView):
             if param == "user":
                 continue
 
-            if param not in request.form:
+            if param not in params:
                 return f"Missing parameter: {param}", 401
         
         needed_params = set(job.PARAMETERS) - {"user"}
             
-        job_instance = job(user=get_current_user(), **{param: request.form[param] for param in needed_params})
+        job_instance = job(user=get_current_user(), **{param: params[param] for param in needed_params})
         
         job_manager.add_job(job_instance)
 
@@ -86,14 +112,17 @@ class JobsView(MethodView):
 
 
 
-    
 class StatsView(MethodView):
     decorators = [login_required]
 
     def get(self):
         user = get_current_user()
 
-        stats = MonthlyStatistic.query.filter_by(user_id=user.id).all()
+        total_points = GPSData.query.filter_by(user_id=user.id).count()
+        # total_geocoded = GPSData.query.filter_by(user_id=user.id, reverse_geocoded=True).count()
+        total_geocoded = GPSData.query.filter_by(user_id=user.id).filter(GPSData.country != None).count()
+
+        stats = DailyStatistic.query.filter_by(user_id=user.id).all()
 
         # We'll group stats by year
         stats_by_year = defaultdict(lambda: {
@@ -105,7 +134,6 @@ class StatsView(MethodView):
 
         for stat in stats:
             year = stat.year
-            # stat.month is a date; we want the month index [0..11]
             month_idx = stat.month - 1  # January -> 0, etc.
 
             # Accumulate distances (in meters). We'll convert to km later.
@@ -123,12 +151,14 @@ class StatsView(MethodView):
         # Collect overall unique sets across **all** years
         all_cities = set()
         all_countries = set()
+        total_distance = 0.0
 
         # Convert sets to lists for JSON serialization; also convert meters -> km
         stats_by_year_processed = {}
         for year, data in sorted(stats_by_year.items(), reverse=True):
             all_cities.update(data["cities"])
             all_countries.update(data["countries"])
+            total_distance += data["total_distance"]
 
             stats_by_year_processed[year] = {
                 "monthly_distances": [dist_m / 1000 for dist_m in data["monthly_distances"]],
@@ -148,7 +178,77 @@ class StatsView(MethodView):
             stats_by_year=stats_by_year_processed,   # Dict of years → aggregated data
             total_cities=list(all_cities),
             total_countries=list(all_countries),
+            total_distance=f"{total_distance / 1000.0:,.0f}",  # Convert to KM
+            total_points=f"{total_points:,}",
+            total_geocoded=f"{total_geocoded:,}",
+            total_not_geocoded=f"{total_points - total_geocoded:,}",
         )
+    
+
+class YearlyStatsView(MethodView):
+    decorators = [login_required]
+
+    def get(self, year):
+        user = get_current_user()
+
+        if not year:
+            return "Missing year", 400
+
+        stats = DailyStatistic.query.filter_by(user_id=user.id, year=year).all()
+
+        # We'll group stats by month
+        stats_by_month = defaultdict(lambda: {
+            "monthly_distances": [0.0] * 31,  # 31 days
+            "cities": set(),
+            "countries": set(),
+            "total_distance": 0.0
+        })
+
+        for stat in stats:
+            month = stat.month
+            day = stat.day
+
+            # Accumulate distances (in meters). We'll convert to km later.
+            stats_by_month[month]["monthly_distances"][day - 1] = stat.total_distance_m
+
+            # Update visited cities / countries (they are stored in JSON columns)
+            if stat.visited_cities:
+                stats_by_month[month]["cities"].update(stat.visited_cities)
+            if stat.visited_countries:
+                stats_by_month[month]["countries"].update(stat.visited_countries)
+
+            # Track total distance in meters for each month
+            stats_by_month[month]["total_distance"] += stat.total_distance_m
+
+        # Collect overall unique sets across **all** months
+        all_cities = set()
+        all_countries = set()
+        total_distance = 0.0
+
+        # Convert sets to lists for JSON serialization; also convert meters -> km
+        stats_by_month_processed = {}
+        for month, data in sorted(stats_by_month.items()):
+            all_cities.update(data["cities"])
+            all_countries.update(data["countries"])
+            total_distance += data["total_distance"]
+
+            stats_by_month_processed[month] = {
+                "monthly_distances": [dist_m / 1000 for dist_m in data["monthly_distances"]],
+                "cities": list(data["cities"]),
+                "countries": list(data["countries"]),
+                "total_distance": data["total_distance"] / 1000.0,  # store in KM
+            }
+
+        return render_template(
+            "stats_yearly.jinja",
+            year=year,
+            stats_by_month=stats_by_month_processed,   # Dict of months → aggregated data
+            total_cities=list(all_cities),
+            total_countries=list(all_countries),
+            total_distance=f"{total_distance / 1000.0:,.0f}",  # Convert to KM
+        )
+
+
     
 class MapView(MethodView):
     decorators = [login_required]
@@ -396,5 +496,6 @@ web_bp.add_url_rule("/logout", view_func=LogoutView.as_view("logout"))
 # web_bp.add_url_rule("/dashboard", view_func=DashboardView.as_view("dashboard"))
 web_bp.add_url_rule("/map", view_func=MapView.as_view("map"), methods=["GET", "POST", "DELETE"])
 web_bp.add_url_rule("/stats", view_func=StatsView.as_view("stats"))
+web_bp.add_url_rule("/stats/<int:year>", view_func=YearlyStatsView.as_view("yearly_stats"))
 web_bp.add_url_rule("/manage_users", view_func=ManageUsersView.as_view("manage_users"), methods=["GET", "POST"])
 web_bp.add_url_rule("/account", view_func=AccountView.as_view("account"), methods=["GET", "POST"])
