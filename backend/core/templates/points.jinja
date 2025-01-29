@@ -1,0 +1,134 @@
+{% extends "base.jinja" %}
+
+{% block heading %}
+Points Overview
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <!-- Single Date Selector (same as before) -->
+    <div class="date-selector" style="display: flex; gap: 10px; justify-content: center; align-items: center; margin-bottom: 20px;">
+        <button onclick="adjustDate(-1)">&lt;&lt;</button>
+        <input type="date" id="date-input">
+        <button onclick="adjustDate(1)">&gt;&gt;</button>
+        <button onclick="setDateRange('today')">Today</button>
+        <button onclick="setDateRange('yesterday')">Yesterday</button>
+    </div>
+
+    <!-- Hidden form to submit GET params for date selection -->
+    <form method="get" id="date-form" style="display: none;">
+        <input type="hidden" name="date" id="hidden-date-input" />
+    </form>
+
+    <h2>Points</h2>
+
+    <!-- Wrap the table in a single POST form for batch delete -->
+    <form method="POST" action="{{ url_for('web.points', date=request.args.get('date', '') ) }}">
+        <input type="hidden" name="action" value="batch_delete">
+
+        <!-- Submit button to delete all selected points -->
+        <div style="margin-top: 10px;">
+            <button type="submit">Delete Selected</button>
+        </div>
+        <br>
+
+        <table border="1" cellpadding="5" cellspacing="0">
+            <thead>
+                <tr>
+                    <th>
+                        <!-- "Select All" checkbox -->
+                        <input type="checkbox" id="select-all" />
+                    </th>
+                    <th>Timestamp</th>
+                    <th>Latitude</th>
+                    <th>Longitude</th>
+                    <th>Speed (m/s)</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if points %}
+                    {% for point in points %}
+                    <tr>
+                        <td>
+                            <!-- Checkbox for each row -->
+                            <input type="checkbox" name="selected_points" value="{{ point.id }}">
+                        </td>
+                        <td>{{ point.timestamp }}</td>
+                        <td>{{ point.latitude }}</td>
+                        <td>{{ point.longitude }}</td>
+                        <td>{{ point.speed }}</td>
+                        <td>
+                            <!-- Optional: single-delete form; can keep or remove -->
+                            <form method="POST" action="{{ url_for('web.points', date=request.args.get('date','')) }}" style="display:inline;">
+                                <input type="hidden" name="action" value="delete_point">
+                                <input type="hidden" name="point_id" value="{{ point.id }}">
+                                <button type="submit">Delete</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr><td colspan="6">No points found for this date.</td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </form>
+</div>
+
+<script>
+function submitDate(dateString) {
+    document.getElementById("hidden-date-input").value = dateString;
+    document.getElementById("date-form").submit();
+}
+
+function adjustDate(days) {
+    const dateInput = document.getElementById("date-input");
+    let currentDate = new Date(dateInput.value);
+    if (isNaN(currentDate.getTime())) {
+        currentDate = new Date();
+    }
+    currentDate.setDate(currentDate.getDate() + days);
+    submitDate(currentDate.toISOString().split('T')[0]);
+}
+
+function setDateRange(range) {
+    let today = new Date();
+    let chosenDate;
+
+    if (range === 'today') {
+        chosenDate = today;
+    } else if (range === 'yesterday') {
+        chosenDate = new Date(today);
+        chosenDate.setDate(chosenDate.getDate() - 1);
+    } else {
+        chosenDate = today;
+    }
+    submitDate(chosenDate.toISOString().split('T')[0]);
+}
+
+// On load, fill the date picker from the ?date= param or default to today
+document.addEventListener("DOMContentLoaded", () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const dateParam = urlParams.get("date");
+    const dateInput = document.getElementById("date-input");
+
+    if (dateParam) {
+        dateInput.value = dateParam;
+    } else {
+        // Default to today's date
+        let now = new Date();
+        dateInput.value = now.toISOString().split('T')[0];
+    }
+
+    // "Select All" checkbox logic
+    const selectAllCheckbox = document.getElementById("select-all");
+    selectAllCheckbox.addEventListener('change', function() {
+        const checkboxes = document.querySelectorAll('input[name="selected_points"]');
+        checkboxes.forEach(cb => {
+            cb.checked = selectAllCheckbox.checked;
+        });
+    });
+});
+</script>
+{% endblock %}

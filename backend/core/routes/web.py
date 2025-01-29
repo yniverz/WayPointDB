@@ -1,5 +1,5 @@
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timedelta
 import uuid
 import time
 import psycopg2
@@ -65,8 +65,23 @@ class JobsView(MethodView):
 
             time_passed = time.time() - start_time
             time_left = (100 - job[3]) * ((time.time() - start_time) / progress)
+
+            time_passed_str = time.strftime("%H:%M:%S", time.gmtime(time_passed))
+            if time_passed > 60*60*24:
+                time_passed_str = f"{time_passed // (60*60*24):.0f}d " + time_passed_str
             
-            jobs.append((job[0], job[1], job[2], progress, time.strftime("%H:%M:%S", time.gmtime(time_passed),), time.strftime("%H:%M:%S", time.gmtime(time_left),)))
+            time_left_str = time.strftime("%H:%M:%S", time.gmtime(time_left))
+            if time_left > 60*60*24:
+                time_left_str = f"{time_left // (60*60*24):.0f}d " + time_left_str
+            
+            jobs.append((
+                job[0], 
+                job[1], 
+                job[2], 
+                progress, 
+                time_passed_str,
+                time_left_str
+            ))
 
         return render_template("jobs.jinja", jobs=jobs, photon_active=len(Config.PHOTON_SERVER_HOST) != 0)
     
@@ -247,6 +262,81 @@ class YearlyStatsView(MethodView):
             total_countries=list(all_countries),
             total_distance=f"{total_distance / 1000.0:,.0f}",  # Convert to KM
         )
+
+
+class PointsView(MethodView):
+    decorators = [login_required]  # or your own login decorator
+
+    def get(self):
+        user = get_current_user()
+        if not user:
+            return "Unauthorized", 401
+
+        # Single-date parameter
+        the_date_str = request.args.get("date")
+        now = datetime.now()
+
+        if not the_date_str:
+            # Default to today
+            start_date = datetime(now.year, now.month, now.day, 0, 0, 0)
+        else:
+            # Parse user-provided date
+            try:
+                parsed = datetime.strptime(the_date_str, "%Y-%m-%d")
+                start_date = datetime(parsed.year, parsed.month, parsed.day, 0, 0, 0)
+            except ValueError:
+                # Fallback to today if error
+                start_date = datetime(now.year, now.month, now.day, 0, 0, 0)
+
+        end_date = start_date + timedelta(hours=24)
+
+        # Query user’s points from start_date to end_date
+        points_query = GPSData.query.filter_by(user_id=user.id).filter(
+            GPSData.timestamp >= start_date,
+            GPSData.timestamp < end_date
+        )
+
+        # Sort newest -> oldest
+        points = points_query.order_by(GPSData.timestamp.desc()).all()
+
+        return render_template("points.jinja", points=points)
+
+    def post(self):
+        user = get_current_user()
+        if not user:
+            return "Unauthorized", 401
+
+        action = request.form.get("action", None)
+
+        if action == "delete_point":
+            # Single-delete logic
+            point_id = request.form.get("point_id")
+            if not point_id:
+                return "Missing point_id", 400
+
+            point = GPSData.query.filter_by(id=point_id, user_id=user.id).first()
+            if not point:
+                return "Point not found or not yours", 404
+
+            db.session.delete(point)
+            db.session.commit()
+
+        elif action == "batch_delete":
+            # Batch delete: get all selected point IDs
+            selected_ids = request.form.getlist("selected_points")
+            if selected_ids:
+                # Convert to int if needed
+                selected_ids = [int(x) for x in selected_ids if x.isdigit()]
+                # Delete all points matching these IDs for this user
+                GPSData.query.filter(
+                    GPSData.user_id == user.id,
+                    GPSData.id.in_(selected_ids)
+                ).delete(synchronize_session=False)
+                db.session.commit()
+
+        # Keep the date param in the redirect so we stay on the same day
+        return redirect(url_for("web.points", date=request.args.get("date", "")))
+
 
 
     
@@ -495,6 +585,7 @@ web_bp.add_url_rule("/login", view_func=LoginView.as_view("login"), methods=["GE
 web_bp.add_url_rule("/logout", view_func=LogoutView.as_view("logout"))
 # web_bp.add_url_rule("/dashboard", view_func=DashboardView.as_view("dashboard"))
 web_bp.add_url_rule("/map", view_func=MapView.as_view("map"), methods=["GET", "POST", "DELETE"])
+web_bp.add_url_rule("/points", view_func=PointsView.as_view("points"), methods=["GET", "POST"])
 web_bp.add_url_rule("/stats", view_func=StatsView.as_view("stats"))
 web_bp.add_url_rule("/stats/<int:year>", view_func=YearlyStatsView.as_view("yearly_stats"))
 web_bp.add_url_rule("/manage_users", view_func=ManageUsersView.as_view("manage_users"), methods=["GET", "POST"])
