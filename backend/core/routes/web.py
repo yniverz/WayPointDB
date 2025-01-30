@@ -10,6 +10,7 @@ from flask import (
     session, g, jsonify
 )
 from flask.views import MethodView
+from sqlalchemy import func
 
 from ..background.jobs import JOB_TYPES, GenerateFullStatisticsJob, ImportJob
 from ..background import job_manager
@@ -639,6 +640,18 @@ class MapView(MethodView):
         db.session.delete(point)
         db.session.commit()
         return "OK", 200
+    
+class HeatMapDataView(MethodView):
+    decorators = [login_required]
+
+    def get(self):
+        user = g.current_user
+
+        heatmap_query = GPSData.query.with_entities(
+            func.json_agg(func.json_build_array(GPSData.latitude, GPSData.longitude))
+        ).filter_by(user_id=user.id).scalar()
+
+        return heatmap_query, 200, {"Content-Type": "application/json"}
 
 class ManageUsersView(MethodView):
     decorators = [login_required]
@@ -722,6 +735,7 @@ web_bp.add_url_rule("/login", view_func=LoginView.as_view("login"), methods=["GE
 web_bp.add_url_rule("/logout", view_func=LogoutView.as_view("logout"))
 # web_bp.add_url_rule("/dashboard", view_func=DashboardView.as_view("dashboard"))
 web_bp.add_url_rule("/map", view_func=MapView.as_view("map"), methods=["GET", "POST", "DELETE"])
+web_bp.add_url_rule("/map/heatmap_data.json", view_func=HeatMapDataView.as_view("heatmap_data"))
 web_bp.add_url_rule("/points", view_func=PointsView.as_view("points"), methods=["GET", "POST"])
 web_bp.add_url_rule("/stats", view_func=StatsView.as_view("stats"))
 web_bp.add_url_rule("/stats/<int:year>", view_func=YearlyStatsView.as_view("yearly_stats"))

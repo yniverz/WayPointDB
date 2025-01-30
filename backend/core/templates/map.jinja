@@ -9,11 +9,13 @@ GPS Map
 <!-- Leaflet.js CSS & JS -->
 <link rel="stylesheet" href="/static/css/leaflet.css" />
 <script src="/static/js/leaflet.js"></script>
+<script src="/static/js/leaflet-heat.js"></script>
 
 <style>
     #map {
         height: 600px;
         width: 100%;
+        position: relative;
     }
 
     .loading-spinner {
@@ -48,12 +50,26 @@ GPS Map
         flex: 1 1 auto;
         min-width: 100px;
     }
+
+    /* Simple "legend" or control area in the top-right corner */
+    .map-legend {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        z-index: 999;
+        background: rgba(255, 255, 255, 0.8);
+        padding: 8px 12px;
+        border-radius: 4px;
+    }
 </style>
 
 <div class="container mt-4">
     <div class="date-selector">
         <button onclick="adjustDate(-1)">&lt;&lt;</button>
-        <div><input type="date" id="start-date"> to <input type="date" id="end-date"></div>
+        <div>
+            <input type="date" id="start-date"> to 
+            <input type="date" id="end-date">
+        </div>
         <button onclick="adjustDate(1)">&gt;&gt;</button>
         <button onclick="setDateRange('today')">Today</button>
         <button onclick="setDateRange('yesterday')">Yesterday</button>
@@ -61,8 +77,21 @@ GPS Map
         <button onclick="setDateRange('last_month')">Last Month</button>
         <button onclick="setDateRange('all')">All</button>
     </div>
+    
     <div id="map">
         <div id="loading-spinner" class="loading-spinner"></div>
+
+        <!-- Legend for toggling heatmap -->
+        <div class="map-legend">
+            <label>
+                <input 
+                    type="checkbox" 
+                    id="toggleHeatmap" 
+                    onchange="toggleHeatmap(this)" 
+                />
+                Enable Heatmap
+            </label>
+        </div>
     </div>
 </div>
 
@@ -73,6 +102,11 @@ GPS Map
     var lastBounds = null;
     var fetchTimeout = null;
     var delay = 500;
+
+    // Heatmap-related variables
+    var heatLayer = null;
+    var heatmapLoaded = false;  // to ensure data is only loaded once
+    var heatmapData = [];       // will be filled upon fetch
 
     function initMap() {
         map = L.map('map').setView([{{ last_point.latitude }}, {{ last_point.longitude }}], 10);
@@ -88,7 +122,7 @@ GPS Map
         map.on('movestart', () => clearTimeout(fetchTimeout));
         map.on('moveend', () => fetchTimeout = setTimeout(fetchGPSData, delay));
 
-        loadDateFromURL()
+        loadDateFromURL();
     }
 
     function updateURLParams(startDate, endDate) {
@@ -106,6 +140,7 @@ GPS Map
         var northEast = bounds.getNorthEast();
         var southWest = bounds.getSouthWest();
 
+        // Skip fetching if the map bounds haven't changed (and not forced)
         if (!forced && lastBounds && lastBounds.equals(bounds)) return;
         lastBounds = bounds;
 
@@ -148,11 +183,13 @@ GPS Map
             timestamp: record.t
         }));
 
+        // Draw polylines
         for (let i = 0; i < coordinates.length - 1; i++) {
             let color = getSpeedColor(coordinates[i].speed || 0);
             L.polyline([coordinates[i], coordinates[i + 1]], { color: color, weight: 4 }).addTo(polylineLayer);
         }
 
+        // Add markers if zoomed in enough OR small data set
         if (map.getZoom() > 18 || coordinates.length < 500) {
             coordinates.forEach(coord => {
                 let marker = L.circleMarker([coord.lat, coord.lng], {
@@ -205,6 +242,7 @@ GPS Map
 
     function getSpeedColor(speed) {
         let kph = speed * 3.6;
+        // Example: color scale from green (low speed) to red (high speed)
         let hue = Math.max(0, Math.min(120 - (kph / 200) * 120, 120));
         return `hsl(${hue}, 100%, 50%)`;
     }
@@ -268,6 +306,42 @@ GPS Map
         }
     }
 
+    // ------------- HEATMAP TOGGLING -------------
+    function toggleHeatmap(checkbox) {
+        if (checkbox.checked) {
+            // If the heatmap data has not been fetched yet, fetch it
+            if (!heatmapLoaded) {
+                fetchHeatmapData()
+                    .then(() => {
+                        // Create the heatLayer once data is available
+                        heatLayer = L.heatLayer(heatmapData).addTo(map);
+                        heatmapLoaded = true;
+                    })
+                    .catch(err => console.error("Error fetching heatmap data:", err));
+            } else {
+                // If already loaded before, just add it to the map
+                if (heatLayer) {
+                    map.addLayer(heatLayer);
+                }
+            }
+        } else {
+            // Uncheck: remove the heat layer if it exists
+            if (heatLayer) {
+                map.removeLayer(heatLayer);
+            }
+        }
+    }
+
+    // Fetch the heatmap data (only once)
+    function fetchHeatmapData() {
+        document.getElementById("loading-spinner").style.display = "block";
+        return fetch("/map/heatmap_data.json")
+            .then(response => response.json())
+            .then(data => {
+                heatmapData = data; // store globally
+            })
+            .finally(() => document.getElementById("loading-spinner").style.display = "none");
+    }
 
     document.addEventListener("DOMContentLoaded", initMap);
 </script>
