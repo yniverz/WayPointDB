@@ -9,3 +9,4 @@ flask_sqlalchemy
 argon2_cffi
 geopy
 requests
+regex
