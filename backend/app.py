@@ -1,5 +1,4 @@
 from waitress import serve
-from core.background.jobs import QueryPhotonJob
 from core import web_app, job_manager
 import signal
 import sys
