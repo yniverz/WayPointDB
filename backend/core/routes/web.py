@@ -65,10 +65,11 @@ class JobsView(MethodView):
         jobs = []
         for job in raw_jobs:
             start_time = job[4] or time.time()
-            progress = max(0.01, job[3] * 100)
+            progress = job[3] * 100
+            safe_progress = max(0.01, progress)
 
             time_passed = time.time() - start_time
-            time_left = (100 - job[3]) * ((time.time() - start_time) / progress)
+            time_left = (100 - job[3]) * ((time.time() - start_time) / safe_progress)
 
             time_passed_str = time.strftime("%H:%M:%S", time.gmtime(time_passed))
             if time_passed > 60*60*24:
