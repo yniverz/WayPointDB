@@ -2,6 +2,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_restx import Api
 from flask import Flask
+from sqlalchemy import create_engine
 
 db = SQLAlchemy()
 migrate = Migrate()
