@@ -19,6 +19,9 @@ class JobManager:
         self.running_jobs: list[Job] = []
         self.threads = []
 
+        self.running = False
+        self.stop_requested = False
+
     def set_config(self, config: Config):
         self.config = config
 
@@ -52,7 +55,11 @@ class JobManager:
 
     def run(self):
         last_day = time.localtime().tm_mday
+        self.running = True
         while True:
+            if self.stop_requested:
+                break
+
             try:
                 if len(self.threads) < int(self.config.BACKGROUND_MAX_THREADS):
                     if self.queued_jobs:
@@ -78,6 +85,8 @@ class JobManager:
 
             time.sleep(0.1)
 
+        self.running = False
+
     def check_for_daily_jobs(self):
         with self.web_app.app_context():
             for user in User.query.all():
@@ -91,9 +100,14 @@ class JobManager:
             
 
     def stop(self, blocking=False):
+        self.stop_requested = True
         self.queued_jobs.clear()
         for job in self.running_jobs:
             job.stop(blocking)
+
+        if blocking:
+            while self.running:
+                time.sleep(0.1)
 
     def add_job(self, job: Job):
         job.set_config(self.config)
