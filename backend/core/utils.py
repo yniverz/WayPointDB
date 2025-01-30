@@ -1,9 +1,12 @@
+import os
 import traceback
 import uuid
 import flask
 from flask import session, redirect, url_for, g
 from functools import wraps
-from .models import User, db
+
+from .config import Config
+from .models import GPSData, Import, User, db
 
 def login_required(f):
     """Decorator to ensure the user is logged in (session-based) for HTML routes."""
@@ -70,3 +73,39 @@ def create_default_user():
     #     db.session.add(user)
     #     db.session.commit()
 
+def check_db():
+    """Check if the database is empty and create a default user."""
+
+    # check for any files in the upload folder that are not in the database
+    for file in os.listdir(Config.UPLOAD_FOLDER):
+        if not Import.query.filter_by(filename=file).first():
+            os.remove(Config.UPLOAD_FOLDER + "/" + file)
+
+    # check all import ids in the gps data and if no import for that id exists, add it
+    import_ids = db.session.query(GPSData.import_id).distinct().all()
+    for (import_id,) in import_ids:
+        if not Import.query.filter_by(id=import_id).first():
+            # get the userid associated with the import_id
+            # user_id = GPSData.query.filter_by(import_id=import_id).first().user_id
+            # total_entries = GPSData.query.filter_by(import_id=import_id).count()
+
+            data = GPSData.query.filter_by(import_id=import_id)
+            total_entries = data.count()
+            user_id = data.first().user_id
+
+            import_obj = Import(
+                user_id=user_id,
+                filename="",
+                total_entries=total_entries
+            )
+
+    
+    for import_obj in Import.query.all():
+        if import_obj.filename == "":
+            continue
+
+        # make sure file exists
+        if not os.path.exists(Config.UPLOAD_FOLDER + "/" + import_obj.filename):
+            db.session.delete(import_obj)
+            db.session.commit()
+            continue

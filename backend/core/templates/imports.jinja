@@ -1,0 +1,101 @@
+{% extends "base.jinja" %}
+
+{% block heading %}
+GPS Imports
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>Upload JSON File</h2>
+    <p>
+        Please upload a JSON file with a <strong>list of dictionaries</strong>. Each dictionary must
+        at least contain:
+        <code>timestamp</code>, <code>latitude</code>, and <code>longitude</code>.
+        <br>
+        Optional fields can be:
+        <code>horizontal_accuracy</code>, <code>altitude</code>, <code>vertical_accuracy</code>,
+        <code>heading</code>, <code>heading_accuracy</code>, <code>speed</code>, <code>speed_accuracy</code>, etc.
+    </p>
+    <p>Example JSON structure:
+    <pre>[
+    {
+      "timestamp": "2025-01-01T12:00:00Z",
+      "latitude": 52.5200,
+      "longitude": 13.4050,
+      "speed": 0.0
+    },
+    ...
+    ]</pre>
+    </p>
+
+    <form method="POST" enctype="multipart/form-data" onsubmit="return validateFile();" style="border:1px solid #ccc; padding:10px;">
+        <input type="hidden" name="action" value="upload_json">
+        <label>Choose a JSON File:
+            <input type="file" name="json_file" id="json_file" accept=".json">
+        </label>
+        <button type="submit">Upload</button>
+    </form>
+
+    <br>
+    <h2>Existing Imports</h2>
+    {% if imports %}
+        <table border="1" cellpadding="5" cellspacing="0">
+            <thead>
+                <tr>
+                    <th>Filename</th>
+                    <th>Created At</th>
+                    <th>Total Entries</th>
+                    <th>Total Imported</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for imp in imports %}
+                <tr>
+                    <td>{{ imp.filename }}</td>
+                    <td>{{ imp.created_at }}</td>
+                    <td>{{ imp.total_entries }}</td>
+                    <td>{{ imp.total_imported }}</td>
+                    <td>
+                        <!-- Start Import Job -->
+                        <form method="POST" style="display:inline;">
+                            <input type="hidden" name="action" value="start_import">
+                            <input type="hidden" name="import_id" value="{{ imp.id }}">
+                            <button type="submit">Start Import Job</button>
+                        </form>
+                        
+                        <!-- Delete Import (with confirmation) -->
+                        <form method="POST" style="display:inline;" onsubmit="return confirmDelete();">
+                            <input type="hidden" name="action" value="delete_import">
+                            <input type="hidden" name="import_id" value="{{ imp.id }}">
+                            <button type="submit">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>No imports found.</p>
+    {% endif %}
+</div>
+
+<script>
+function validateFile() {
+    const fileInput = document.getElementById("json_file");
+    if (!fileInput.value) {
+        alert("Please select a .json file before uploading.");
+        return false;
+    }
+    if (!fileInput.value.toLowerCase().endsWith(".json")) {
+        alert("Only .json files are allowed.");
+        return false;
+    }
+    return true;
+}
+
+function confirmDelete() {
+    return confirm("Are you sure you want to delete this import AND all associated GPS data?");
+}
+</script>
+{% endblock %}

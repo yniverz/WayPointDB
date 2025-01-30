@@ -7,8 +7,8 @@ class Config:
     DB_NAME = os.getenv("POSTGRES_DB", "mydatabase")
     DB_USER = os.getenv("POSTGRES_USER", "user")
     DB_PASS = os.getenv("POSTGRES_PASSWORD", "password")
-    BACKGROUND_MAX_THREADS = os.getenv("BACKGROUND_MAX_THREADS", 5)
-    BACKGROUND_MAX_THREADS_PER_JOB = os.getenv("BACKGROUND_MAX_THREADS_PER_JOB", 5)
+    UPLOAD_FOLDER = os.getenv("UPLOAD_FOLDER", "/app/uploads")
+    BACKGROUND_MAX_THREADS = os.getenv("BACKGROUND_MAX_THREADS", 1)
     SQLALCHEMY_DATABASE_URI = f"postgresql://{DB_USER}:{DB_PASS}@{DB_HOST}/{DB_NAME}"
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     PHOTON_SERVER_HOST = os.getenv("PHOTON_SERVER_HOST", "")

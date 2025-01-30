@@ -35,7 +35,7 @@ class GPSData(db.Model):
     """Stores GPS data tied to a user."""
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     user_id = db.Column(UUID(as_uuid=True), db.ForeignKey("user.id"), nullable=False)
-    import_id = db.Column(db.String(255), nullable=True)
+    import_id = db.Column(UUID(as_uuid=True), db.ForeignKey("import.id"), nullable=True)
 
     timestamp = db.Column(db.DateTime, nullable=False, default=datetime.now(timezone.utc))
     latitude = db.Column(db.Float, nullable=False)
