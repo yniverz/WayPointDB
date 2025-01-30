@@ -1,10 +1,10 @@
 import os
 import traceback
-import uuid
 import flask
+
 from flask import session, redirect, url_for, g
 from functools import wraps
-
+from .models import User
 from .config import Config
 from .models import GPSData, Import, User, db
 
@@ -46,7 +46,6 @@ def get_current_user():
 
 def create_default_user():
     """Create a default admin user if none exists."""
-    from .models import User
     db.create_all()
 
     # make sure the tables conform to the latest schema
