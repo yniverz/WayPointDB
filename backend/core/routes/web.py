@@ -187,17 +187,11 @@ class StatsView(MethodView):
             total_distance += data["total_distance"]
 
             stats_by_year_processed[year] = {
-                "monthly_distances": [dist_m / 1000 for dist_m in data["monthly_distances"]],
+                "monthly_distances": [int(dist_m / 1000) for dist_m in data["monthly_distances"]],
                 "cities": list(data["cities"]),
                 "countries": list(data["countries"]),
-                "total_distance": data["total_distance"] / 1000.0,  # store in KM
+                "total_distance": int(data["total_distance"] / 1000.0),  # store in KM
             }
-
-        print(stats)
-        print(stats_by_year)
-        print(stats_by_year_processed)
-        print(all_cities)
-        print(all_countries)
 
         return render_template(
             "stats.jinja",
@@ -259,10 +253,10 @@ class YearlyStatsView(MethodView):
             total_distance += data["total_distance"]
 
             stats_by_month_processed[month] = {
-                "monthly_distances": [dist_m / 1000 for dist_m in data["monthly_distances"]],
+                "monthly_distances": [int(dist_m / 1000) for dist_m in data["monthly_distances"]],
                 "cities": list(data["cities"]),
                 "countries": list(data["countries"]),
-                "total_distance": data["total_distance"] / 1000.0,  # store in KM
+                "total_distance": int(data["total_distance"] / 1000.0),  # store in KM
             }
 
         return render_template(
