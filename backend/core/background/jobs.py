@@ -1,12 +1,13 @@
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
+import json
 import uuid
 from flask import Flask
 import requests
 import time
 import geopy.distance
 
-from ..models import DailyStatistic, GPSData, User
+from ..models import DailyStatistic, GPSData, Import, User
 from . import Config
 from ..extensions import db
 
@@ -334,6 +335,100 @@ class GenerateWeeklyStatisticsJob(Job):
 
             db.session.add(daily_stat)
             db.session.commit()
+
+
+
+
+
+class ImportJob(Job):
+    PARAMETERS = {
+        "user": User,
+        "import": Import
+    }
+
+    def __init__(self, user: User, import_obj: Import):
+        super().__init__()
+        self.user_id = user.id
+        self.import_obj = import_obj
+
+    def run(self):
+        user = User.query.get(self.user_id)
+        if not user:
+            self.done = True
+            return
+
+        # Read the file and parse the GPS data
+        with open(Config.UPLOAD_FOLDER + "/" + self.import_obj.filename, "r") as f:
+            data = f.read()
+
+        json_data = json.loads(data)
+        if not json_data:
+            self.done = True
+            return
+
+        # Load existing GPS data in memory for fast lookup
+        existing_points = set(
+            (r.timestamp, r.latitude, r.longitude)
+            # for r in GPSData.query.filter(GPSData.import_id == self.import_obj.id).all()
+            for r in GPSData.query.filter_by(import_id=self.import_obj.id).all()
+        )
+
+        i = 0
+        new_records = []  # Store new records in batch
+        for entry in json_data:
+            ts_str = entry.get("timestamp")
+            try:
+                ts = datetime.fromisoformat(ts_str)  # Parse timestamp as ISO 8601
+            except:
+                ts = datetime.now()  # Fallback to current timestamp
+
+            lat = entry["latitude"]
+            lon = entry["longitude"]
+
+            # Skip if record already exists
+            if (ts, lat, lon) in existing_points:
+                continue
+
+            gps_record = GPSData(
+                user_id=user.id,
+                import_id=self.import_obj.id,
+                timestamp=ts,
+                latitude=lat,
+                longitude=lon,
+                horizontal_accuracy=entry.get("horizontal_accuracy"),
+                altitude=entry.get("altitude"),
+                vertical_accuracy=entry.get("vertical_accuracy"),
+                heading=entry.get("heading"),
+                heading_accuracy=entry.get("heading_accuracy"),
+                speed=entry.get("speed"),
+                speed_accuracy=entry.get("speed_accuracy"),
+            )
+
+            new_records.append(gps_record)
+
+            # Batch insert every 1000 records
+            if len(new_records) >= 1000:
+                db.session.bulk_save_objects(new_records)
+                db.session.commit()
+                new_records = []  # Clear batch after commit
+
+            i += 1
+            self.progress = i / len(json_data)
+
+        # Final commit for remaining records
+        if new_records:
+            db.session.bulk_save_objects(new_records)
+            db.session.commit()
+
+        self.done = True
+
+        
+
+
+
+
+
+
 
 
 JOB_TYPES: dict[str, Job] = {

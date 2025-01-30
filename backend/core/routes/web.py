@@ -1,19 +1,22 @@
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+import os
 import uuid
 import time
 import psycopg2
+import json
 from flask import (
     Blueprint, render_template, request, redirect, url_for, 
     session, g, jsonify
 )
 from flask.views import MethodView
 
-from ..background.jobs import JOB_TYPES, GenerateFullStatisticsJob
+from ..background.jobs import JOB_TYPES, GenerateFullStatisticsJob, ImportJob
 from ..background import job_manager
-from ..models import DailyStatistic, User, GPSData, db
+from ..models import DailyStatistic, Import, User, GPSData, db
 from ..utils import login_required, get_current_user
 from ..config import Config
+from werkzeug.utils import secure_filename
 
 web_bp = Blueprint("web", __name__)
 
@@ -274,6 +277,7 @@ class PointsView(MethodView):
 
         # Single-date parameter
         the_date_str = request.args.get("date")
+        import_id = request.args.get("import")
         now = datetime.now()
 
         if not the_date_str:
@@ -296,10 +300,22 @@ class PointsView(MethodView):
             GPSData.timestamp < end_date
         )
 
+        if import_id:
+            points_query = points_query.filter_by(import_id=import_id)
+
         # Sort newest -> oldest
         points = points_query.order_by(GPSData.timestamp.desc()).all()
 
-        return render_template("points.jinja", points=points)
+        raw_imports = Import.query.filter_by(user_id=user.id).all()
+
+        imports = []
+        for imp in raw_imports:
+            imports.append({
+                "id": imp.id,
+                "name": imp.filename.split("_")[1],
+            })
+
+        return render_template("points.jinja", points=points, imports=imports)
 
     def post(self):
         user = get_current_user()
@@ -339,12 +355,145 @@ class PointsView(MethodView):
 
 
 
+class ImportsView(MethodView):
+    decorators = [login_required]
+    ALLOWED_EXTENSIONS = {"json"}
+
+    def get(self):
+        user = get_current_user()
+        if not user:
+            return "Unauthorized", 401
+
+        # Fetch all 'Import' records for this user
+        raw_imports = Import.query.filter_by(user_id=user.id).order_by(Import.created_at.desc()).all()
+
+        imports = []
+        for imp in raw_imports:
+            imports.append({
+                "id": imp.id,
+                "filename": imp.filename,
+                "created_at": imp.created_at,
+                "total_entries": imp.total_entries,
+                "total_imported": GPSData.query.filter_by(user_id=user.id, import_id=imp.id).count()
+            })
+
+
+        return render_template("imports.jinja", imports=imports)
+
+    def post(self):
+        user = get_current_user()
+        if not user:
+            return "Unauthorized", 401
+
+        action = request.form.get("action")
+        if not action:
+            return "Missing action", 400
+
+        if action == "upload_json":
+            return self.upload_json_file(user)
+        elif action == "start_import":
+            return self.start_import_job(user)
+        elif action == "delete_import":
+            return self.delete_import(user)
+        else:
+            return "Unknown action", 400
+
+    def upload_json_file(self, user):
+        """Handle the form submission where a user uploads a JSON file."""
+        file = request.files.get("json_file")
+        if not file or file.filename == "":
+            return "No file selected", 400
+
+        # Optional check for allowed extension
+        filename = secure_filename(file.filename)
+        name = os.path.splitext(filename)[0]
+        ext = os.path.splitext(filename)[1].lower()
+        if ext.replace(".", "") not in self.ALLOWED_EXTENSIONS:
+            return "Invalid file type. Only .json allowed.", 400
+
+        # Save file to disk with a unique name to avoid collisions
+        # Example: "user_<filename>_<user_id>_<uuid>.json"
+        unique_name = f"user_{name}_{user.id}_{uuid.uuid4()}{ext}"
+        save_path = os.path.join(Config.UPLOAD_FOLDER, unique_name)
+        file.save(save_path)
+
+        # parse file
+        with open(save_path, "r") as f:
+            data = f.read()
+
+        try:
+            json_data = json.loads(data)
+        except json.JSONDecodeError:
+            return "Invalid JSON file", 400
+        
+
+        # Create a new Import record
+        new_import = Import(
+            user_id=user.id,
+            filename=unique_name,
+            created_at=datetime.now(timezone.utc),
+            total_entries=len(json_data)
+        )
+        db.session.add(new_import)
+        db.session.commit()
+
+        # Redirect back to /imports
+        return redirect(url_for("web.imports"))
+
+    def start_import_job(self, user):
+        """Queue a background job to parse and insert data from the specified import."""
+        import_id = request.form.get("import_id")
+        if not import_id:
+            return "Missing import_id", 400
+
+        import_record = Import.query.filter_by(id=import_id, user_id=user.id).first()
+        if not import_record:
+            return "Import not found or not yours", 404
+
+        # Add job to job manager
+        # The job itself (ImportJob) will handle reading the file from disk,
+        # validating JSON, inserting GPSData, etc.
+        job_instance = ImportJob(user=user, import_obj=import_record)
+        job_manager.add_job(job_instance)
+
+        return redirect(url_for("web.imports"))
+
+    def delete_import(self, user):
+        """Deletes an import record AND all associated GPSData. Asks user for confirmation in the HTML form."""
+        import_id = request.form.get("import_id")
+        if not import_id:
+            return "Missing import_id", 400
+
+        import_record = Import.query.filter_by(id=import_id, user_id=user.id).first()
+        if not import_record:
+            return "Import not found or not yours", 404
+
+        # First delete associated GPSData by this import_id
+        # Note the "import_id" in GPSData is a string field, so match accordingly
+        GPSData.query.filter_by(user_id=user.id, import_id=str(import_record.id)).delete(synchronize_session=False)
+
+        # Remove the import record itself
+        db.session.delete(import_record)
+        db.session.commit()
+
+        # Optional: remove the file from disk
+        file_path = os.path.join(Config.UPLOAD_FOLDER, import_record.filename)
+        if os.path.exists(file_path):
+            os.remove(file_path)
+
+        return redirect(url_for("web.imports"))
+
+
     
 class MapView(MethodView):
     decorators = [login_required]
 
     def get(self):
         user = get_current_user()
+
+        if not user:
+            return "Unauthorized", 401
+
         last_point = GPSData.query.filter_by(user_id=user.id).order_by(GPSData.timestamp.desc()).first()
         if not last_point:
             # Some default coords
@@ -410,7 +559,7 @@ class MapView(MethodView):
                         altitude, vertical_accuracy, heading, heading_accuracy, speed, speed_accuracy,
                         ROW_NUMBER() OVER (ORDER BY timestamp) AS row_num
                     FROM gps_data
-                    WHERE user_id = {user.id}
+                    WHERE user_id = '{user.id}'
                     {date_filter}
                 ),
                 row_count AS (
@@ -429,7 +578,7 @@ class MapView(MethodView):
                 SELECT id, user_id, timestamp, latitude, longitude, horizontal_accuracy,
                     altitude, vertical_accuracy, heading, heading_accuracy, speed, speed_accuracy
                 FROM gps_data
-                WHERE user_id = {user.id}
+                WHERE user_id = '{user.id}'
                 AND latitude BETWEEN {sw_lat} AND {ne_lat}
                 AND longitude BETWEEN {sw_lng} AND {ne_lng}
                 {date_filter}
@@ -442,7 +591,7 @@ class MapView(MethodView):
                         altitude, vertical_accuracy, heading, heading_accuracy, speed, speed_accuracy,
                         ROW_NUMBER() OVER (ORDER BY timestamp) AS row_num
                     FROM gps_data
-                    WHERE user_id = {user.id}
+                    WHERE user_id = '{user.id}'
                     AND latitude BETWEEN {sw_lat} AND {ne_lat}
                     AND longitude BETWEEN {sw_lng} AND {ne_lng}
                     {date_filter}
@@ -580,7 +729,6 @@ class AccountView(MethodView):
 
 # Register the class-based views with the Blueprint
 web_bp.add_url_rule("/", view_func=HomeView.as_view("home"))
-web_bp.add_url_rule("/jobs", view_func=JobsView.as_view("jobs"), methods=["GET", "POST"])
 web_bp.add_url_rule("/login", view_func=LoginView.as_view("login"), methods=["GET", "POST"])
 web_bp.add_url_rule("/logout", view_func=LogoutView.as_view("logout"))
 # web_bp.add_url_rule("/dashboard", view_func=DashboardView.as_view("dashboard"))
@@ -590,3 +738,5 @@ web_bp.add_url_rule("/stats", view_func=StatsView.as_view("stats"))
 web_bp.add_url_rule("/stats/<int:year>", view_func=YearlyStatsView.as_view("yearly_stats"))
 web_bp.add_url_rule("/manage_users", view_func=ManageUsersView.as_view("manage_users"), methods=["GET", "POST"])
 web_bp.add_url_rule("/account", view_func=AccountView.as_view("account"), methods=["GET", "POST"])
+web_bp.add_url_rule("/jobs", view_func=JobsView.as_view("jobs"), methods=["GET", "POST"])
+web_bp.add_url_rule("/imports", view_func=ImportsView.as_view("imports"), methods=["GET", "POST"])

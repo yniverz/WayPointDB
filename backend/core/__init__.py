@@ -7,7 +7,7 @@ from .config import Config
 from .extensions import init_extensions, api_v1
 from .routes.web import web_bp
 from .routes.api import api_ns
-from .utils import create_default_user
+from .utils import check_db, create_default_user
 from .background import job_manager
 
 
@@ -52,6 +52,7 @@ def create_web_app(config_class = Config):
     # Create DB tables and default user if needed
     with app.app_context():
         create_default_user()
+        check_db()
 
     return app
 

@@ -18,6 +18,8 @@ services:
       - .env
     ports:
       - "8500:8500"
+    volumes:
+      - imports:/app/imports
 
   nginx:
     build: ./nginx
@@ -29,3 +31,4 @@ services:
 
 volumes:
   pg_data:
+  imports:

@@ -13,6 +13,13 @@ Points Overview
         <button onclick="adjustDate(1)">&gt;&gt;</button>
         <button onclick="setDateRange('today')">Today</button>
         <button onclick="setDateRange('yesterday')">Yesterday</button>
+        {# a selector from "imports" list variable #}
+        <select onchange="submitImport(this.value)">
+            <option value="">Select Import</option>
+            {% for imp in imports %}
+                <option value="{{ imp.id }}">{{ imp.name }}</option>
+            {% endfor %}
+        </select>
     </div>
 
     <!-- Hidden form to submit GET params for date selection -->
@@ -80,6 +87,12 @@ Points Overview
 function submitDate(dateString) {
     document.getElementById("hidden-date-input").value = dateString;
     document.getElementById("date-form").submit();
+}
+
+function submitImport(importId) {
+    const urlParams = new URLSearchParams(window.location.search);
+    urlParams.set("import", importId);
+    window.location.search = urlParams.toString();
 }
 
 function adjustDate(days) {
