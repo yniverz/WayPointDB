@@ -168,6 +168,8 @@ class GenerateSpeedDataJob(Job):
             self.done = True
             return
         
+        self.progress = 0.01
+        
         # Get all GPS data for the user sorted by timestamp
         gps_data: list[GPSData] = GPSData.query.filter_by(user_id=user.id).order_by(GPSData.timestamp).all()
         if not gps_data:
@@ -181,6 +183,8 @@ class GenerateSpeedDataJob(Job):
                 break
 
             if data.speed is not None and data.speed > 0:
+                i += 1
+                self.progress = (i / total_count)
                 continue
 
             if i > 0:
