@@ -23,7 +23,7 @@ web_bp = Blueprint("web", __name__)
 class HomeView(MethodView):
     def get(self):
         """Simple home route."""
-        user = get_current_user()
+        user = g.current_user
         if user:
             return redirect(url_for("web.map"))
         return redirect(url_for("web.login"))
@@ -122,7 +122,7 @@ class JobsView(MethodView):
         
         needed_params = set(job.PARAMETERS) - {"user"}
             
-        job_instance = job(user=get_current_user(), **{param: params[param] for param in needed_params})
+        job_instance = job(user=g.current_user, **{param: params[param] for param in needed_params})
         
         job_manager.add_job(job_instance)
 
@@ -134,7 +134,7 @@ class StatsView(MethodView):
     decorators = [login_required]
 
     def get(self):
-        user = get_current_user()
+        user = g.current_user
 
         total_points = GPSData.query.filter_by(user_id=user.id).count()
         # total_geocoded = GPSData.query.filter_by(user_id=user.id, reverse_geocoded=True).count()
@@ -207,7 +207,7 @@ class YearlyStatsView(MethodView):
     decorators = [login_required]
 
     def get(self, year):
-        user = get_current_user()
+        user = g.current_user
 
         if not year:
             return "Missing year", 400
@@ -271,9 +271,7 @@ class PointsView(MethodView):
     decorators = [login_required]  # or your own login decorator
 
     def get(self):
-        user = get_current_user()
-        if not user:
-            return "Unauthorized", 401
+        user = g.current_user
 
         # Single-date parameter
         the_date_str = request.args.get("date")
@@ -318,9 +316,7 @@ class PointsView(MethodView):
         return render_template("points.jinja", points=points, imports=imports)
 
     def post(self):
-        user = get_current_user()
-        if not user:
-            return "Unauthorized", 401
+        user = g.current_user
 
         action = request.form.get("action", None)
 
@@ -360,9 +356,7 @@ class ImportsView(MethodView):
     ALLOWED_EXTENSIONS = {"json"}
 
     def get(self):
-        user = get_current_user()
-        if not user:
-            return "Unauthorized", 401
+        user = g.current_user
 
         # Fetch all 'Import' records for this user
         raw_imports = Import.query.filter_by(user_id=user.id).order_by(Import.created_at.desc()).all()
@@ -381,9 +375,7 @@ class ImportsView(MethodView):
         return render_template("imports.jinja", imports=imports)
 
     def post(self):
-        user = get_current_user()
-        if not user:
-            return "Unauthorized", 401
+        user = g.current_user
 
         action = request.form.get("action")
         if not action:
@@ -490,10 +482,7 @@ class MapView(MethodView):
     decorators = [login_required]
 
     def get(self):
-        user = get_current_user()
-
-        if not user:
-            return "Unauthorized", 401
+        user = g.current_user
 
         last_point = GPSData.query.filter_by(user_id=user.id).order_by(GPSData.timestamp.desc()).first()
         if not last_point:
@@ -521,7 +510,7 @@ class MapView(MethodView):
         sw_lat -= 0.01
         sw_lng -= 0.01
 
-        user = get_current_user()
+        user = g.current_user
         if not user:
             return jsonify({"error": "Unauthorized"}), 401
         
@@ -639,9 +628,8 @@ class MapView(MethodView):
         return jsonify(gps_data)
 
     def delete(self):
-        user = get_current_user()
-        if not user:
-            return "Unauthorized", 401
+        user = g.current_user
+        
         point_id = request.args.get("id")
         if not point_id:
             return "Missing point_id", 400
@@ -656,14 +644,14 @@ class ManageUsersView(MethodView):
     decorators = [login_required]
 
     def get(self):
-        user = get_current_user()
+        user = g.current_user
         if not user.is_admin:
             return "Access denied", 403
         users = User.query.all()
         return render_template("manage_users.jinja", users=users)
     
     def post(self):
-        user = get_current_user()
+        user = g.current_user
         if not user.is_admin:
             return "Access denied", 403
         
@@ -712,7 +700,7 @@ class AccountView(MethodView):
         return render_template("account.jinja")
 
     def post(self):
-        user = get_current_user()
+        user = g.current_user
         if "generate_key" in request.form:
             # Generate new API key
             user.api_key = uuid.uuid4().hex
