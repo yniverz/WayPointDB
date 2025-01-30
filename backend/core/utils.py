@@ -14,7 +14,12 @@ def login_required(f):
     def decorated_function(*args, **kwargs):
         if "user_id" not in session:
             return redirect(url_for("web.login"))
-        g.current_user = get_current_user()
+        
+        user = get_current_user()
+        if not user:
+            return redirect(url_for("web.login"))
+        
+        g.current_user = user
         return f(*args, **kwargs)
     return decorated_function
 
