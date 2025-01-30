@@ -8,7 +8,9 @@ GPS Map
 
 <!-- Leaflet.js CSS & JS -->
 <link rel="stylesheet" href="/static/css/leaflet.css" />
+<link rel="stylesheet" href="/static/css/leaflet.fullscreen.css" />
 <script src="/static/js/leaflet.js"></script>
+<script src="/static/js/leaflet.fullscreen.js"></script>
 <script src="/static/js/leaflet-heat.js"></script>
 
 <style>
@@ -115,6 +117,8 @@ GPS Map
             attribution: '&copy; OpenStreetMap contributors',
             maxZoom: 19,
         }).addTo(map);
+
+        L.control.fullscreen().addTo(map);
 
         polylineLayer = L.layerGroup().addTo(map);
         markerLayer = L.layerGroup().addTo(map);
