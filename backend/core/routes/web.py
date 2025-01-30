@@ -543,24 +543,26 @@ class MapView(MethodView):
         cursor = conn.cursor()
 
         max_points_count = 3000
-        date_filter = ""
+        filters = ""
 
         if end_date:
             end_date = end_date + " 23:59:59"
         
         if start_date and end_date:
-            date_filter = f"AND timestamp BETWEEN '{start_date}' AND '{end_date}'"
+            filters = f"AND timestamp BETWEEN '{start_date}' AND '{end_date}'"
         elif start_date:
-            date_filter = f"AND timestamp >= '{start_date}'"
+            filters = f"AND timestamp >= '{start_date}'"
         elif end_date:
-            date_filter = f"AND timestamp <= '{end_date}'"
+            filters = f"AND timestamp <= '{end_date}'"
+
+        # filters += " AND horizontal_accuracy < 20"
 
         # calculate time delta
-        # time_delta = 0
-        # if start_date and end_date:
-        #     time_delta = (datetime.fromisoformat(end_date) - datetime.fromisoformat(start_date)).total_seconds()
+        time_delta = 0
+        if start_date and end_date:
+            time_delta = (datetime.fromisoformat(end_date) - datetime.fromisoformat(start_date)).total_seconds()
         
-        # if time_delta != 0 and time_delta < 60 * 60 * 25:
+        if time_delta != 0 and time_delta < 60 * 60 * 25:
             # query = f"""
             #     WITH filtered_data AS (
             #         SELECT id, user_id, timestamp, latitude, longitude, horizontal_accuracy,
@@ -581,23 +583,16 @@ class MapView(MethodView):
             #     ORDER BY timestamp;
             # """
 
-            # query = f"""
-            #     WITH filtered_data AS (
-            #         SELECT id, user_id, timestamp, latitude, longitude, horizontal_accuracy,
-            #             altitude, vertical_accuracy, heading, heading_accuracy, speed, speed_accuracy,
-            #             ROW_NUMBER() OVER (ORDER BY timestamp) AS row_num,
-            #             COUNT(*) OVER () AS total
-            #         FROM gps_data
-            #         WHERE user_id = '{user.id}'
-            #         {date_filter}
-            #     )
-            #     SELECT id, user_id, timestamp, latitude, longitude, horizontal_accuracy,
-            #         altitude, vertical_accuracy, heading, heading_accuracy, speed, speed_accuracy
-            #     FROM filtered_data
-            #     WHERE total <= {max_points_count} 
-            #     OR row_num % CEIL(total::FLOAT / {max_points_count})::INTEGER = 1
-            #     ORDER BY timestamp;
-            # """
+            query = f"""
+                SELECT id, user_id, timestamp, latitude, longitude, horizontal_accuracy,
+                    altitude, vertical_accuracy, heading, heading_accuracy, speed, speed_accuracy
+                FROM gps_data
+                WHERE user_id = '{user.id}'
+                AND latitude BETWEEN {sw_lat} AND {ne_lat}
+                AND longitude BETWEEN {sw_lng} AND {ne_lng}
+                {filters}
+                ORDER BY timestamp;
+            """
 
             # query = f"""
             #     SELECT id, user_id, timestamp, latitude, longitude, horizontal_accuracy,
@@ -612,15 +607,24 @@ class MapView(MethodView):
             #     ORDER BY timestamp;
             # """
 
-        if zoom > 18:
+        elif zoom > 18:
             query = f"""
+                WITH filtered_data AS (
+                    SELECT id, user_id, timestamp, latitude, longitude, horizontal_accuracy,
+                        altitude, vertical_accuracy, heading, heading_accuracy, speed, speed_accuracy,
+                        ROW_NUMBER() OVER (ORDER BY timestamp) AS row_num,
+                        COUNT(*) OVER () AS total
+                    FROM gps_data
+                    WHERE user_id = '{user.id}'
+                    AND latitude BETWEEN {sw_lat} AND {ne_lat}
+                    AND longitude BETWEEN {sw_lng} AND {ne_lng}
+                    {filters}
+                )
                 SELECT id, user_id, timestamp, latitude, longitude, horizontal_accuracy,
                     altitude, vertical_accuracy, heading, heading_accuracy, speed, speed_accuracy
-                FROM gps_data
-                WHERE user_id = '{user.id}'
-                AND latitude BETWEEN {sw_lat} AND {ne_lat}
-                AND longitude BETWEEN {sw_lng} AND {ne_lng}
-                {date_filter}
+                FROM filtered_data
+                WHERE total <= {max_points_count} 
+                OR row_num % CEIL(total::FLOAT / {max_points_count})::INTEGER = 1
                 ORDER BY timestamp;
             """
         else:
@@ -634,7 +638,7 @@ class MapView(MethodView):
                     WHERE user_id = '{user.id}'
                     AND latitude BETWEEN {sw_lat} AND {ne_lat}
                     AND longitude BETWEEN {sw_lng} AND {ne_lng}
-                    {date_filter}
+                    {filters}
                 )
                 SELECT id, user_id, timestamp, latitude, longitude, horizontal_accuracy,
                     altitude, vertical_accuracy, heading, heading_accuracy, speed, speed_accuracy
