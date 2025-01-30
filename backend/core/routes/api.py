@@ -1,14 +1,15 @@
 from datetime import datetime
-from flask import request, g
+from flask import redirect, request, g, session, url_for
 from flask_restx import Resource, fields, Namespace
+from flask_restx.reqparse import RequestParser
 from ..extensions import db
-from ..models import GPSData
+from ..models import GPSData, User
 from ..utils import api_key_required
 
 # Create a dedicated namespace for the GPS routes
-api_ns = Namespace("gps", description="GPS Data operations")
+api_gps_ns = Namespace("gps", description="GPS Data operations")
 
-gps_model = api_ns.model("GPSData", {
+gps_model = api_gps_ns.model("GPSData", {
     "timestamp": fields.String(required=True),
     "latitude": fields.Float(required=True),
     "longitude": fields.Float(required=True),
@@ -21,8 +22,8 @@ gps_model = api_ns.model("GPSData", {
     "speed_accuracy": fields.Float(),
 })
 
-batch_parser = api_ns.parser()
-batch_parser.add_argument(
+api_key_parser = RequestParser()
+api_key_parser.add_argument(
     "api_key",
     type=str,
     required=True,
@@ -30,16 +31,16 @@ batch_parser.add_argument(
     location="args"
 )
 
-batch_gps_model = api_ns.model("BatchGPSData", {
+batch_gps_model = api_gps_ns.model("BatchGPSData", {
     "gps_data": fields.List(fields.Nested(gps_model), required=True, description="List of GPS data points"),
 })
 
-@api_ns.route("/batch")
+@api_gps_ns.route("/batch")
 class GPSBatch(Resource):
     def get(self):
         return "Please use POST to submit GPS data", 405
 
-    @api_ns.expect(batch_parser, batch_gps_model)
+    @api_gps_ns.expect(api_key_parser, batch_gps_model)
     @api_key_required
     def post(self):
         """Submit batch GPS data (requires a valid API key)."""
@@ -78,3 +79,20 @@ class GPSBatch(Resource):
 
         db.session.commit()
         return {"message": "GPS data added successfully"}, 201
+
+
+
+
+api_account_ns = Namespace("account", description="Account operations")
+
+@api_account_ns.route("/login")
+class AccountLogin(Resource):
+
+    @api_account_ns.expect(api_key_parser)
+    @api_key_required
+    def get(self):
+        """Login with an API key."""
+        user = g.current_user
+        session["user_id"] = str(user.id)
+        return redirect(url_for("web.home"))
+        # return {"message": "Logged in successfully"}, 200

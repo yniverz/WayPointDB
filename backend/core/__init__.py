@@ -6,7 +6,7 @@ from jinja2 import ChoiceLoader, FileSystemLoader
 from .config import Config
 from .extensions import init_extensions, api_v1
 from .routes.web import web_bp
-from .routes.api import api_ns
+from .routes.api import api_gps_ns, api_account_ns
 from .utils import check_db, create_default_user
 from .background import job_manager
 
@@ -46,7 +46,8 @@ def create_web_app(config_class = Config):
 
     # Register Blueprints
     app.register_blueprint(web_bp, url_prefix="")
-    api_v1.add_namespace(api_ns)
+    api_v1.add_namespace(api_gps_ns)
+    api_v1.add_namespace(api_account_ns)
 
 
     # Create DB tables and default user if needed

@@ -27,7 +27,7 @@ def api_key_required(f):
     """Decorator for REST endpoints that requires an API key."""
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        api_key = flask.request.args.get("api_key")  # or from headers
+        api_key = flask.request.args.get("api_key")
         user = User.query.filter_by(api_key=api_key).first()
         if not user:
             return {"error": "Invalid or missing API key"}, 401
