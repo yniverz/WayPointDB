@@ -10,7 +10,7 @@ services:
     volumes:
       - pg_data:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - "5465:5432"
 
   backend:
     build: ./backend
@@ -22,6 +22,7 @@ services:
       - POSTGRES_USER=user
       - POSTGRES_PASSWORD=password
       - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
       - UPLOAD_FOLDER=/app/imports
       - BACKGROUND_MAX_THREADS=1
       - PHOTON_SERVER_HOST=
