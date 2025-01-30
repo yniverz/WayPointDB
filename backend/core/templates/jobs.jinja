@@ -26,14 +26,14 @@
                 <th>Actions</th>
             </tr>
         </thead>
-        <tbody>
+        <tbody id="jobs-tbody">
             {% for job in jobs %}
                 <tr>
                     <td>{{ job[1] }}</td>
                     <td>{{ job[2] }}</td>
                     <td>{{ job[3]|round(2) }}%</td>
-                    <td>{{ job[4] }}s</td>
-                    <td>{{ job[5] }}s</td>
+                    <td>{{ job[4] }}</td>
+                    <td>{{ job[5] }}</td>
                     <td>
                         <form method="POST" style="display:inline;">
                             <input type="hidden" name="cancelJob" value="{{ job[0] }}">
@@ -45,20 +45,92 @@
         </tbody>
     </table>
     <br>
+
+    <!-- Toggle button to enable or disable auto refresh -->
     <button id="toggle-refresh">Disable Auto Refresh</button>
     
     <script>
     let refreshEnabled = true;
-    document.getElementById("toggle-refresh").addEventListener("click", function() {
+    const toggleBtn = document.getElementById("toggle-refresh");
+    const tbody = document.getElementById("jobs-tbody");
+
+    toggleBtn.addEventListener("click", function() {
         refreshEnabled = !refreshEnabled;
         this.textContent = refreshEnabled ? "Disable Auto Refresh" : "Enable Auto Refresh";
     });
 
     function autoRefresh() {
-        if (refreshEnabled) {
-            window.location.reload();
+        if (!refreshEnabled) return;
+
+        // Fetch updated job data from the server
+        fetch(window.location.pathname + "?update=1")
+            .then(response => response.json())
+            .then(data => {
+                // data is a list of jobs in the same format as `jobs` from the server
+                updateJobsTable(data);
+            })
+            .catch(error => console.error("Error fetching jobs update:", error));
+    }
+
+    function updateJobsTable(jobs) {
+        // Clear existing rows
+        tbody.innerHTML = "";
+
+        // Build rows from the updated job data
+        for (let job of jobs) {
+            const [ jobId, jobName, running, progress, timePassed, timeLeft ] = job;
+            const row = document.createElement("tr");
+            
+            // Job Name
+            const nameCell = document.createElement("td");
+            nameCell.textContent = jobName;
+            row.appendChild(nameCell);
+
+            // Running?
+            const runningCell = document.createElement("td");
+            runningCell.textContent = running;
+            row.appendChild(runningCell);
+
+            // Progress
+            const progressCell = document.createElement("td");
+            progressCell.textContent = progress.toFixed(2) + "%";
+            row.appendChild(progressCell);
+
+            // Time Elapsed
+            const timePassedCell = document.createElement("td");
+            timePassedCell.textContent = timePassed; // e.g. "00:05:12" or "1d 03:12:45"
+            row.appendChild(timePassedCell);
+
+            // Time Remaining
+            const timeLeftCell = document.createElement("td");
+            timeLeftCell.textContent = timeLeft;
+            row.appendChild(timeLeftCell);
+
+            // Actions (Cancel Form)
+            const actionsCell = document.createElement("td");
+            const cancelForm = document.createElement("form");
+            cancelForm.method = "POST";
+            cancelForm.style.display = "inline";
+
+            const hiddenInput = document.createElement("input");
+            hiddenInput.type = "hidden";
+            hiddenInput.name = "cancelJob";
+            hiddenInput.value = jobId;
+            cancelForm.appendChild(hiddenInput);
+
+            const cancelButton = document.createElement("button");
+            cancelButton.type = "submit";
+            cancelButton.textContent = "Cancel";
+            cancelForm.appendChild(cancelButton);
+
+            actionsCell.appendChild(cancelForm);
+            row.appendChild(actionsCell);
+
+            tbody.appendChild(row);
         }
     }
-    setInterval(autoRefresh, 5000);
+
+    // Refresh the table every 1 second (only if refresh is enabled)
+    setInterval(autoRefresh, 1000);
     </script>
 {% endblock %}

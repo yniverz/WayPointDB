@@ -1,6 +1,7 @@
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 import os
+import re
 import uuid
 import time
 import psycopg2
@@ -15,19 +16,19 @@ from sqlalchemy import func
 from ..background.jobs import JOB_TYPES, GenerateFullStatisticsJob, ImportJob
 from ..background import job_manager
 from ..models import DailyStatistic, Import, User, GPSData, db
-from ..utils import login_required, get_current_user
+from ..utils import login_required
 from ..config import Config
 from werkzeug.utils import secure_filename
 
 web_bp = Blueprint("web", __name__)
 
 class HomeView(MethodView):
+    decorators = [login_required]
+
     def get(self):
         """Simple home route."""
-        user = g.current_user
-        if user:
-            return redirect(url_for("web.map"))
-        return redirect(url_for("web.login"))
+        
+        return redirect(url_for("web.map"))
 
 class LoginView(MethodView):
     def get(self):
@@ -61,6 +62,7 @@ class JobsView(MethodView):
     def get(self):
         """Example protected dashboard."""
 
+
         raw_jobs = job_manager.get_jobs()
         jobs = []
         for job in raw_jobs:
@@ -87,6 +89,10 @@ class JobsView(MethodView):
                 time_passed_str,
                 time_left_str
             ))
+
+
+        if request.args.get("update"):
+            return jsonify(jobs)
 
         return render_template("jobs.jinja", jobs=jobs, photon_active=len(Config.PHOTON_SERVER_HOST) != 0)
     
@@ -491,18 +497,30 @@ class MapView(MethodView):
             # Some default coords
             last_point = {"latitude": 52.516310, "longitude": 13.378208}
         return render_template("map.jinja", last_point=last_point)
+
+    def is_valid_date_format(self, s):
+        pattern = r"^\d{4}-\d{2}-\d{2}$"
+        if not bool(re.fullmatch(pattern, s)):
+            raise ValueError("Invalid date format")
+        
+        return s
     
     def post(self):
         """Fetch GPS data using psycopg2 and return JSON."""
 
         data: dict = request.json
-        ne_lat = data.get("ne_lat")
-        ne_lng = data.get("ne_lng")
-        sw_lat = data.get("sw_lat")
-        sw_lng = data.get("sw_lng")
-        zoom = data.get("zoom", 10)
-        start_date = data.get("start_date")
-        end_date = data.get("end_date")
+
+        try:
+            ne_lat = float(data.get("ne_lat"))
+            ne_lng = float(data.get("ne_lng"))
+            sw_lat = float(data.get("sw_lat"))
+            sw_lng = float(data.get("sw_lng"))
+            zoom = int(data.get("zoom", 10))
+            start_date = self.is_valid_date_format(data.get("start_date"))
+            end_date = self.is_valid_date_format(data.get("end_date"))
+
+        except (ValueError, TypeError):
+            return jsonify({"error": "Invalid bounds"}), 400
 
         if None in [ne_lat, ne_lng, sw_lat, sw_lng]:
             return jsonify({"error": "Invalid or missing bounds"}), 400
@@ -513,8 +531,6 @@ class MapView(MethodView):
         sw_lng -= 0.01
 
         user = g.current_user
-        if not user:
-            return jsonify({"error": "Unauthorized"}), 401
         
         time1 = time.time()
 
@@ -526,7 +542,7 @@ class MapView(MethodView):
         )
         cursor = conn.cursor()
 
-        max_points_count = 2000
+        max_points_count = 3000
         date_filter = ""
 
         if end_date:
@@ -540,32 +556,63 @@ class MapView(MethodView):
             date_filter = f"AND timestamp <= '{end_date}'"
 
         # calculate time delta
-        time_delta = 0
-        if start_date and end_date:
-            time_delta = (datetime.fromisoformat(end_date) - datetime.fromisoformat(start_date)).total_seconds()
+        # time_delta = 0
+        # if start_date and end_date:
+        #     time_delta = (datetime.fromisoformat(end_date) - datetime.fromisoformat(start_date)).total_seconds()
         
-        if time_delta != 0 and time_delta < 60 * 60 * 24 * 3:
-            query = f"""
-                WITH filtered_data AS (
-                    SELECT id, user_id, timestamp, latitude, longitude, horizontal_accuracy,
-                        altitude, vertical_accuracy, heading, heading_accuracy, speed, speed_accuracy,
-                        ROW_NUMBER() OVER (ORDER BY timestamp) AS row_num
-                    FROM gps_data
-                    WHERE user_id = '{user.id}'
-                    {date_filter}
-                ),
-                row_count AS (
-                    SELECT COUNT(*) AS total FROM filtered_data
-                )
-                SELECT id, user_id, timestamp, latitude, longitude, horizontal_accuracy,
-                    altitude, vertical_accuracy, heading, heading_accuracy, speed, speed_accuracy
-                FROM filtered_data
-                WHERE row_num % (SELECT GREATEST(1, total / {max_points_count}) FROM row_count) = 1
-                OR (SELECT total FROM row_count) < {max_points_count}
-                ORDER BY timestamp;
-            """
+        # if time_delta != 0 and time_delta < 60 * 60 * 25:
+            # query = f"""
+            #     WITH filtered_data AS (
+            #         SELECT id, user_id, timestamp, latitude, longitude, horizontal_accuracy,
+            #             altitude, vertical_accuracy, heading, heading_accuracy, speed, speed_accuracy,
+            #             ROW_NUMBER() OVER (ORDER BY timestamp) AS row_num
+            #         FROM gps_data
+            #         WHERE user_id = '{user.id}'
+            #         {date_filter}
+            #     ),
+            #     row_count AS (
+            #         SELECT COUNT(*) AS total FROM filtered_data
+            #     )
+            #     SELECT id, user_id, timestamp, latitude, longitude, horizontal_accuracy,
+            #         altitude, vertical_accuracy, heading, heading_accuracy, speed, speed_accuracy
+            #     FROM filtered_data
+            #     WHERE row_num % (SELECT GREATEST(1, total / {max_points_count}) FROM row_count) = 1
+            #     OR (SELECT total FROM row_count) < {max_points_count}
+            #     ORDER BY timestamp;
+            # """
 
-        elif zoom > 18:
+            # query = f"""
+            #     WITH filtered_data AS (
+            #         SELECT id, user_id, timestamp, latitude, longitude, horizontal_accuracy,
+            #             altitude, vertical_accuracy, heading, heading_accuracy, speed, speed_accuracy,
+            #             ROW_NUMBER() OVER (ORDER BY timestamp) AS row_num,
+            #             COUNT(*) OVER () AS total
+            #         FROM gps_data
+            #         WHERE user_id = '{user.id}'
+            #         {date_filter}
+            #     )
+            #     SELECT id, user_id, timestamp, latitude, longitude, horizontal_accuracy,
+            #         altitude, vertical_accuracy, heading, heading_accuracy, speed, speed_accuracy
+            #     FROM filtered_data
+            #     WHERE total <= {max_points_count} 
+            #     OR row_num % CEIL(total::FLOAT / {max_points_count})::INTEGER = 1
+            #     ORDER BY timestamp;
+            # """
+
+            # query = f"""
+            #     SELECT id, user_id, timestamp, latitude, longitude, horizontal_accuracy,
+            #         altitude, vertical_accuracy, heading, heading_accuracy, speed, speed_accuracy,
+            #         ROW_NUMBER() OVER (ORDER BY timestamp) AS row_num,
+            #         COUNT(*) OVER () AS total
+            #     FROM gps_data
+            #     WHERE user_id = '{user.id}'
+            #     AND latitude BETWEEN {sw_lat} AND {ne_lat}
+            #     AND longitude BETWEEN {sw_lng} AND {ne_lng}
+            #     {date_filter}
+            #     ORDER BY timestamp;
+            # """
+
+        if zoom > 18:
             query = f"""
                 SELECT id, user_id, timestamp, latitude, longitude, horizontal_accuracy,
                     altitude, vertical_accuracy, heading, heading_accuracy, speed, speed_accuracy
@@ -581,21 +628,19 @@ class MapView(MethodView):
                 WITH filtered_data AS (
                     SELECT id, user_id, timestamp, latitude, longitude, horizontal_accuracy,
                         altitude, vertical_accuracy, heading, heading_accuracy, speed, speed_accuracy,
-                        ROW_NUMBER() OVER (ORDER BY timestamp) AS row_num
+                        ROW_NUMBER() OVER (ORDER BY timestamp) AS row_num,
+                        COUNT(*) OVER () AS total
                     FROM gps_data
                     WHERE user_id = '{user.id}'
                     AND latitude BETWEEN {sw_lat} AND {ne_lat}
                     AND longitude BETWEEN {sw_lng} AND {ne_lng}
                     {date_filter}
-                ),
-                row_count AS (
-                    SELECT COUNT(*) AS total FROM filtered_data
                 )
                 SELECT id, user_id, timestamp, latitude, longitude, horizontal_accuracy,
                     altitude, vertical_accuracy, heading, heading_accuracy, speed, speed_accuracy
                 FROM filtered_data
-                WHERE row_num % (SELECT GREATEST(1, total / {max_points_count}) FROM row_count) = 1
-                OR (SELECT total FROM row_count) < {max_points_count}
+                WHERE total <= {max_points_count} 
+                OR row_num % CEIL(total::FLOAT / {max_points_count})::INTEGER = 1
                 ORDER BY timestamp;
             """
 
