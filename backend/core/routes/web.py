@@ -312,7 +312,7 @@ class PointsView(MethodView):
         for imp in raw_imports:
             imports.append({
                 "id": imp.id,
-                "name": imp.filename.split("_")[1],
+                "name": imp.original_filename,
             })
 
         return render_template("points.jinja", points=points, imports=imports)
@@ -371,7 +371,7 @@ class ImportsView(MethodView):
         for imp in raw_imports:
             imports.append({
                 "id": imp.id,
-                "filename": imp.filename,
+                "name": imp.original_filename,
                 "created_at": imp.created_at,
                 "total_entries": imp.total_entries,
                 "total_imported": GPSData.query.filter_by(user_id=user.id, import_id=imp.id).count()
@@ -431,6 +431,7 @@ class ImportsView(MethodView):
         new_import = Import(
             user_id=user.id,
             filename=unique_name,
+            original_filename=filename,
             created_at=datetime.now(timezone.utc),
             total_entries=len(json_data)
         )
