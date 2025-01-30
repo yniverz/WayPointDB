@@ -1,7 +1,7 @@
+import os
 from waitress import serve
 from core import web_app, job_manager
 import signal
-import sys
 
 # cl = QueryPhotonJob([100, 101, 102, 103, 104, 105, 106, 107, 108, 109])
 # job_manager.add_job(cl)
@@ -22,7 +22,7 @@ def handle_sigterm(*args):
     # 4. Perform any other necessary cleanup steps.
 
     # After cleanup, we can exit with code 0
-    sys.exit(0)
+    os._exit(0)
 
 if __name__ == "__main__":
     signal.signal(signal.SIGTERM, handle_sigterm)
