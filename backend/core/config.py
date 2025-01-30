@@ -2,7 +2,7 @@ import os
 import uuid
 
 class Config:
-    SECRET_KEY = os.environ.get("FLASK_SECRET_KEY") or "test"  # For local dev
+    SECRET_KEY = uuid.uuid4().hex
     DB_HOST = os.environ.get("POSTGRES_HOST")
     DB_PORT = os.environ.get("POSTGRES_PORT", 5432)
     DB_NAME = os.environ.get("POSTGRES_DB")
