@@ -9,7 +9,7 @@ Points Overview
     <!-- Single Date Selector (same as before) -->
     <div class="date-selector" style="display: flex; gap: 10px; justify-content: center; align-items: center; margin-bottom: 20px;">
         <button onclick="adjustDate(-1)">&lt;&lt;</button>
-        <input type="date" id="date-input">
+        <input type="date" id="date-input" onchange="submitDate(this.value)" />
         <button onclick="adjustDate(1)">&gt;&gt;</button>
         <button onclick="setDateRange('today')">Today</button>
         <button onclick="setDateRange('yesterday')">Yesterday</button>
@@ -17,7 +17,7 @@ Points Overview
         <select onchange="submitImport(this.value)">
             <option value="">Select Import</option>
             {% for imp in imports %}
-                <option value="{{ imp.id }}">{{ imp.name }}</option>
+                <option value="{{ imp.id }}" {% if request.args.get('import') == imp.id|string %}selected{% endif %}>{{ imp.name }}</option>
             {% endfor %}
         </select>
     </div>
