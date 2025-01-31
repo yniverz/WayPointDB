@@ -66,4 +66,5 @@ WayPointDB can use a [Photon server](https://github.com/komoot/photon) for rever
 <hr>
 
 ### References
-- icon made by [Freepik](https://www.flaticon.com/authors/freepik)
+- Highly inspired by [DaWarIch](https://github.com/Freika/dawarich) but with a focus on "as fast as possible" web UI, data viewing and retrieval
+- Icon made by [Freepik](https://www.flaticon.com/authors/freepik)
