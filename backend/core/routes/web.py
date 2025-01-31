@@ -41,6 +41,11 @@ class LoginView(MethodView):
         user = User.query.filter_by(email=email).first()
         if user and user.check_password(password):
             session["user_id"] = user.id
+
+            dest = request.args.get('next')
+            if dest:
+                return redirect(dest)
+            
             return redirect(url_for("web.home"))
         return "Invalid credentials", 401
 
