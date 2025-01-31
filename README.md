@@ -17,21 +17,12 @@ Before running the project, ensure you have the following installed:
 
 ## Installation
 1. Clone the repository
-```bash
-git clone https://github.com/yniverz/waypointdb
-```
-
 2. Change directory to the project folder
-```bash
-cd waypointdb
-```
-
 3. Build the Docker image
-```bash
-docker-compose build
-```
-
 4. Run the Docker container (```-d``` for detached mode)
 ```bash
+git clone https://github.com/yniverz/waypointdb
+cd waypointdb
+docker-compose build
 docker-compose up -d
 ```
