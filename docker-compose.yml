@@ -16,7 +16,7 @@ services:
       - .env
     environment:
       - UPLOAD_FOLDER=/app/imports
-      - BACKGROUND_MAX_THREADS=1
+      - BACKGROUND_MAX_THREADS=5
       - PHOTON_SERVER_HOST=
       - PHOTON_SERVER_HTTPS=true
       - PHOTON_SERVER_API_KEY=
