@@ -26,10 +26,8 @@ services:
   nginx:
     build: ./nginx
     restart: always
-    environment:
-      - OUTBOUND_PORT=80
     ports:
-      - "${OUTBOUND_PORT}:80"
+      - "80:80"
     depends_on:
       - backend
 
