@@ -33,7 +33,7 @@
         }
 
         .stat-container small {
-            font-size: 1em;
+            font-size: 0.9em;
             color: #6c757d;
         }
 
@@ -57,20 +57,54 @@
             border-radius: 20px;
             box-shadow: 0 0 20px rgba(0, 0, 0, 0.317);
         }
+
+        .info-tooltip {
+          position: relative;
+          display: inline-block;
+          text-decoration: underline;
+          text-decoration-style: dotted;
+        }
+
+        .info-tooltip .info-tooltip-text {
+          visibility: hidden;
+          width: 220px;
+          background-color: black;
+          color: #a3a3a3;
+          text-align: center;
+          border-radius: 6px;
+          padding: 5px 0;
+          font-size: 0.8em;
+          
+          /* Position the tooltip */
+          position: absolute;
+          z-index: 1;
+          top: 100%;
+          left: 50%;
+          margin-left: -110px;
+        }
+
+        .info-tooltip:hover .info-tooltip-text {
+          visibility: visible;
+        }
   </style>
 
   <div class="stat-container">
     <div>
       <p style="color: #747fff">{{ total_distance }}</p>
-      <small>Total Distance Travelled (km)</small>
+      <small>Total distance travelled (km)</small>
     </div>
     <div>
       <p style="color: #00aa6e">{{ total_points }}</p>
-      <small>Total Points</small>
+      <small>Total points</small>
     </div>
     <div>
       <p style="color: #00aa6e">{{ total_geocoded }}</p>
-      <small>Total Geocoded Points<br>({{ total_not_geocoded }} with no geo data)</small>
+      <small>Total reverse geocoded<br>
+        <div class="info-tooltip">{{ total_not_geocoded }} without data
+          <span class="info-tooltip-text">Points that were reverse geocoded but have no data</span>
+        </div>
+      </small>
+      
     </div>
     <div>
       <p style="color: #ffbe00" class="stat-button" data-bs-toggle="modal" data-bs-target="#modal-countries">{{ total_countries|length }}</p>
