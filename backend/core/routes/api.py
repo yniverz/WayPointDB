@@ -55,7 +55,8 @@ class GPSBatch(Resource):
             ts_str = entry.get("timestamp")
             try:
                 # Attempt to parse the timestamp as ISO 8601
-                ts = datetime.fromisoformat(ts_str)
+                # ts = datetime.fromisoformat(ts_str)
+                ts = datetime.fromtimestamp(int(ts_str), tz=datetime.now().astimezone().tzinfo)  # handle UTC 'Z'
             except:
                 ts = datetime.now()  # fallback if parse fails
 
