@@ -251,10 +251,10 @@ GPS Map
         }
 
         
-        let startDate = document.getElementById("start-date").value;
-        let endDate = document.getElementById("end-date").value;
+        // let startDate = document.getElementById("start-date").value;
+        // let endDate = document.getElementById("end-date").value;
 
-        if (startDate === endDate) {
+        if (coordinates[coordinates.length - 1].timestamp.split("T")[0] === coordinates[0].timestamp.split("T")[0]) {
             for (let i = 0; i < coordinates.length - 1; i++) {
                 let color = getSpeedColor(coordinates[i].speed || 0);
                 L.polyline([coordinates[i], coordinates[i + 1]], 
