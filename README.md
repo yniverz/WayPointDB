@@ -26,3 +26,12 @@ cd WayPointDB
 docker-compose build
 docker-compose up -d
 ```
+
+### Update
+To update the project, pull the latest changes from the repository and rebuild the Docker image
+```bash
+docker-compose down
+git pull
+docker-compose build
+docker-compose up -d
+```
