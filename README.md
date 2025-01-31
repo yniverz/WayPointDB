@@ -62,3 +62,8 @@ docker-compose up -d
 
 ## Photon Server
 WayPointDB can use a [Photon server](https://github.com/komoot/photon) for reverse geocoding. It is recommended to use a self-hosted instance of the Photon server to avoid rate limiting, and to ensure the privacy of the data. Some hosting providers use an api key for authentication, which can be set in the ```docker-compose.yml``` file. WayPointDB will pass this as the ```X-Api-Key``` header in the requests to the Photon server.
+
+<hr>
+
+### References
+- icon made by [Freepik](https://www.flaticon.com/authors/freepik)
