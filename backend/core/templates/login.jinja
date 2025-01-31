@@ -6,12 +6,12 @@
 
 {% block content %}
     <form method="POST" action="{{ url_for('web.login') }}">
-        <label for="email">Email:</label>
-        <input type="text" id="email" name="email" required>
-
-        <label for="password">Password:</label>
-        <input type="password" id="password" name="password" required>
-
+        <label for="email">Email:</label><br/>
+        <input type="text" id="email" name="email" required><br/>
+        <br/>
+        <label for="password">Password:</label><br/>
+        <input type="password" id="password" name="password" required><br/>
+        <br/>
         <button type="submit">Log In</button>
     </form>
 {% endblock %}
