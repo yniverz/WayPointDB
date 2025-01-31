@@ -21,8 +21,8 @@ Before running the project, ensure you have the following installed:
 3. Build the Docker image
 4. Run the Docker container (```-d``` for detached mode)
 ```bash
-git clone https://github.com/yniverz/waypointdb
-cd waypointdb
+git clone https://github.com/yniverz/WayPointDB
+cd WayPointDB
 docker-compose build
 docker-compose up -d
 ```
