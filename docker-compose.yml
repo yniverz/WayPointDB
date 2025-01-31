@@ -2,42 +2,34 @@ services:
   db:
     image: postgres:15
     restart: always
-    environment:
-      - POSTGRES_DB=mydatabase
-      - POSTGRES_USER=user
-      - POSTGRES_PASSWORD=password
-      - POSTGRES_HOST=db
+    env_file:
+      - .env
     volumes:
       - pg_data:/var/lib/postgresql/data
-    ports:
-      - "5465:5432"
 
   backend:
     build: ./backend
     restart: always
     depends_on:
       - db
+    env_file:
+      - .env
     environment:
-      - POSTGRES_DB=mydatabase
-      - POSTGRES_USER=user
-      - POSTGRES_PASSWORD=password
-      - POSTGRES_HOST=db
-      - POSTGRES_PORT=5432
       - UPLOAD_FOLDER=/app/imports
       - BACKGROUND_MAX_THREADS=1
       - PHOTON_SERVER_HOST=
       - PHOTON_SERVER_HTTPS=true
       - PHOTON_SERVER_API_KEY=
-    ports:
-      - "8500:8500"
     volumes:
       - imports:/app/imports
 
   nginx:
     build: ./nginx
     restart: always
+    environment:
+      - OUTBOUND_PORT=80
     ports:
-      - "80:80"
+      - "${OUTBOUND_PORT}:80"
     depends_on:
       - backend
 
