@@ -114,8 +114,9 @@ GPS Map
     var radiusLayer;
     var lastBounds = null;
     var fetchTimeout = null;
-    var delay = 500;
-    var max_points_for_markers = 300;
+    const delay = 500;
+    const max_points_for_markers = 300;
+    const max_points_for_colored_path = 1000;
 
     // Heatmap-related variables
     var heatLayer = null;
@@ -254,7 +255,7 @@ GPS Map
         // let startDate = document.getElementById("start-date").value;
         // let endDate = document.getElementById("end-date").value;
 
-        if (coordinates[coordinates.length - 1].timestamp.split("T")[0] === coordinates[0].timestamp.split("T")[0]) {
+        if (coordinates[coordinates.length - 1].timestamp.split("T")[0] === coordinates[0].timestamp.split("T")[0] && coordinates.length < max_points_for_colored_path) {
             for (let i = 0; i < coordinates.length - 1; i++) {
                 let color = getSpeedColor(coordinates[i].speed || 0);
                 L.polyline([coordinates[i], coordinates[i + 1]], 
