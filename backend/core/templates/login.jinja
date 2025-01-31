@@ -1,11 +1,12 @@
 {% extends "base.jinja" %}
 
 {% block heading %}
-    Login
+<div style="text-align: center;">Login</div>
 {% endblock %}
 
 {% block content %}
-    <form method="POST">
+<!-- Login form put in center of page -->
+    <form method="POST" style="text-align: center;">
         <label for="email">Email:</label><br/>
         <input type="text" id="email" name="email" required><br/>
         <br/>
