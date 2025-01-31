@@ -16,10 +16,7 @@ Before running the project, ensure you have the following installed:
 - [Docker Compose](https://docs.docker.com/compose/)
 
 ## Installation
-1. Clone the repository
-2. Change directory to the project folder
-3. Build the Docker image
-4. Run the Docker container (```-d``` for detached mode)
+To install the project, clone the repository, change directory to the project folder, build the Docker image, and run the Docker container (```-d``` for detached mode)
 ```bash
 git clone https://github.com/yniverz/WayPointDB
 cd WayPointDB
