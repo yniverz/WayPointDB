@@ -1,5 +1,6 @@
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
+import math
 import os
 import re
 import uuid
@@ -276,15 +277,116 @@ class YearlyStatsView(MethodView):
         )
 
 
+# class PointsView(MethodView):
+#     decorators = [login_required]  # or your own login decorator
+
+#     def get(self):
+#         user = g.current_user
+
+#         # Single-date parameter
+#         the_date_str = request.args.get("date")
+#         import_id = request.args.get("import")
+#         now = datetime.now()
+
+#         if not the_date_str:
+#             # Default to today
+#             start_date = datetime(now.year, now.month, now.day, 0, 0, 0)
+#         else:
+#             # Parse user-provided date
+#             try:
+#                 parsed = datetime.strptime(the_date_str, "%Y-%m-%d")
+#                 start_date = datetime(parsed.year, parsed.month, parsed.day, 0, 0, 0)
+#             except ValueError:
+#                 # Fallback to today if error
+#                 start_date = datetime(now.year, now.month, now.day, 0, 0, 0)
+
+#         end_date = start_date + timedelta(hours=24)
+
+#         # Query user’s points from start_date to end_date
+#         points_query = GPSData.query.filter_by(user_id=user.id).filter(
+#             GPSData.timestamp >= start_date,
+#             GPSData.timestamp < end_date
+#         )
+
+#         if import_id:
+#             points_query = points_query.filter_by(import_id=import_id)
+
+#         # Sort newest -> oldest
+#         points = points_query.order_by(GPSData.timestamp.desc()).all()
+
+#         raw_imports = Import.query.filter_by(user_id=user.id).all()
+
+#         imports = []
+#         for imp in raw_imports:
+#             imports.append({
+#                 "id": imp.id,
+#                 "name": imp.original_filename,
+#             })
+
+#         return render_template("points.jinja", points=points, imports=imports)
+
+#     def post(self):
+#         user = g.current_user
+
+#         action = request.form.get("action", None)
+
+#         # if action == "delete_point":
+#         #     # Single-delete logic
+#         #     point_id = request.form.get("point_id")
+#         #     if not point_id:
+#         #         return "Missing point_id", 400
+
+#         #     point = GPSData.query.filter_by(id=point_id, user_id=user.id).first()
+#         #     if not point:
+#         #         return "Point not found or not yours", 404
+
+#         #     db.session.delete(point)
+#         #     db.session.commit()
+
+#         if action == "batch_delete":
+#             # Batch delete: get all selected point IDs
+#             selected_ids = request.form.getlist("selected_points")
+#             if selected_ids:
+#                 # Convert to int if needed
+#                 selected_ids = [int(x) for x in selected_ids if x.isdigit()]
+#                 # Delete all points matching these IDs for this user
+#                 GPSData.query.filter(
+#                     GPSData.user_id == user.id,
+#                     GPSData.id.in_(selected_ids)
+#                 ).delete(synchronize_session=False)
+#                 db.session.commit()
+
+#         # Keep the date param in the redirect so we stay on the same day
+#         return redirect(url_for("web.points", date=request.args.get("date", "")))
+
 class PointsView(MethodView):
-    decorators = [login_required]  # or your own login decorator
+    decorators = [login_required]  # Ensure the user is logged in
 
     def get(self):
         user = g.current_user
 
-        # Single-date parameter
+        # Retrieve query parameters
         the_date_str = request.args.get("date")
         import_id = request.args.get("import")
+        page = request.args.get("page", 1)
+        per_page = request.args.get("per_page", 100)
+
+        # Validate and parse 'page'
+        try:
+            page = int(page)
+            if page < 1:
+                page = 1
+        except ValueError:
+            page = 1
+
+        # Validate and parse 'per_page'
+        try:
+            per_page = int(per_page)
+            if per_page not in [10, 20, 50, 150]:
+                per_page = 20
+        except ValueError:
+            per_page = 20
+
         now = datetime.now()
 
         if not the_date_str:
@@ -299,9 +401,9 @@ class PointsView(MethodView):
                 # Fallback to today if error
                 start_date = datetime(now.year, now.month, now.day, 0, 0, 0)
 
-        end_date = start_date + timedelta(hours=24)
+        end_date = start_date + timedelta(days=1)  # Use days=1 for clarity
 
-        # Query user’s points from start_date to end_date
+        # Build the base query
         points_query = GPSData.query.filter_by(user_id=user.id).filter(
             GPSData.timestamp >= start_date,
             GPSData.timestamp < end_date
@@ -310,9 +412,23 @@ class PointsView(MethodView):
         if import_id:
             points_query = points_query.filter_by(import_id=import_id)
 
-        # Sort newest -> oldest
-        points = points_query.order_by(GPSData.timestamp.desc()).all()
+        # Calculate total points for pagination
+        total_points = points_query.count()
 
+        # Calculate max_pages with ceiling division
+        max_pages = math.ceil(total_points / per_page) if total_points > 0 else 1
+
+        # Ensure the current page isn't beyond the maximum
+        if page > max_pages:
+            page = max_pages
+
+        # Calculate offset
+        offset = (page - 1) * per_page
+
+        # Fetch points for the current page, sorted newest to oldest
+        points = points_query.order_by(GPSData.timestamp.desc()).offset(offset).limit(per_page).all()
+
+        # Fetch imports for the selector
         raw_imports = Import.query.filter_by(user_id=user.id).all()
 
         imports = []
@@ -322,41 +438,51 @@ class PointsView(MethodView):
                 "name": imp.original_filename,
             })
 
-        return render_template("points.jinja", points=points, imports=imports)
+        return render_template(
+            "points.jinja",
+            points=points,
+            imports=imports,
+            current_page=page,
+            per_page=per_page,
+            max_pages=max_pages
+        )
 
     def post(self):
         user = g.current_user
 
         action = request.form.get("action", None)
 
-        # if action == "delete_point":
-        #     # Single-delete logic
-        #     point_id = request.form.get("point_id")
-        #     if not point_id:
-        #         return "Missing point_id", 400
-
-        #     point = GPSData.query.filter_by(id=point_id, user_id=user.id).first()
-        #     if not point:
-        #         return "Point not found or not yours", 404
-
-        #     db.session.delete(point)
-        #     db.session.commit()
-
         if action == "batch_delete":
             # Batch delete: get all selected point IDs
             selected_ids = request.form.getlist("selected_points")
             if selected_ids:
-                # Convert to int if needed
-                selected_ids = [int(x) for x in selected_ids if x.isdigit()]
-                # Delete all points matching these IDs for this user
-                GPSData.query.filter(
-                    GPSData.user_id == user.id,
-                    GPSData.id.in_(selected_ids)
-                ).delete(synchronize_session=False)
-                db.session.commit()
+                # Convert to integers and filter out invalid entries
+                try:
+                    selected_ids = [int(x) for x in selected_ids if x.isdigit()]
+                except ValueError:
+                    selected_ids = []
 
-        # Keep the date param in the redirect so we stay on the same day
-        return redirect(url_for("web.points", date=request.args.get("date", "")))
+                if selected_ids:
+                    # Delete all points matching these IDs for this user
+                    GPSData.query.filter(
+                        GPSData.user_id == user.id,
+                        GPSData.id.in_(selected_ids)
+                    ).delete(synchronize_session=False)
+                    db.session.commit()
+
+        # Retrieve current query parameters to maintain state after action
+        the_date_str = request.args.get("date", "")
+        import_id = request.args.get("import", "")
+        page = request.args.get("page", 1)
+        per_page = request.args.get("per_page", 100)
+
+        return redirect(url_for(
+            "web.points",
+            date=the_date_str,
+            importid=import_id,
+            page=page,
+            per_page=per_page
+        ))
 
 
 

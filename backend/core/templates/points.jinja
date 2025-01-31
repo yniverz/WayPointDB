@@ -1,10 +1,84 @@
 {% extends "base.jinja" %}
 
+
+
+
+{% macro add_page_navigator() %}
+    <!-- Page Navigator -->
+    <div class="page-navigator">
+        {# First Page Button #}
+        <a onclick="goToPage(1)"><<<</a>
+
+        {# Previous Button #}
+        {% if current_page <= 1 %}
+            <span><<</span>
+        {% else %}
+            <a onclick="goToPage({{ current_page - 1 }})"><<</a>
+        {% endif %}
+
+        {% if current_page > 4 %}
+            <span>...</span>
+        {% endif %}
+
+        {# Page Number Buttons #}
+        {% for page_num in range(1, max_pages + 1) %}
+            {% if page_num >= current_page - 3 and page_num <= current_page + 3 %}
+                {% if page_num == current_page %}
+                    <strong>{{ page_num }}</strong>
+                {% else %}
+                    <a onclick="goToPage({{ page_num }})">{{ page_num }}</a>
+                {% endif %}
+            {% elif page_num == 1 or page_num == max_pages %}
+                {% if page_num == 1 and current_page <= 4 %}
+                    <a onclick="goToPage(1)">1</a>
+                    <span>...</span>
+                {% elif page_num == max_pages and current_page >= max_pages - 3 %}
+                    <span>...</span>
+                    <a onclick="goToPage({{ max_pages }})">{{ max_pages }}</a>
+                {% endif %}
+            {% endif %}
+        {% endfor %}
+
+        {% if current_page < max_pages - 3 %}
+            <span>...</span>
+        {% endif %}
+
+        {# Next Button #}
+        {% if current_page >= max_pages %}
+            <span>>></span>
+        {% else %}
+            <a onclick="goToPage({{ current_page + 1 }})">>></a>
+        {% endif %}
+
+        {# Last Page Button #}
+        <a onclick="goToPage({{ max_pages }})">>>></a>
+    </div>
+{% endmacro %}
+
+
+
+
 {% block heading %}
 Points Overview
 {% endblock %}
 
 {% block content %}
+<style>
+.page-navigator {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.page-navigator a {
+    text-decoration: underline !important;
+    cursor: pointer;
+}
+
+.page-navigator a:hover {
+    text-decoration: none !important;
+}
+</style>
 <div class="container mt-4">
     <!-- Single Date Selector (same as before) -->
     <div class="date-selector" style="display: flex; gap: 10px; justify-content: center; align-items: center; margin-bottom: 20px;">
@@ -17,7 +91,7 @@ Points Overview
         <select onchange="submitImport(this.value)">
             <option value="">Select Import</option>
             {% for imp in imports %}
-                <option value="{{ imp.id }}" {% if request.args.get('import') == imp.id|string %}selected{% endif %}>{{ imp.name }}</option>
+                <option value="{{ imp.id }}" {% if request.args.get('importid') == imp.id|string %}selected{% endif %}>{{ imp.name }}</option>
             {% endfor %}
         </select>
     </div>
@@ -27,15 +101,18 @@ Points Overview
         <input type="hidden" name="date" id="hidden-date-input" />
     </form>
 
-    <h2>Points</h2>
-
     <!-- Wrap the table in a single POST form for batch delete -->
-    <form method="POST" action="{{ url_for('web.points', date=request.args.get('date', '') ) }}">
+    <form method="POST" action="{{ url_for('web.points', date=request.args.get('date', ''), importid=request.args.get('importid', ''), per_page=per_page, page=current_page ) }}">
         <input type="hidden" name="action" value="batch_delete">
 
         <!-- Submit button to delete all selected points -->
-        <div style="margin-top: 10px;">
-            <button type="submit">Delete Selected</button>
+        <div class="pagination-controls" style="display: flex; justify-content: space-between; align-items: center; margin-top: 20px; flex-wrap: wrap;">
+                <button type="submit">Delete Selected</button>
+
+                <!-- Page Navigator -->
+                {{ add_page_navigator() }}
+                
+            </div>
         </div>
         <br>
 
@@ -65,14 +142,6 @@ Points Overview
                         <td>{{ point.latitude }}</td>
                         <td>{{ point.longitude }}</td>
                         <td>{{ point.speed }}</td>
-                        {# <td>
-                            <!-- Optional: single-delete form; can keep or remove -->
-                            <form method="POST" action="{{ url_for('web.points', date=request.args.get('date','')) }}" style="display:inline;">
-                                <input type="hidden" name="action" value="delete_point">
-                                <input type="hidden" name="point_id" value="{{ point.id }}">
-                                <button type="submit">Delete</button>
-                            </form>
-                        </td> #}
                     </tr>
                     {% endfor %}
                 {% else %}
@@ -81,18 +150,33 @@ Points Overview
             </tbody>
         </table>
     </form>
+
+    <!-- Pagination Controls -->
+    <div class="pagination-controls" style="display: flex; justify-content: space-between; align-items: center; margin-top: 20px; flex-wrap: wrap;">
+        <!-- Per-Page Selector -->
+        <div class="per-page-selector" style="margin-bottom: 10px;">
+            <label for="per-page">Points per page:</label>
+            <select id="per-page" onchange="changePerPage(this.value)">
+                <option value="10" {% if per_page == 10 %}selected{% endif %}>10</option>
+                <option value="20" {% if per_page == 20 %}selected{% endif %}>20</option>
+                <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
+                <option value="150" {% if per_page == 150 %}selected{% endif %}>150</option>
+            </select>
+        </div>
+
+        <!-- Page Navigator -->
+        {{ add_page_navigator() }}
+        
+    </div>
 </div>
 
 <script>
 function submitDate(dateString) {
-    document.getElementById("hidden-date-input").value = dateString;
-    document.getElementById("date-form").submit();
+    updateQueryParams({ date: dateString, page: 1 }); // Reset to page 1 on date change
 }
 
 function submitImport(importId) {
-    const urlParams = new URLSearchParams(window.location.search);
-    urlParams.set("import", importId);
-    window.location.search = urlParams.toString();
+    updateQueryParams({ importid: importId, page: 1 }); // Reset to page 1 on import change
 }
 
 function adjustDate(days) {
@@ -120,7 +204,32 @@ function setDateRange(range) {
     submitDate(chosenDate.toISOString().split('T')[0]);
 }
 
-// On load, fill the date picker from the ?date= param or default to today
+// Handle per-page change
+function changePerPage(perPage) {
+    updateQueryParams({ per_page: perPage, page: 1 }); // Reset to page 1 on per_page change
+}
+
+// Handle page navigation
+function goToPage(pageNum) {
+    updateQueryParams({ page: pageNum });
+}
+
+// Utility function to update query parameters and reload
+function updateQueryParams(params) {
+    const urlParams = new URLSearchParams(window.location.search);
+
+    for (const key in params) {
+        if (params[key] !== null && params[key] !== undefined && params[key] !== '') {
+            urlParams.set(key, params[key]);
+        } else {
+            urlParams.delete(key);
+        }
+    }
+
+    window.location.search = urlParams.toString();
+}
+
+// "Select All" checkbox logic
 document.addEventListener("DOMContentLoaded", () => {
     const urlParams = new URLSearchParams(window.location.search);
     const dateParam = urlParams.get("date");
@@ -134,7 +243,6 @@ document.addEventListener("DOMContentLoaded", () => {
         dateInput.value = now.toISOString().split('T')[0];
     }
 
-    // "Select All" checkbox logic
     const selectAllCheckbox = document.getElementById("select-all");
     selectAllCheckbox.addEventListener('change', function() {
         const checkboxes = document.querySelectorAll('input[name="selected_points"]');
