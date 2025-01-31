@@ -310,7 +310,6 @@ class GenerateWeeklyStatisticsJob(Job):
         # regenerate daily stats for past 7 days
         for i in range(7):
             date = time.localtime(time.time() - i * 86400)
-            key = f"{date.tm_year}-{date.tm_mon}-{date.tm_mday}"
             stats = DailyStatistic.query.filter_by(user_id=user.id, year=date.tm_year, month=date.tm_mon, day=date.tm_mday).all()
             for stat in stats:
                 db.session.delete(stat)
@@ -339,6 +338,53 @@ class GenerateWeeklyStatisticsJob(Job):
 
             db.session.add(daily_stat)
             db.session.commit()
+
+
+
+
+
+class FilterLargeAccuracyJob(Job):
+    PARAMETERS = {
+        "user": User,
+        "maximum_accuracy": float
+    }
+
+    def __init__(self, user: User, maximum_accuracy: float):
+        super().__init__()
+        self.user_id = user.id
+        self.maximum_accuracy = maximum_accuracy
+
+    def run(self):
+        user = User.query.get(self.user_id)
+        if not user:
+            self.done = True
+            return
+        
+        # Get all GPS data for the user sorted by timestamp
+        gps_data: list[GPSData] = GPSData.query.filter_by(user_id=user.id).order_by(GPSData.timestamp).all()
+        if not gps_data:
+            self.done = True
+            return
+        
+        i = 0
+        total_count = len(gps_data)
+        for data in gps_data:
+            if self.stop_requested:
+                break
+
+            if data.horizontal_accuracy is not None and data.horizontal_accuracy > self.maximum_accuracy:
+                db.session.delete(data)
+
+            i += 1
+            self.progress = (i / total_count)
+
+            if i % 1000 == 0:
+                db.session.commit()
+
+        db.session.commit()
+
+        self.done = True
+
 
 
 
@@ -438,6 +484,7 @@ class ImportJob(Job):
 JOB_TYPES: dict[str, Job] = {
     "full_stats": GenerateFullStatisticsJob,
     "speed_data": GenerateSpeedDataJob,
+    "filter_accuracy": FilterLargeAccuracyJob,
 }
 
 if len(Config.PHOTON_SERVER_HOST) != 0:

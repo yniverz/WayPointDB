@@ -130,7 +130,7 @@ class JobsView(MethodView):
         
         needed_params = set(job.PARAMETERS) - {"user"}
             
-        job_instance = job(user=g.current_user, **{param: params[param] for param in needed_params})
+        job_instance = job(user=g.current_user, **{param: job.PARAMETERS[param](params[param]) for param in needed_params})
         
         job_manager.add_job(job_instance)
 

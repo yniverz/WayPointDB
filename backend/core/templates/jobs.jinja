@@ -5,14 +5,17 @@
 {% endblock %}
 
 {% block content %}
-    <form method="POST">
-        {% if photon_active %}
-        <button type="submit" name="newJob" value="photon_full">Geocode all points</button>
-        <button type="submit" name="newJob" value="photon_fill">Geocode new points</button>
-        {% endif %}
-        <button type="submit" name="newJob" value="full_stats">Generate Statistics</button>
-        <button type="submit" name="newJob" value="speed_data">Generate Speed Data</button>
-    </form>
+    <div style="display: flex;">
+        <form method="POST">
+            {% if photon_active %}
+            <button type="submit" name="newJob" value="photon_full">Geocode all points</button>
+            <button type="submit" name="newJob" value="photon_fill">Geocode new points</button>
+            {% endif %}
+            <button type="submit" name="newJob" value="full_stats">Generate Statistics</button>
+            <button type="submit" name="newJob" value="speed_data">Generate Speed Data</button>
+        </form>&nbsp;
+        <button type="submit" name="newJob" value="filter_accuracy" onclick="startFilterAccuracyJob()">Filter Large Accuracy</button>
+    </div>
     <br>
     <h2>Jobs</h2>
     <table border="1" cellpadding="5" cellspacing="0">
@@ -132,5 +135,33 @@
 
     // Refresh the table every 1 second (only if refresh is enabled)
     setInterval(autoRefresh, 1000);
+
+
+
+
+    function startFilterAccuracyJob() {
+        // ask the user for a meter value
+        const meterValue = prompt("Enter the meter value to filter by", "500");
+        if (meterValue === null) {
+            return;
+        }
+
+        // start a POST request to the server to start the job
+        fetch(window.location.pathname, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+            body: `newJob=filter_accuracy&maximum_accuracy=${meterValue}`,
+        })
+            .then(response => response.json())
+            .then(data => {
+                // data is a list of jobs in the same format as `jobs` from the server
+                updateJobsTable(data);
+            })
+            .catch(error => console.error("Error starting filter accuracy job:", error));
+    }
+
+
     </script>
 {% endblock %}
