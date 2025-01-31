@@ -37,9 +37,6 @@ batch_gps_model = api_gps_ns.model("BatchGPSData", {
 
 @api_gps_ns.route("/batch")
 class GPSBatch(Resource):
-    def get(self):
-        return "Please use POST to submit GPS data", 405
-
     @api_gps_ns.expect(api_key_parser, batch_gps_model)
     @api_key_required
     def post(self):
@@ -79,6 +76,163 @@ class GPSBatch(Resource):
 
         db.session.commit()
         return {"message": "GPS data added successfully"}, 201
+
+
+# GeoJSON Geometry Model
+geometry_model = api_gps_ns.model("Geometry", {
+    "type": fields.String(
+        required=True,
+        description="The geometry type, always 'Point'",
+        example="Point"
+    ),
+    "coordinates": fields.List(
+        fields.Float,
+        required=True,
+        description="[longitude, latitude] of the GPS point",
+        example=[13.407278, 52.605508]
+    ),
+})
+
+# GeoJSON Properties Model (Containing Overland-specific data)
+properties_model = api_gps_ns.model("Properties", {
+    "timestamp": fields.String(
+        required=True,
+        description="Timestamp in ISO 8601 format",
+        example="2025-01-31T09:32:11Z"
+    ),
+    "speed": fields.Float(
+        description="Speed in meters per second",
+        example=0.0
+    ),
+    "speed_accuracy": fields.Float(
+        description="Speed accuracy in meters per second",
+        example=0.36
+    ),
+    "horizontal_accuracy": fields.Float(
+        description="Horizontal accuracy in meters",
+        example=10.0
+    ),
+    "vertical_accuracy": fields.Float(
+        description="Vertical accuracy in meters",
+        example=2.0
+    ),
+    "altitude": fields.Float(
+        description="Altitude in meters",
+        example=309.0
+    ),
+    "course": fields.Float(
+        description="Course (heading) in degrees",
+        example=-1.0
+    ),
+    "course_accuracy": fields.Float(
+        description="Course accuracy in degrees",
+        example=-1.0
+    ),
+    "battery_state": fields.String(
+        description="Battery state of the device",
+        example="unplugged"
+    ),
+    "battery_level": fields.Float(
+        description="Battery level as a fraction (0-1)",
+        example=0.65
+    ),
+    "motion": fields.List(
+        fields.String,
+        description="Motion types detected (e.g., 'stationary', 'walking')",
+        example=["stationary"]
+    ),
+    "wifi": fields.String(
+        description="Connected WiFi network name",
+        example="Main"
+    ),
+})
+
+# Full GeoJSON Feature Model (Overland Location)
+feature_model = api_gps_ns.model("Feature", {
+    "type": fields.String(
+        required=True,
+        description="The feature type, always 'Feature'",
+        example="Feature"
+    ),
+    "geometry": fields.Nested(geometry_model),
+    "properties": fields.Nested(properties_model),
+})
+
+# Overland GPS Batch Request Model
+overland_model = api_gps_ns.model("OverlandGPSRequest", {
+    "locations": fields.List(
+        fields.Nested(feature_model),
+        required=True,
+        description="List of location features in GeoJSON Feature format"
+    )
+})
+
+@api_gps_ns.route("/overland")
+class OverlandGPSBatch(Resource):
+    """
+    Endpoint to accept GeoJSON-style Overland location updates.
+    """
+
+    @api_gps_ns.expect(api_key_parser, overland_model)
+    @api_key_required
+    def post(self):
+        """
+        Submit GeoJSON-style GPS data from Overland (requires a valid API key).
+        """
+        # Parse request JSON
+        data = request.json or {}
+        locations = data.get("locations")
+
+        if not locations or not isinstance(locations, list):
+            return {"error": "Invalid data format: 'locations' should be a list"}, 400
+
+        user = g.current_user  # Retrieved from @api_key_required decorator
+
+        for feature in locations:
+            # Validate that it follows the GeoJSON Feature structure
+            if feature.get("type") != "Feature":
+                continue  # or return an error if you'd rather fail early
+
+            geometry = feature.get("geometry", {})
+            properties = feature.get("properties", {})
+
+            # Ensure geometry is a "Point" with [longitude, latitude]
+            coords = geometry.get("coordinates", [])
+            if len(coords) != 2 or geometry.get("type") != "Point":
+                continue  # or handle invalid geometry
+
+            longitude, latitude = coords[0], coords[1]
+
+            # Parse timestamp, default to now if parsing fails
+            ts_str = properties.get("timestamp")
+            try:
+                ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))  # handle UTC 'Z'
+            except Exception:
+                ts = datetime.now()
+
+            # Create a GPSData record
+            gps_record = GPSData(
+                user_id=user.id,
+                timestamp=ts,
+                latitude=latitude,
+                longitude=longitude,
+                horizontal_accuracy=properties.get("horizontal_accuracy"),
+                vertical_accuracy=properties.get("vertical_accuracy"),
+                altitude=properties.get("altitude"),
+                speed=properties.get("speed"),
+                speed_accuracy=properties.get("speed_accuracy"),
+                heading=properties.get("course"),  # "course" is equivalent to heading
+                heading_accuracy=properties.get("course_accuracy"),
+                # Additional fields can be added as needed
+            )
+
+            db.session.add(gps_record)
+
+        db.session.commit()
+        return {"message": "Overland GPS data added successfully"}, 201
+
+
+
 
 
 
