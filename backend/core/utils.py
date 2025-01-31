@@ -10,14 +10,18 @@ from .models import GPSData, Import, User, db
 
 def login_required(f):
     """Decorator to ensure the user is logged in (session-based) for HTML routes."""
+    def login_with_old_page():
+        # path with get parameter
+        return redirect(url_for("web.login", next=flask.request.path+"?"+flask.request.query_string.decode("utf-8")))
+
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if "user_id" not in session:
-            return redirect(url_for("web.login"))
+            return login_with_old_page()
         
         user = get_current_user()
         if not user:
-            return redirect(url_for("web.login"))
+            return login_with_old_page()
         
         g.current_user = user
         return f(*args, **kwargs)

@@ -251,10 +251,13 @@ GPS Map
             coordinates = coordinates.filter(coord => coord.accuracy < 20);
         }
 
-        // only keep points if it and next one are inside the map bounds
         coordinates = coordinates.filter((coord, i) => {
-            if (i === coordinates.length - 1) return true;
-            return map.getBounds().contains([coord.lat, coord.lng]) && map.getBounds().contains([coordinates[i + 1].lat, coordinates[i + 1].lng]);
+            if (i === 0 || i === coordinates.length - 1) {
+                return true;
+            }
+            return map.getBounds().contains([coord.lat, coord.lng]) ||
+                map.getBounds().contains([coordinates[i - 1].lat, coordinates[i - 1].lng]) ||
+                map.getBounds().contains([coordinates[i + 1].lat, coordinates[i + 1].lng]);
         });
 
         if (coordinates[coordinates.length - 1].timestamp.split("T")[0] === coordinates[0].timestamp.split("T")[0] && coordinates.length < max_points_for_colored_path) {
