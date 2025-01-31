@@ -13,6 +13,12 @@ from ..extensions import db
 
 
 
+class ConcurrencyLimitType:
+    GLOBAl = "global"
+    PHOTON = "photon"
+    GENERATE_STATS = "generate_stats"
+
+
 class Job:
     PARAMETERS: dict[str, object] = {}
 
@@ -28,6 +34,7 @@ class Job:
         self.done = False
         self.stop_requested = False
         self.id = uuid.uuid4().hex
+        self.concurrency_limit_type: ConcurrencyLimitType = None
 
     def set_config(self, config: Config):
         self.config = config
@@ -57,6 +64,7 @@ class Job:
 class QueryPhotonJob(Job):
     def __init__(self):
         super().__init__()
+        self.concurrency_limit_type = ConcurrencyLimitType.PHOTON
         self.point_ids = []
     
     def do_request(self, lat, lon):
@@ -219,6 +227,7 @@ class GenerateFullStatisticsJob(Job):
 
     def __init__(self, user: User):
         super().__init__()
+        self.concurrency_limit_type = ConcurrencyLimitType.GENERATE_STATS
         self.user_id = user.id
 
     def get_distance(self, point1: GPSData, point2: GPSData):
@@ -303,6 +312,7 @@ class GenerateWeeklyStatisticsJob(Job):
 
     def __init__(self, user: User):
         super().__init__()
+        self.concurrency_limit_type = ConcurrencyLimitType.GENERATE_STATS
         self.user_id = user.id
 
     def run(self):
@@ -355,6 +365,7 @@ class FilterLargeAccuracyJob(Job):
 
     def __init__(self, user: User, maximum_accuracy: float):
         super().__init__()
+        self.concurrency_limit_type = ConcurrencyLimitType.GLOBAl
         self.user_id = user.id
         self.maximum_accuracy = maximum_accuracy
 
@@ -475,8 +486,6 @@ class ImportJob(Job):
             db.session.commit()
 
         self.done = True
-
-        
 
 
 

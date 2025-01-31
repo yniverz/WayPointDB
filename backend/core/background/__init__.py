@@ -6,7 +6,7 @@ from flask import Flask
 
 from ..models import User
 from ..config import Config
-from .jobs import GenerateWeeklyStatisticsJob, Job, PhotonFillJob
+from .jobs import ConcurrencyLimitType, GenerateWeeklyStatisticsJob, Job, PhotonFillJob
 
 
 
@@ -62,14 +62,31 @@ class JobManager:
 
             try:
                 if len(self.threads) < int(self.config.BACKGROUND_MAX_THREADS):
-                    if self.queued_jobs:
-                        job = self.queued_jobs.pop(0)
-                        job.running = True
-                        job.start_time = time.time()
-                        thread = threading.Thread(target=self.run_safely, args=(job,))
-                        thread.start()
-                        self.threads.append(thread)
-                        self.running_jobs.append(job)
+                    concurrent_types = [job.concurrency_limit_type for job in self.running_jobs if job.concurrency_limit_type != None]
+                    if self.queued_jobs and ConcurrencyLimitType.GLOBAl not in concurrent_types:
+                        to_remove = []
+                        for job in self.queued_jobs:
+                            if job.concurrency_limit_type in concurrent_types:
+                                continue
+
+                            job.running = True
+                            job.start_time = time.time()
+                            thread = threading.Thread(target=self.run_safely, args=(job,))
+                            thread.start()
+                            self.threads.append(thread)
+                            self.running_jobs.append(job)
+                            to_remove.append(job)
+
+                        for job in to_remove:
+                            self.queued_jobs.remove(job)
+
+                        # job = self.queued_jobs.pop(0)
+                        # job.running = True
+                        # job.start_time = time.time()
+                        # thread = threading.Thread(target=self.run_safely, args=(job,))
+                        # thread.start()
+                        # self.threads.append(thread)
+                        # self.running_jobs.append(job)
 
                 for job in self.running_jobs:
                     if job.done:
