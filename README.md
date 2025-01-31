@@ -32,3 +32,11 @@ git pull
 docker-compose build
 docker-compose up -d
 ```
+
+## Configuration
+The project can be configured by modifying the environment variables in the ```docker-compose.yml``` file. The following environment variables are commonly modified:
+- ```OUTBOUND_PORT``` in the NginX section: The port on which the Nginx server listens
+- ```PHOTON_SERVER_*``` in the backend section: The host, HTTPS status, and an optional API key of the Photon server
+
+### Photon Server
+WayPointDB can use a [Photon server](https://github.com/komoot/photon) for reverse geocoding. It is recommended to use a self-hosted instance of the Photon server to avoid rate limiting, and to ensure the privacy of the data. Some hosting providers use an api key for authentication, which can be set in the ```docker-compose.yml``` file. WayPointDB will pass this as the ```X-Api-Key``` header in the requests to the Photon server.
