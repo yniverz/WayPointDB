@@ -91,11 +91,11 @@ class JobManager:
         with self.web_app.app_context():
             for user in User.query.all():
                 if len(self.config.PHOTON_SERVER_HOST) > 0:
-                    job = PhotonFillJob(user)
-                    self.add_job(job)
+                    if PhotonFillJob.__name__ not in [job.__class__.__name__ for job in self.queued_jobs + self.running_jobs]:
+                        self.add_job(PhotonFillJob(user))
 
-                job = GenerateWeeklyStatisticsJob(user)
-                self.add_job(job)
+                if GenerateWeeklyStatisticsJob.__name__ not in [job.__class__.__name__ for job in self.queued_jobs + self.running_jobs]:
+                    self.add_job(GenerateWeeklyStatisticsJob(user))
 
             
 
