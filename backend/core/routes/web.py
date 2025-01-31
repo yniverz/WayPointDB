@@ -146,7 +146,9 @@ class StatsView(MethodView):
 
         total_points = GPSData.query.filter_by(user_id=user.id).count()
         # total_geocoded = GPSData.query.filter_by(user_id=user.id, reverse_geocoded=True).count()
-        total_geocoded = GPSData.query.filter_by(user_id=user.id).filter(GPSData.country != None).count()
+        total_geocoded = GPSData.query.filter_by(user_id=user.id).filter(GPSData.reverse_geocoded == True).count()
+        # where reverse_geocoded = true and city is none
+        total_not_geocoded = GPSData.query.filter_by(user_id=user.id).filter(GPSData.reverse_geocoded == True).filter(GPSData.city == None).count()
 
         stats = DailyStatistic.query.filter_by(user_id=user.id).all()
 
@@ -201,7 +203,7 @@ class StatsView(MethodView):
             total_distance=f"{total_distance / 1000.0:,.0f}",  # Convert to KM
             total_points=f"{total_points:,}",
             total_geocoded=f"{total_geocoded:,}",
-            total_not_geocoded=f"{total_points - total_geocoded:,}",
+            total_not_geocoded=f"{total_not_geocoded:,}",
         )
     
 

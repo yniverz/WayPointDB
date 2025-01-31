@@ -102,8 +102,12 @@ class QueryPhotonJob(Job):
                 while buffer:
                     point_id, data = buffer.pop(0)
                     if data and "features" in data:
-                        feature: dict[str, dict] = data["features"][0]
                         point = GPSData.query.get(point_id)
+                        if len(data["features"]) == 0:
+                            point.reverse_geocoded = True
+                            continue
+
+                        feature: dict[str, dict] = data["features"][0]
                         point.reverse_geocoded = True
                         point.country = feature["properties"].get("country")
                         point.city = feature["properties"].get("city")
