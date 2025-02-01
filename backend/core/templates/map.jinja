@@ -118,6 +118,8 @@ GPS Map
     const max_points_for_markers = 300;
     const max_points_for_colored_path = 1000;
 
+    var last_point = {{ last_point }};
+
     // Heatmap-related variables
     var heatLayer = null;
     var heatmapLoaded = false;  // to ensure data is only loaded once
@@ -130,13 +132,13 @@ GPS Map
         const params = new URLSearchParams(window.location.search);
         let lat = parseFloat(params.get('lat'));
         let lng = parseFloat(params.get('lng'));
-        let zoom = parseInt(params.get('zoom'), 10);
+        let zoom = parseInt(params.get('zoom'));
 
         // Fallback to last_point if missing or invalid
         if (isNaN(lat) || isNaN(lng) || isNaN(zoom)) {
-            lat = {{ last_point.latitude }};
-            lng = {{ last_point.longitude }};
-            zoom = 10;
+            lat = last_point.lat;
+            lng = last_point.lng;
+            zoom = 14;
         }
 
         map = L.map('map').setView([lat, lng], zoom);
@@ -240,7 +242,7 @@ GPS Map
         var coordinates = gpsData.map(record => ({
             id: record.id,
             lat: record.lat,
-            lng: record.lon,
+            lng: record.lng,
             accuracy: record.ha,
             speed: record.s,
             altitude: record.a,
@@ -260,22 +262,11 @@ GPS Map
                 map.getBounds().contains([coordinates[i + 1].lat, coordinates[i + 1].lng]);
         });
 
-        {# if (coordinates[coordinates.length - 1].timestamp.split("T")[0] === coordinates[0].timestamp.split("T")[0] && coordinates.length < max_points_for_colored_path) {
-            for (let i = 0; i < coordinates.length - 1; i++) {
-                let color = getSpeedColor(coordinates[i].speed || 0);
-                L.polyline([coordinates[i], coordinates[i + 1]], 
-                    { 
-                        color: color,
-                        weight: 2
-                    }).addTo(polylineLayer);
-            }
-        } else { #}
-            var polyline = L.polyline(coordinates.map(coord => [coord.lat, coord.lng]), { 
-                color: "#369eff",
-                fillColor: "#0b84ff",
-                weight: 3
-            }).addTo(polylineLayer);
-        {# } #}
+        var polyline = L.polyline(coordinates.map(coord => [coord.lat, coord.lng]), { 
+            color: "#369eff",
+            fillColor: "#0b84ff",
+            weight: 3
+        }).addTo(polylineLayer);
 
 
         const center = map.getCenter();
@@ -296,6 +287,9 @@ GPS Map
 
         // cut newCoords to max_points_for_markers
         newCoords = newCoords.slice(0, max_points_for_markers);
+        
+        // find coord with last_point.id 
+        let selected_point = coordinates.find(coord => coord.id === last_point.id);
 
         // Add markers if zoomed in enough OR small data set
         if (map.getZoom() > 15 || newCoords.length <= 50) {
@@ -314,27 +308,39 @@ GPS Map
                 }).addTo(radiusLayer);
             });
 
-            newCoords.forEach(coord => {
-                let marker = L.circleMarker([coord.lat, coord.lng], {
-                    radius: 5,
-                    fillColor: "#0b84ff",
-                    color: "#c7c7cb",
-                    weight: 3,
-                    opacity: 1,
-                    fillOpacity: 1
-                }).addTo(markerLayer);
 
-                marker.bindPopup(`
-                    <b>Timestamp:</b> ${coord.timestamp} <br>
-                    <b>Speed:</b> ${coord.speed ? (coord.speed * 3.6).toFixed(2) + " km/h" : "N/A"} <br>
-                    <b>Altitude:</b> ${coord.altitude ? coord.altitude.toFixed(2) + " m" : "N/A"} <br>
-                    <b>Accuracy:</b> ${coord.accuracy.toFixed(2)} m <br>
-                    <button onclick="deletePoint(${coord.id}, this)">Delete</button>
-                    <button onclick="setDateToPoint('${coord.timestamp}')">Set Date</button>
-                    <button onclick="goToSpeedMap('${coord.id}')">View on Speed Map</button>
-                `);
+            newCoords.forEach(coord => {
+                if (selected_point && coord.lat === selected_point.lat && coord.lng === selected_point.lng) {
+                    return;
+                }
+                createMarker(coord, markerLayer);
             });
         }
+
+        if (selected_point) {
+            createMarker(selected_point, markerLayer, true);
+        }
+    }
+
+    function createMarker(coord, markerLayer, highlight = false) {
+        let marker = L.circleMarker([coord.lat, coord.lng], {
+            radius: 5,
+            fillColor: highlight ? "red" : "#369eff",
+            color: "#c7c7cb",
+            weight: 3,
+            opacity: 1,
+            fillOpacity: 1
+        }).addTo(markerLayer);
+
+        marker.bindPopup(`
+            <b>Timestamp:</b> ${coord.timestamp} <br>
+            <b>Speed:</b> ${coord.speed ? (coord.speed * 3.6).toFixed(2) + " km/h" : "N/A"} <br>
+            <b>Altitude:</b> ${coord.altitude ? coord.altitude.toFixed(2) + " m" : "N/A"} <br>
+            <b>Accuracy:</b> ${coord.accuracy.toFixed(2)} m <br>
+            <button onclick="deletePoint(${coord.id}, this)">Delete</button>
+            <button onclick="setDateToPoint('${coord.timestamp}')">Set Date</button>
+            <button onclick="goToSpeedMap('${coord.id}')">View on Speed Map</button>
+        `);
     }
 
     function goToSpeedMap(pointId) {
