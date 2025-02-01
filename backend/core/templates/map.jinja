@@ -260,7 +260,7 @@ GPS Map
                 map.getBounds().contains([coordinates[i + 1].lat, coordinates[i + 1].lng]);
         });
 
-        if (coordinates[coordinates.length - 1].timestamp.split("T")[0] === coordinates[0].timestamp.split("T")[0] && coordinates.length < max_points_for_colored_path) {
+        {# if (coordinates[coordinates.length - 1].timestamp.split("T")[0] === coordinates[0].timestamp.split("T")[0] && coordinates.length < max_points_for_colored_path) {
             for (let i = 0; i < coordinates.length - 1; i++) {
                 let color = getSpeedColor(coordinates[i].speed || 0);
                 L.polyline([coordinates[i], coordinates[i + 1]], 
@@ -269,13 +269,13 @@ GPS Map
                         weight: 2
                     }).addTo(polylineLayer);
             }
-        } else {
+        } else { #}
             var polyline = L.polyline(coordinates.map(coord => [coord.lat, coord.lng]), { 
                 color: "#369eff",
                 fillColor: "#0b84ff",
                 weight: 3
             }).addTo(polylineLayer);
-        }
+        {# } #}
 
 
         const center = map.getCenter();

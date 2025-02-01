@@ -619,7 +619,13 @@ class MapView(MethodView):
     def get(self):
         user = g.current_user
 
-        last_point = GPSData.query.filter_by(user_id=user.id).order_by(GPSData.timestamp.desc()).first()
+        point_id = request.args.get("point_id")
+
+        if point_id:
+            last_point = GPSData.query.filter_by(id=point_id, user_id=user.id).first()
+        else:
+            last_point = GPSData.query.filter_by(user_id=user.id).order_by(GPSData.timestamp.desc()).first()
+            
         if not last_point:
             # Some default coords
             last_point = {"latitude": 52.516310, "longitude": 13.378208}

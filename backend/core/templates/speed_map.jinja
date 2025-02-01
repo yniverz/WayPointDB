@@ -304,7 +304,7 @@ Speed Map
             <b>Speed:</b> ${point.speed ? (point.speed * 3.6).toFixed(2) + " km/h" : "N/A"} <br>
             <b>Altitude:</b> ${point.altitude ? point.altitude.toFixed(2) + " m" : "N/A"} <br>
             <b>Accuracy:</b> ${point.accuracy.toFixed(2)} m <br>
-            <button onclick="setDateToPoint('${point.timestamp}')">View on Map</button>
+            <button onclick="viewOnRealMap('${point.id}')">View on Map</button>
         `);
 
         updateMapPosition();
@@ -315,6 +315,10 @@ Speed Map
         if (index < 10 || index > gpsCoordinates.length - 10) {
             fetchGPSData();
         }
+    }
+
+    function viewOnRealMap(pointID) {
+        window.open(`/map?point_id=${pointID}`);
     }
 
     function setDateToPoint(timestamp) {
