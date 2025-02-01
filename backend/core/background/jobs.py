@@ -190,6 +190,7 @@ class GenerateSpeedDataJob(Job):
         
         i = 0
         total_count = len(gps_data)
+        added = 1
         for data in gps_data:
             if self.stop_requested:
                 break
@@ -206,9 +207,11 @@ class GenerateSpeedDataJob(Job):
                 if time_diff > 0:
                     data.speed = distance / time_diff
                     db.session.add(data)
+                    added += 1
 
-            if i % 1000 == 0:
+            if added % 1000 == 0:
                 db.session.commit()
+                added = 1
 
             i += 1
             self.progress = (i / total_count)
@@ -383,18 +386,21 @@ class FilterLargeAccuracyJob(Job):
         
         i = 0
         total_count = len(gps_data)
+        deleted = 1
         for data in gps_data:
             if self.stop_requested:
                 break
 
             if data.horizontal_accuracy is not None and data.horizontal_accuracy > self.maximum_accuracy:
                 db.session.delete(data)
+                deleted += 1
 
             i += 1
             self.progress = (i / total_count)
 
-            if i % 1000 == 0:
+            if deleted % 1000 == 0:
                 db.session.commit()
+                deleted = 1
 
         db.session.commit()
 
