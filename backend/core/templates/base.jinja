@@ -144,7 +144,16 @@
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto">
                     {# <li class="nav-item"><a class="nav-link" href="{{ url_for('web.dashboard') }}">Dashboard</a></li> #}
-                    <li class="nav-item"><a class="nav-link" href="{{ url_for('web.map') }}">Map</a></li>
+                    {# <li class="nav-item"><a class="nav-link" href="{{ url_for('web.map') }}">Map</a></li> #}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="mapDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            Map
+                        </a>
+                        <ul class="dropdown-menu" aria-labelledby="mapDropdown">
+                            <li><a class="nav-link dropdown-item" href="{{ url_for('web.map') }}">Map</a></li>
+                            <li><a class="nav-link dropdown-item" href="{{ url_for('web.speed_map') }}">Speed Map</a></li>
+                        </ul>
+                    </li>
                     <li class="nav-item"><a class="nav-link" href="{{ url_for('web.stats') }}">Stats</a></li>
                     <li class="nav-item"><a class="nav-link" href="{{ url_for('web.points') }}">Points</a></li>
                     <li class="nav-item"><a class="nav-link" href="{{ url_for('web.account') }}">Account</a></li>
@@ -180,6 +189,7 @@
 
     <!-- Dark Mode Toggle Script -->
     <script>
+
         document.addEventListener("DOMContentLoaded", function () {
             const toggleButton = document.getElementById("darkModeToggle");
             const body = document.body;
