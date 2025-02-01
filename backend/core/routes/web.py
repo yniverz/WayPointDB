@@ -612,7 +612,7 @@ class ImportsView(MethodView):
         return redirect(url_for("web.imports"))
 
 
-    
+
 class MapView(MethodView):
     decorators = [login_required]
 
@@ -829,6 +829,85 @@ class HeatMapDataView(MethodView):
         ).filter_by(user_id=user.id).scalar()
 
         return heatmap_query, 200, {"Content-Type": "application/json"}
+    
+class SpeedMapView(MethodView):
+    decorators = [login_required]
+
+    def get(self):
+        # get last point coordinates ordered by timestamp
+        user = g.current_user
+
+        last_point: GPSData = GPSData.query.filter_by(user_id=user.id).order_by(GPSData.timestamp.desc()).first()
+
+        return render_template("speed_map.jinja", latitude=last_point.latitude, longitude=last_point.longitude)
+
+    def post(self):
+        #param point id will allways be set, will define the viewed point.
+        # will return all the points around the point with a defined margin amount of points in each direction
+
+        user = g.current_user
+
+        # point_id = request.form.get("point_id")
+        # date = request.form.get("date") # format: "YYYY-MM-DD"
+        # time = request.form.get("time") # format: "HH:MM:SS"
+
+        # get them from post body json
+        data: dict = request.json
+        point_id = data.get("point_id")
+        date = data.get("date")
+        time = data.get("time")
+        
+        if point_id:
+            point = GPSData.query.filter_by(id=point_id, user_id=user.id).first()
+        elif date and time:
+            # find point closest to timestamp
+            dateTimeObj = datetime.strptime(f"{date} {time}", "%Y-%m-%d %H:%M:%S")
+            # Convert the datetime to a Unix timestamp (a float value representing seconds).
+            ts = dateTimeObj.timestamp()
+
+            # Order by the absolute difference in seconds between the point's timestamp
+            # (converted to epoch seconds using extract('epoch', ...)) and ts.
+            point = (
+                GPSData.query.filter_by(user_id=user.id)
+                .order_by(func.abs(func.extract('epoch', GPSData.timestamp) - ts))
+                .first()
+            )
+        else:
+            return "Missing point_id or date and time", 400
+
+        if not point:
+            return "Point not found", 404
+        
+        margin = 100
+        if "margin" in request.args:
+            margin = min(int(request.args.get("margin")), 1000)
+
+        # select all points within the margin of the point, so margin amount of points (not time) before and after the point
+        before_points = GPSData.query.filter_by(user_id=user.id).order_by(GPSData.timestamp.desc()).filter(GPSData.timestamp < point.timestamp).limit(margin).all()
+        after_points = GPSData.query.filter_by(user_id=user.id).order_by(GPSData.timestamp.asc()).filter(GPSData.timestamp > point.timestamp).limit(margin).all()
+
+        all_points: list[GPSData] = before_points[::-1] + [point] + after_points
+
+        gps_data = []
+        for row in all_points:
+            gps_data.append({
+                "id": row.id,
+                "uid": row.user_id,
+                "t": row.timestamp.isoformat() if row.timestamp else None,
+                "lat": row.latitude,
+                "lon": row.longitude,
+                "ha": row.horizontal_accuracy,
+                "a": row.altitude,
+                "va": row.vertical_accuracy,
+                "h": row.heading,
+                "ha2": row.heading_accuracy,
+                "s": row.speed,
+                "sa": row.speed_accuracy,
+            })
+
+        return jsonify(gps_data)
+
+
 
 class ManageUsersView(MethodView):
     decorators = [login_required]
@@ -913,6 +992,7 @@ web_bp.add_url_rule("/logout", view_func=LogoutView.as_view("logout"))
 # web_bp.add_url_rule("/dashboard", view_func=DashboardView.as_view("dashboard"))
 web_bp.add_url_rule("/map", view_func=MapView.as_view("map"), methods=["GET", "POST", "DELETE"])
 web_bp.add_url_rule("/map/heatmap_data.json", view_func=HeatMapDataView.as_view("heatmap_data"))
+web_bp.add_url_rule("/map/speed", view_func=SpeedMapView.as_view("speed_map"), methods=["GET", "POST"])
 web_bp.add_url_rule("/points", view_func=PointsView.as_view("points"), methods=["GET", "POST"])
 web_bp.add_url_rule("/stats", view_func=StatsView.as_view("stats"))
 web_bp.add_url_rule("/stats/<int:year>", view_func=YearlyStatsView.as_view("yearly_stats"))
