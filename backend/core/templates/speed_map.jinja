@@ -234,7 +234,7 @@ Speed Map
         gpsCoordinates = gpsData.map(record => ({
             id: record.id,
             lat: record.lat,
-            lng: record.lon,
+            lng: record.lng,
             accuracy: record.ha,
             speed: record.s,         // speed in m/s
             altitude: record.a,
@@ -318,7 +318,7 @@ Speed Map
     }
 
     function viewOnRealMap(pointID) {
-        window.open(`/map?point_id=${pointID}`);
+        window.location.href = `/map?point_id=${pointID}&start_date=${document.getElementById("date").value}&end_date=${document.getElementById("date").value}`;
     }
 
     function setDateToPoint(timestamp) {
@@ -410,7 +410,7 @@ Speed Map
                 animation: false,
                 scales: {
                     x: {
-                        display: true,
+                        display: false,
                         title: { display: true, text: 'Data Point' }
                     },
                     y: {
@@ -458,7 +458,7 @@ Speed Map
     function updateSpeedChart() {
         if (!speedChart) return;
 
-        const labels = gpsCoordinates.map(record => record.timestamp);
+        const labels = gpsCoordinates.map(record => record.timestamp.split('T')[1]); // Extract time
         const data = gpsCoordinates.map(record => (record.speed * 3.6).toFixed(2)); // Convert m/s to km/h
         speedChart.data.labels = labels;
         speedChart.data.datasets[0].data = data;

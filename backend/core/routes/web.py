@@ -625,10 +625,18 @@ class MapView(MethodView):
             last_point = GPSData.query.filter_by(id=point_id, user_id=user.id).first()
         else:
             last_point = GPSData.query.filter_by(user_id=user.id).order_by(GPSData.timestamp.desc()).first()
-            
+
         if not last_point:
             # Some default coords
-            last_point = {"latitude": 52.516310, "longitude": 13.378208}
+            last_point = {"id": -1, "lat": 52.516310, "lon": 13.378208}
+
+        else:
+            last_point = {
+                "id": last_point.id,
+                "lat": last_point.latitude,
+                "lng": last_point.longitude
+            }
+
         return render_template("map.jinja", last_point=last_point)
 
     def is_valid_date_format(self, s):
@@ -794,7 +802,7 @@ class MapView(MethodView):
                 "uid": row[1],
                 "t": row[2].isoformat() if row[2] else None,
                 "lat": row[3],
-                "lon": row[4],
+                "lng": row[4],
                 "ha": row[5],
                 "a": row[6],
                 "va": row[7],
@@ -901,7 +909,7 @@ class SpeedMapView(MethodView):
                 "uid": row.user_id,
                 "t": row.timestamp.isoformat() if row.timestamp else None,
                 "lat": row.latitude,
-                "lon": row.longitude,
+                "lng": row.longitude,
                 "ha": row.horizontal_accuracy,
                 "a": row.altitude,
                 "va": row.vertical_accuracy,
