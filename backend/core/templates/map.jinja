@@ -331,9 +331,14 @@ GPS Map
                     <b>Accuracy:</b> ${coord.accuracy.toFixed(2)} m <br>
                     <button onclick="deletePoint(${coord.id}, this)">Delete</button>
                     <button onclick="setDateToPoint('${coord.timestamp}')">Set Date</button>
+                    <button onclick="goToSpeedMap('${coord.id}')">View on Speed Map</button>
                 `);
             });
         }
+    }
+
+    function goToSpeedMap(pointId) {
+        window.location.href = `/map/speed?point_id=${pointId}`;
     }
 
     function adjustDate(days) {
