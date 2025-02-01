@@ -1,7 +1,7 @@
 {% extends "base.jinja" %}
 
 {% block heading %}
-Speed Chart/Map
+Speed Map
 {% endblock %}
 
 {% block content %}
@@ -304,7 +304,7 @@ Speed Chart/Map
             <b>Speed:</b> ${point.speed ? (point.speed * 3.6).toFixed(2) + " km/h" : "N/A"} <br>
             <b>Altitude:</b> ${point.altitude ? point.altitude.toFixed(2) + " m" : "N/A"} <br>
             <b>Accuracy:</b> ${point.accuracy.toFixed(2)} m <br>
-            <button onclick="setDateToPoint('${point.timestamp}')">Set Date</button>
+            <button onclick="setDateToPoint('${point.timestamp}')">View on Map</button>
         `);
 
         updateMapPosition();
