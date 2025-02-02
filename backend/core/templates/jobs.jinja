@@ -14,8 +14,11 @@
             <button type="submit" name="newJob" value="full_stats">Generate Statistics</button>
             <button type="submit" name="newJob" value="speed_data">Generate Speed Data</button>
             <button type="submit" name="newJob" value="delete_duplicates">Delete Duplicates</button>
-        </form>&nbsp;
+        </form>
+        &nbsp;
         <button type="submit" name="newJob" value="filter_accuracy" onclick="startFilterAccuracyJob()" title="Will ask for a number input first">Filter Large Accuracy</button>
+        &nbsp;
+        <button type="submit" name="newJob" value="filter_clusters" onclick="startFilterclustersJob()" title="Will ask for a number input first">Reduce Clusters</button>
     </div>
     <br>
     <h2>Jobs</h2>
@@ -161,6 +164,29 @@
                 updateJobsTable(data);
             })
             .catch(error => console.error("Error starting filter accuracy job:", error));
+    }
+
+    function startFilterclustersJob() {
+        // ask the user for a cluster value
+        const clusterValue = prompt("Enter the minimum distance between points that is allowed in the dataset", "14");
+        if (clusterValue === null) {
+            return;
+        }
+
+        // start a POST request to the server to start the job
+        fetch(window.location.pathname, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+            body: `newJob=filter_clusters&maximum_distance=${clusterValue}`,
+        })
+            .then(response => response.json())
+            .then(data => {
+                // data is a list of jobs in the same format as `jobs` from the server
+                updateJobsTable(data);
+            })
+            .catch(error => console.error("Error starting filter clusters job:", error));
     }
 
 
