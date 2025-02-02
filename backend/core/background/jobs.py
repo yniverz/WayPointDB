@@ -317,12 +317,12 @@ class GenerateFullStatisticsJob(Job):
 
             self.progress = (i / total_count) * 0.9
 
-        for stat in daily_stats.values():
-            key = f"{stat.year}-{stat.month}-{stat.day}"
-            if key in daily_stats_country_city_count:
-                if daily_stats_country_city_count[key][1] >= MIN_VISIT_COUNT_FOR_STATS:
-                    stat.visited_countries = daily_stats_country_city_count[key][0].keys()
-                    stat.visited_cities = daily_stats_country_city_count[key][1].keys()
+        # for stat in daily_stats.values():
+        #     key = f"{stat.year}-{stat.month}-{stat.day}"
+        #     if key in daily_stats_country_city_count:
+        #         if daily_stats_country_city_count[key][1] >= MIN_VISIT_COUNT_FOR_STATS:
+        #             stat.visited_countries = daily_stats_country_city_count[key][0].keys()
+        #             stat.visited_cities = daily_stats_country_city_count[key][1].keys()
 
         i = 0
         total_count = len(daily_stats)
