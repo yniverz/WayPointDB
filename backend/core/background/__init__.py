@@ -71,27 +71,24 @@ class JobManager:
 
                             job.running = True
                             job.start_time = time.time()
-                            thread = threading.Thread(target=self.run_safely, args=(job,))
-                            thread.start()
-                            self.threads.append(thread)
+                            job.thread = threading.Thread(target=self.run_safely, args=(job,))
+                            job.thread.start()
+                            self.threads.append(job.thread)
                             self.running_jobs.append(job)
                             to_remove.append(job)
 
                         for job in to_remove:
                             self.queued_jobs.remove(job)
 
-                        # job = self.queued_jobs.pop(0)
-                        # job.running = True
-                        # job.start_time = time.time()
-                        # thread = threading.Thread(target=self.run_safely, args=(job,))
-                        # thread.start()
-                        # self.threads.append(thread)
-                        # self.running_jobs.append(job)
-
                 for job in self.running_jobs:
                     if job.done:
-                        self.running_jobs.remove(job)
-                        self.threads.remove(thread)
+                        try:
+                            self.threads.remove(job.thread)
+                        except ValueError:
+                            pass
+
+                self.running_jobs = [job for job in self.running_jobs if not job.done]
+
 
                 if time.localtime().tm_mday != last_day:
                     self.check_for_daily_jobs()

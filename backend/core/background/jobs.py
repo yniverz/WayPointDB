@@ -1,6 +1,7 @@
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 import json
+from threading import Thread
+import traceback
 import uuid
 from flask import Flask
 import requests
@@ -28,6 +29,7 @@ class Job:
         """
         self.config = Config
         self.app: Flask = None
+        self.thread: Thread = None
         self.start_time = None
         self.progress = 0 # 0-1
         self.running = False
@@ -96,15 +98,19 @@ class QueryPhotonJob(Job):
         for point_id in self.point_ids:
             if self.stop_requested:
                 break
+            
+            i += 1
+            self.progress = i / total_count
 
             point: GPSData = GPSData.query.get(point_id)
             if not point:
                 continue
 
-            buffer.append(self.do_with_point(point))
-            
-            i += 1
-            self.progress = i / total_count
+            try:
+                buffer.append(self.do_with_point(point))
+            except requests.exceptions.RequestException as e:
+                print(traceback.format_exc())
+                continue
 
             if len(buffer) >= buffer_dump_interval:
                 while buffer:
