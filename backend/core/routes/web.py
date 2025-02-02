@@ -656,20 +656,25 @@ class MapView(MethodView):
             ne_lng = float(data.get("ne_lng"))
             sw_lat = float(data.get("sw_lat"))
             sw_lng = float(data.get("sw_lng"))
-            zoom = int(data.get("zoom", 10))
+            # zoom = int(data.get("zoom", 10))
+
+            ne_lat += 0.01
+            ne_lng += 0.01
+            sw_lat -= 0.01
+            sw_lng -= 0.01
+        except TypeError:
+            ne_lat = ne_lng = sw_lat = sw_lng = None
+        
+        try:
             start_date = self.is_valid_date_format(data.get("start_date"))
             end_date = self.is_valid_date_format(data.get("end_date"))
 
-        except (ValueError, TypeError):
+        except ValueError:
             return jsonify({"error": "Invalid bounds"}), 400
 
-        if None in [ne_lat, ne_lng, sw_lat, sw_lng]:
-            return jsonify({"error": "Invalid or missing bounds"}), 400
+        # if None in [ne_lat, ne_lng, sw_lat, sw_lng]:
+        #     return jsonify({"error": "Invalid or missing bounds"}), 400
         
-        ne_lat += 0.01
-        ne_lng += 0.01
-        sw_lat -= 0.01
-        sw_lng -= 0.01
 
         user = g.current_user
         
@@ -702,8 +707,28 @@ class MapView(MethodView):
         time_delta = 0
         if start_date and end_date:
             time_delta = (datetime.fromisoformat(end_date) - datetime.fromisoformat(start_date)).total_seconds()
+
+        if ne_lat is None and ne_lng is None and sw_lat is None and sw_lng is None:
+            print("LOLOLOL")
+            query = f"""
+                WITH filtered_data AS (
+                    SELECT id, user_id, timestamp, latitude, longitude, horizontal_accuracy,
+                        altitude, vertical_accuracy, heading, heading_accuracy, speed, speed_accuracy,
+                        ROW_NUMBER() OVER (ORDER BY timestamp) AS row_num,
+                        COUNT(*) OVER () AS total
+                    FROM gps_data
+                    WHERE user_id = '{user.id}'
+                    {filters}
+                )
+                SELECT id, user_id, timestamp, latitude, longitude, horizontal_accuracy,
+                    altitude, vertical_accuracy, heading, heading_accuracy, speed, speed_accuracy
+                FROM filtered_data
+                WHERE total <= {max_points_count} 
+                OR row_num % CEIL(total::FLOAT / {max_points_count})::INTEGER = 1
+                ORDER BY timestamp;
+            """
         
-        if time_delta != 0 and time_delta < 60 * 60 * 25:
+        elif time_delta != 0 and time_delta < 60 * 60 * 25:
             # query = f"""
             #     WITH filtered_data AS (
             #         SELECT id, user_id, timestamp, latitude, longitude, horizontal_accuracy,
@@ -735,39 +760,39 @@ class MapView(MethodView):
                 ORDER BY timestamp;
             """
 
-            # query = f"""
-            #     SELECT id, user_id, timestamp, latitude, longitude, horizontal_accuracy,
-            #         altitude, vertical_accuracy, heading, heading_accuracy, speed, speed_accuracy,
-            #         ROW_NUMBER() OVER (ORDER BY timestamp) AS row_num,
-            #         COUNT(*) OVER () AS total
-            #     FROM gps_data
-            #     WHERE user_id = '{user.id}'
-            #     AND latitude BETWEEN {sw_lat} AND {ne_lat}
-            #     AND longitude BETWEEN {sw_lng} AND {ne_lng}
-            #     {date_filter}
-            #     ORDER BY timestamp;
-            # """
+        #     # query = f"""
+        #     #     SELECT id, user_id, timestamp, latitude, longitude, horizontal_accuracy,
+        #     #         altitude, vertical_accuracy, heading, heading_accuracy, speed, speed_accuracy,
+        #     #         ROW_NUMBER() OVER (ORDER BY timestamp) AS row_num,
+        #     #         COUNT(*) OVER () AS total
+        #     #     FROM gps_data
+        #     #     WHERE user_id = '{user.id}'
+        #     #     AND latitude BETWEEN {sw_lat} AND {ne_lat}
+        #     #     AND longitude BETWEEN {sw_lng} AND {ne_lng}
+        #     #     {date_filter}
+        #     #     ORDER BY timestamp;
+        #     # """
 
-        elif zoom > 18:
-            query = f"""
-                WITH filtered_data AS (
-                    SELECT id, user_id, timestamp, latitude, longitude, horizontal_accuracy,
-                        altitude, vertical_accuracy, heading, heading_accuracy, speed, speed_accuracy,
-                        ROW_NUMBER() OVER (ORDER BY timestamp) AS row_num,
-                        COUNT(*) OVER () AS total
-                    FROM gps_data
-                    WHERE user_id = '{user.id}'
-                    AND latitude BETWEEN {sw_lat} AND {ne_lat}
-                    AND longitude BETWEEN {sw_lng} AND {ne_lng}
-                    {filters}
-                )
-                SELECT id, user_id, timestamp, latitude, longitude, horizontal_accuracy,
-                    altitude, vertical_accuracy, heading, heading_accuracy, speed, speed_accuracy
-                FROM filtered_data
-                WHERE total <= {max_points_count} 
-                OR row_num % CEIL(total::FLOAT / {max_points_count})::INTEGER = 1
-                ORDER BY timestamp;
-            """
+        # elif zoom > 18:
+        #     query = f"""
+        #         WITH filtered_data AS (
+        #             SELECT id, user_id, timestamp, latitude, longitude, horizontal_accuracy,
+        #                 altitude, vertical_accuracy, heading, heading_accuracy, speed, speed_accuracy,
+        #                 ROW_NUMBER() OVER (ORDER BY timestamp) AS row_num,
+        #                 COUNT(*) OVER () AS total
+        #             FROM gps_data
+        #             WHERE user_id = '{user.id}'
+        #             AND latitude BETWEEN {sw_lat} AND {ne_lat}
+        #             AND longitude BETWEEN {sw_lng} AND {ne_lng}
+        #             {filters}
+        #         )
+        #         SELECT id, user_id, timestamp, latitude, longitude, horizontal_accuracy,
+        #             altitude, vertical_accuracy, heading, heading_accuracy, speed, speed_accuracy
+        #         FROM filtered_data
+        #         WHERE total <= {max_points_count} 
+        #         OR row_num % CEIL(total::FLOAT / {max_points_count})::INTEGER = 1
+        #         ORDER BY timestamp;
+        #     """
         else:
             query = f"""
                 WITH filtered_data AS (

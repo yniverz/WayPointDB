@@ -118,6 +118,9 @@ GPS Map
     const max_points_for_markers = 300;
     const max_points_for_colored_path = 1000;
 
+    var preventFetch = false;
+    var activateFitBounds = false;
+
     var last_point = {{ last_point }};
 
     // Heatmap-related variables
@@ -156,11 +159,18 @@ GPS Map
 
         // 2) Whenever the map finishes moving or zooming, update the URL
         map.on('moveend', () => {
+            if (preventFetch) {
+                preventFetch = false;
+                return;
+            }
             updateMapPositionInURL();
             clearTimeout(fetchTimeout);
             fetchTimeout = setTimeout(fetchGPSData, delay);
         });
         map.on('zoomend', () => {
+            if (preventFetch) {
+                return;
+            }
             updateMapPositionInURL();
             clearTimeout(fetchTimeout);
             fetchTimeout = setTimeout(fetchGPSData, delay);
@@ -196,7 +206,7 @@ GPS Map
         window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
     }
 
-    function fetchGPSData(forced = false) {
+    function fetchGPSData(forced = false, full_date_range = false) {
         var bounds = map.getBounds();
         if (!bounds) return;
 
@@ -213,18 +223,23 @@ GPS Map
         let startDate = document.getElementById("start-date").value;
         let endDate = document.getElementById("end-date").value;
 
+        var body = {
+            start_date: startDate,
+            end_date: endDate
+        };
+
+        if (!full_date_range) {
+            body.ne_lat = northEast.lat;
+            body.ne_lng = northEast.lng;
+            body.sw_lat = southWest.lat;
+            body.sw_lng = southWest.lng;
+            body.zoom = zoomLevel;
+        }
+
         fetch("", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                ne_lat: northEast.lat,
-                ne_lng: northEast.lng,
-                sw_lat: southWest.lat,
-                sw_lng: southWest.lng,
-                zoom: zoomLevel,
-                start_date: startDate,
-                end_date: endDate
-            })
+            body: JSON.stringify(body)
         })
         .then(response => response.json())
         .then(data => updateMap(data))
@@ -253,14 +268,14 @@ GPS Map
             coordinates = coordinates.filter(coord => coord.accuracy < 20);
         }
 
-        coordinates = coordinates.filter((coord, i) => {
+        {# coordinates = coordinates.filter((coord, i) => {
             if (i === 0 || i === coordinates.length - 1) {
                 return true;
             }
             return map.getBounds().contains([coord.lat, coord.lng]) ||
                 map.getBounds().contains([coordinates[i - 1].lat, coordinates[i - 1].lng]) ||
                 map.getBounds().contains([coordinates[i + 1].lat, coordinates[i + 1].lng]);
-        });
+        }); #}
 
         var polyline = L.polyline(coordinates.map(coord => [coord.lat, coord.lng]), { 
             color: "#369eff",
@@ -320,6 +335,15 @@ GPS Map
         if (selected_point) {
             createMarker(selected_point, markerLayer, true);
         }
+
+
+        // set map bounds to include all points
+        if (gpsData.length > 0 && activateFitBounds) {
+            activateFitBounds = false;
+            preventFetch = true;
+            var bounds = new L.LatLngBounds(gpsData.map(coord => [coord.lat, coord.lng]));
+            map.fitBounds(bounds);
+        }
     }
 
     function createMarker(coord, markerLayer, highlight = false) {
@@ -348,6 +372,8 @@ GPS Map
     }
 
     function adjustDate(days) {
+        activateFitBounds = true;
+
         let startDateInput = document.getElementById("start-date");
         let endDateInput = document.getElementById("end-date");
         
@@ -361,7 +387,7 @@ GPS Map
         endDateInput.value = endDate.toISOString().split('T')[0];
         
         updateURLParams(startDateInput.value, endDateInput.value);
-        fetchGPSData(true);
+        fetchGPSData(true, true);
     }
 
     function setDateToPoint(timestamp) {
@@ -436,6 +462,8 @@ GPS Map
     }
 
     function setDateRange(range) {
+        activateFitBounds = true;
+
         let today = new Date();
         let startDate, endDate;
 
@@ -464,7 +492,7 @@ GPS Map
         document.getElementById("end-date").value = endDate;
 
         updateURLParams(startDate, endDate);
-        fetchGPSData(true);
+        fetchGPSData(true, true);
     }
 
     function loadDateFromURL() {
