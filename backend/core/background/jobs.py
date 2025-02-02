@@ -306,7 +306,7 @@ class GenerateFullStatisticsJob(Job):
                     daily_stats_country_city_count[key][0][point.country] = 0
                 daily_stats_country_city_count[key][0][point.country] += 1
 
-            if last_point.city and point.city:
+            if last_point and last_point.city and point.city:
                 country_city_key = (last_point.country, last_point.city)
                 duration = (point.timestamp - last_point.timestamp).total_seconds()
                 if country_city_key not in daily_stats_country_city_count[key][1]:
