@@ -204,8 +204,8 @@ class StatsView(MethodView):
         return render_template(
             "stats.jinja",
             stats_by_year=stats_by_year_processed,   # Dict of years → aggregated data
-            total_cities=list(all_cities),
-            total_countries=list(all_countries),
+            total_cities=sorted(list(all_cities)),
+            total_countries=sorted(list(all_countries)),
             total_distance=f"{total_distance / 1000.0:,.0f}",  # Convert to KM
             total_points=f"{total_points:,}",
             total_geocoded=f"{total_geocoded:,}",
@@ -271,8 +271,8 @@ class YearlyStatsView(MethodView):
             "stats_yearly.jinja",
             year=year,
             stats_by_month=stats_by_month_processed,   # Dict of months → aggregated data
-            total_cities=list(all_cities),
-            total_countries=list(all_countries),
+            total_cities=sorted(list(all_cities)),
+            total_countries=sorted(list(all_countries)),
             total_distance=f"{total_distance / 1000.0:,.0f}",  # Convert to KM
         )
 
