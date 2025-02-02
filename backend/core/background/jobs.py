@@ -259,7 +259,7 @@ class GenerateFullStatisticsJob(Job):
         DailyStatistic.query.filter_by(user_id=user.id).delete()
 
 
-        MIN_VISIT_COUNT_FOR_STATS = 50
+        MIN_VISIT_COUNT_FOR_STATS = 200
 
         
         i = 0
