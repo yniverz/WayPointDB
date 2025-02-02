@@ -1,6 +1,6 @@
 import os
 import threading
-from flask import Flask, g
+from flask import Flask, g, render_template
 from jinja2 import ChoiceLoader, FileSystemLoader
 
 from .config import Config
@@ -31,12 +31,19 @@ def month_name(value):
     except (IndexError, TypeError):
         # Fallback if value is out of range or invalid
         return "Unknown Month"
+    
+def get_block(block, file):
+    # returns the code from a specific jinja block
+    
+    # Load the template
+    template = web_app.jinja_env.get_template(file)
 
 def create_web_app(config_class = Config):
     app = Flask(__name__, template_folder="templates")
     app.config.from_object(config_class)
     app.context_processor(inject_user)
     app.jinja_env.filters["month_name"] = month_name
+    app.jinja_env.globals["get_block"] = get_block
 
     # Optionally set up a custom Jinja loader:
     app.jinja_loader = ChoiceLoader([FileSystemLoader(os.path.join(os.path.dirname(__file__), "templates"))])

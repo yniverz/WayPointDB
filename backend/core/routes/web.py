@@ -235,6 +235,8 @@ class YearlyStatsView(MethodView):
 
         if not year:
             return "Missing year", 400
+        
+        total_points = GPSData.query.filter_by(user_id=user.id).filter(func.extract("year", GPSData.timestamp) == year).count()
 
         stats = DailyStatistic.query.filter_by(user_id=user.id, year=year).all()
 
@@ -288,6 +290,7 @@ class YearlyStatsView(MethodView):
             total_cities=sorted(list(all_cities)),
             total_countries=sorted(list(all_countries)),
             total_distance=f"{total_distance / 1000.0:,.0f}",  # Convert to KM
+            total_points=f"{total_points:,}",
             is_photon_connected=len(Config.PHOTON_SERVER_HOST) != 0,
         )
 
