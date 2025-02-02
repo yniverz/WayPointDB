@@ -4,8 +4,7 @@
 GPS Map
 {% endblock %}
 
-{% block content %}
-
+{% block head %}
 <!-- Leaflet.js CSS & JS -->
 <link rel="stylesheet" href="/static/css/leaflet.css" />
 <link rel="stylesheet" href="/static/css/leaflet.fullscreen.css" />
@@ -65,6 +64,11 @@ GPS Map
         border-radius: 4px;
     }
 </style>
+{% endblock %}
+
+{% block content %}
+
+
 
 <div class="container mt-4">
     <div class="date-selector">

@@ -62,23 +62,27 @@
 Points Overview
 {% endblock %}
 
-{% block content %}
+{% block head %}
 <style>
-.page-navigator {
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
-}
+    .page-navigator {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
 
-.page-navigator a {
-    text-decoration: underline !important;
-    cursor: pointer;
-}
+    .page-navigator a {
+        text-decoration: underline !important;
+        cursor: pointer;
+    }
 
-.page-navigator a:hover {
-    text-decoration: none !important;
-}
+    .page-navigator a:hover {
+        text-decoration: none !important;
+    }
 </style>
+{% endblock %}
+
+{% block content %}
+
 <div class="container mt-4">
     <!-- Single Date Selector (same as before) -->
     <div class="date-selector" style="display: flex; gap: 10px; justify-content: center; align-items: center; margin-bottom: 20px;">
