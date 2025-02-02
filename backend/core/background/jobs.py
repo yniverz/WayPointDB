@@ -458,6 +458,57 @@ class FilterLargeAccuracyJob(Job):
 
 
 
+class FilterClustersJob(Job):
+    PARAMETERS = {
+        "user": User,
+        "maximum_distance": float
+    }
+
+    def __init__(self, user: User, maximum_distance: float):
+        super().__init__()
+        self.concurrency_limit_type = ConcurrencyLimitType.GLOBAl
+        self.user_id = user.id
+        self.maximum_distance = maximum_distance
+
+    def run(self):
+        user = User.query.get(self.user_id)
+        if not user:
+            self.done = True
+            return
+        
+        # Get all GPS data for the user sorted by timestamp
+        gps_data: list[GPSData] = GPSData.query.filter_by(user_id=user.id).order_by(GPSData.timestamp).all()
+        if not gps_data:
+            self.done = True
+            return
+        
+        i = 0
+        total_count = len(gps_data)
+        deleted = 1
+        for data in gps_data:
+            if self.stop_requested:
+                break
+
+            if i > 0:
+                prev = gps_data[i - 1]
+                distance = geopy.distance.great_circle((prev.latitude, prev.longitude), (data.latitude, data.longitude)).m
+                if distance < self.maximum_distance:
+                    db.session.delete(prev)
+                    deleted += 1
+
+            i += 1
+            self.progress = (i / total_count)
+
+            if deleted % 1000 == 0:
+                db.session.commit()
+                deleted = 1
+
+        db.session.commit()
+
+        self.done = True
+
+
+
 
 
 class ImportJob(Job):
@@ -603,6 +654,7 @@ JOB_TYPES: dict[str, Job] = {
     "full_stats": GenerateFullStatisticsJob,
     "speed_data": GenerateSpeedDataJob,
     "filter_accuracy": FilterLargeAccuracyJob,
+    "filter_clusters": FilterClustersJob,
     "delete_duplicates": DeleteDuplicatesJob,
 }
 
