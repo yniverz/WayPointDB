@@ -259,12 +259,14 @@ class GenerateFullStatisticsJob(Job):
         DailyStatistic.query.filter_by(user_id=user.id).delete()
 
 
-        MIN_VISIT_COUNT_FOR_STATS = 200
+        MIN_COUNTRY_COUNT_FOR_STATS = 50
+        MIN_CITY_COUNT_FOR_STATS = 50
 
         
         i = 0
         daily_stats: dict[str, DailyStatistic] = {}
-        daily_stats_country_city_count: dict[str, tuple[dict[str, int], dict[str, int]]] = {}
+        # daily_stats_country_city_count: dict[str, dict[tuple[str, str], int]] = {}
+        daily_stats_country_city_count: dict[str, tuple[dict[str, int], dict[tuple[str, str], int]]] = {}
         total_count = len(gps_data)
         for data in gps_data:
             if self.stop_requested:
@@ -297,32 +299,31 @@ class GenerateFullStatisticsJob(Job):
 
             if data.country:
                 if key not in daily_stats_country_city_count:
-                    daily_stats_country_city_count[key] = ({}, {})
-
+                    daily_stats_country_city_count[key] = {}
                 if data.country not in daily_stats_country_city_count[key][0]:
                     daily_stats_country_city_count[key][0][data.country] = 0
-
                 daily_stats_country_city_count[key][0][data.country] += 1
 
             if data.city:
+                country_city_key = (data.country, data.city)
                 if key not in daily_stats_country_city_count:
-                    daily_stats_country_city_count[key] = ({}, {})
-
-                if data.city not in daily_stats_country_city_count[key][1]:
-                    daily_stats_country_city_count[key][1][data.city] = 0
-
-                daily_stats_country_city_count[key][1][data.city] += 1
+                    daily_stats_country_city_count[key] = {}
+                if country_city_key not in daily_stats_country_city_count[key][1]:
+                    daily_stats_country_city_count[key][1][country_city_key] = 0
+                daily_stats_country_city_count[key][1][country_city_key] += 1
 
             i += 1
 
             self.progress = (i / total_count) * 0.9
 
-        # for stat in daily_stats.values():
-        #     key = f"{stat.year}-{stat.month}-{stat.day}"
-        #     if key in daily_stats_country_city_count:
-        #         if daily_stats_country_city_count[key][1] >= MIN_VISIT_COUNT_FOR_STATS:
-        #             stat.visited_countries = daily_stats_country_city_count[key][0].keys()
-        #             stat.visited_cities = daily_stats_country_city_count[key][1].keys()
+        for stat in daily_stats.values():
+            key = f"{stat.year}-{stat.month}-{stat.day}"
+            if key in daily_stats_country_city_count:
+                country_count, city_count = daily_stats_country_city_count[key]
+                if country_count:
+                    stat.visited_countries = [country for country, count in country_count.items() if count > MIN_COUNTRY_COUNT_FOR_STATS]
+                if city_count:
+                    stat.visited_cities = [city for city, count in city_count.items() if count > MIN_CITY_COUNT_FOR_STATS]
 
         i = 0
         total_count = len(daily_stats)
