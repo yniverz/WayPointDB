@@ -45,9 +45,7 @@
             <div class="modal-body">
                 <h6>Cities</h6>
                 <ul>
-                {% for city in total_cities %}
-                    <li>{{ city }}</li>
-                {% endfor %}
+                {{ add_city_country_element(total_cities) }}
                 </ul>
             </div>
         </div>
@@ -65,9 +63,7 @@
             <div class="modal-body">
                 <h6>Countries</h6>
                 <ul>
-                {% for country in total_countries %}
-                    <li>{{ country }}</li>
-                {% endfor %}
+                  {{ add_city_country_element(total_countries) }}
                 </ul>
             </div>
         </div>
@@ -115,9 +111,7 @@
             <div class="modal-body">
               <h6>Cities</h6>
               <ul>
-                {% for city in data.cities %}
-                  <li>{{ city }}</li>
-                {% endfor %}
+                {{ add_city_country_element(data.cities) }}
               </ul>
             </div>
           </div>
@@ -137,9 +131,7 @@
             <div class="modal-body">
               <h6>Countries</h6>
               <ul>
-                {% for country in data.countries %}
-                  <li>{{ country }}</li>
-                {% endfor %}
+                {{ add_city_country_element(data.countries) }}
               </ul>
             </div>
           </div>
