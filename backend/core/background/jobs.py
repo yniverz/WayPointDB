@@ -315,7 +315,14 @@ class GenerateFullStatisticsJob(Job):
 
             self.progress = (i / total_count) * 0.9
 
+        i = 0
+        total_count = len(daily_stats)
         for stat in daily_stats.values():
+            if self.stop_requested:
+                break
+            
+            self.progress = 0.8 + (i / total_count) * 0.1
+
             key = f"{stat.year}-{stat.month}-{stat.day}"
             if key in daily_stats_country_city_count:
                 country_count, city_count = daily_stats_country_city_count[key]
