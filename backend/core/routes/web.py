@@ -156,7 +156,7 @@ class StatsView(MethodView):
         # where reverse_geocoded = true and city is none
         total_not_geocoded = GPSData.query.filter_by(user_id=user.id).filter(GPSData.reverse_geocoded == True).filter(GPSData.city == None).count()
 
-        stats = DailyStatistic.query.filter_by(user_id=user.id).all()
+        stats: list[DailyStatistic] = DailyStatistic.query.filter_by(user_id=user.id).all()
 
         # We'll group stats by year
         stats_by_year = defaultdict(lambda: {

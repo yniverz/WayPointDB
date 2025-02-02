@@ -322,7 +322,7 @@ class GenerateFullStatisticsJob(Job):
                 if country_count:
                     stat.visited_countries = [country for country, count in country_count.items() if count > MIN_COUNTRY_COUNT_FOR_STATS]
                 if city_count:
-                    stat.visited_cities = [city for city, count in city_count.items() if count > MIN_CITY_COUNT_FOR_STATS]
+                    stat.visited_cities = [city for (country, city), count in city_count.items() if count > MIN_CITY_COUNT_FOR_STATS]
 
         i = 0
         total_count = len(daily_stats)
