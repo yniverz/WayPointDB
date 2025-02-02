@@ -22,27 +22,6 @@
 
 {% block content %}
     <div>
-        <!-- <form method="POST">
-            {% if photon_active %}
-            <h3>Reverse Geocoding</h3><br>
-            <button type="submit" name="newJob" value="photon_full" title="Query Photon to reverse geocode, and overwrite any existing records" >Geocode all points</button>
-            {# <button type="submit" name="newJob" value="reset_no_geocoding">Reset points without geocoding</button> #}
-            <button type="submit" name="newJob" value="photon_fill" title="Only query points which havent yet been reverse geocoded">Geocode new points</button>
-            <br>
-            {% endif %}
-            <h3>Statistics</h3><br>
-            <button type="submit" name="newJob" value="full_stats">Generate Statistics</button>
-            <button type="submit" name="newJob" value="speed_data">Generate Speed Data</button>
-            <br>
-            <h3>Data Cleaning</h3><br>
-            <button type="submit" name="newJob" value="delete_duplicates">Delete Duplicates</button>
-        </form>
-        &nbsp;
-        <button type="submit" name="newJob" value="filter_accuracy" onclick="startFilterAccuracyJob()" title="Will ask for a number input first">Filter Large Accuracy</button>
-        &nbsp;
-        <button type="submit" name="newJob" value="filter_clusters" onclick="startFilterclustersJob()" title="Will ask for a number input first">Reduce Clusters</button> #}
-        -->
-
         {% if photon_active %}
         <div class="category">
             <h4>Reverse Geocoding</h4>
@@ -230,54 +209,6 @@
                 .catch(error => console.error(`Error starting ${jobName} job:`, error));
         }
     }
-
-{# 
-    function startFilterAccuracyJob() {
-        // ask the user for a meter value
-        const meterValue = prompt("Enter the maximum meter accuracy that should be allowed in the dataset", "500");
-        if (meterValue === null) {
-            return;
-        }
-
-        // start a POST request to the server to start the job
-        fetch(window.location.pathname, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/x-www-form-urlencoded",
-            },
-            body: `newJob=filter_accuracy&maximum_accuracy=${meterValue}`,
-        })
-            .then(response => response.json())
-            .then(data => {
-                // data is a list of jobs in the same format as `jobs` from the server
-                updateJobsTable(data);
-            })
-            .catch(error => console.error("Error starting filter accuracy job:", error));
-    }
-
-    function startFilterclustersJob() {
-        // ask the user for a cluster value
-        const clusterValue = prompt("Enter the minimum distance between points that is allowed in the dataset", "14");
-        if (clusterValue === null) {
-            return;
-        }
-
-        // start a POST request to the server to start the job
-        fetch(window.location.pathname, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/x-www-form-urlencoded",
-            },
-            body: `newJob=filter_clusters&maximum_distance=${clusterValue}`,
-        })
-            .then(response => response.json())
-            .then(data => {
-                // data is a list of jobs in the same format as `jobs` from the server
-                updateJobsTable(data);
-            })
-            .catch(error => console.error("Error starting filter clusters job:", error));
-    } #}
-
 
     </script>
 {% endblock %}

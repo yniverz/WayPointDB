@@ -8,7 +8,7 @@
   <style>
         .stat-container {
             display: grid;
-            grid-template-columns: repeat(5, 1fr);
+            grid-template-columns: repeat({% if is_photon_connected %}5{% else %}2{% endif %}, 1fr);
             grid-gap: 10px;
             padding: 10px;
             border-radius: 20px;
@@ -104,6 +104,8 @@
       <p style="color: #00aa6e">{{ total_points }}</p>
       <small>Total points</small>
     </div>
+
+    {% if is_photon_connected %}
     <div>
       <p style="color: #00aa6e">{{ total_geocoded }}</p>
       <small>Total reverse geocoded<br>
@@ -115,14 +117,25 @@
     </div>
     <div>
       <p style="color: #ffbe00" class="stat-button" data-bs-toggle="modal" data-bs-target="#modal-countries">{{ total_countries|length }}</p>
-      <small>Countries Visited</small>
+      <small>
+        <div class="info-tooltip">Countries Visited
+          <span class="info-tooltip-text">Will count if you spend more than {{ MIN_COUNTRY_VISIT_DURATION_FOR_STATS }} in a country</span>
+        </div>
+      </small>
     </div>
     <div>
       <p style="color: #a6adbb" class="stat-button" data-bs-toggle="modal" data-bs-target="#modal-cities">{{ total_cities|length }}</p>
-      <small>Cities Visited</small>
+      <small>
+        <div class="info-tooltip">Cities Visited
+          <span class="info-tooltip-text">Will count if you spend more than {{ MIN_CITY_VISIT_DURATION_FOR_STATS }} in a city</span>
+        </div>
+      </small>
     </div>
+    {% endif %}
   </div>
 
+
+  {% if is_photon_connected %}
   <!-- Overall modal -->
   <div class="modal fade" id="modal-cities" tabindex="-1" aria-labelledby="modalLabelAll" aria-hidden="true">
     <div class="modal-dialog">
@@ -142,7 +155,7 @@
       </div>
     </div>
   </div>
-   <div class="modal fade" id="modal-countries" tabindex="-1" aria-labelledby="modalLabelAll" aria-hidden="true">
+  <div class="modal fade" id="modal-countries" tabindex="-1" aria-labelledby="modalLabelAll" aria-hidden="true">
     <div class="modal-dialog">
       <div class="modal-content">
         <div class="modal-header">
@@ -160,6 +173,8 @@
       </div>
     </div>
   </div>
+
+  {% endif %}
 
   <hr>
 

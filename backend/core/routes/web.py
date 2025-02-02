@@ -208,9 +208,22 @@ class StatsView(MethodView):
             total_countries=sorted(list(all_countries)),
             total_distance=f"{total_distance / 1000.0:,.0f}",  # Convert to KM
             total_points=f"{total_points:,}",
+            is_photon_connected=len(Config.PHOTON_SERVER_HOST) != 0,
             total_geocoded=f"{total_geocoded:,}",
             total_not_geocoded=f"{total_not_geocoded:,}",
+            MIN_COUNTRY_VISIT_DURATION_FOR_STATS=self.formatTimeDelta(Config.MIN_COUNTRY_VISIT_DURATION_FOR_STATS),
+            MIN_CITY_VISIT_DURATION_FOR_STATS=self.formatTimeDelta(Config.MIN_CITY_VISIT_DURATION_FOR_STATS)
         )
+    
+    def formatTimeDelta(self, seconds: int):
+        if seconds < 60:
+            return f"{seconds} second" + ("s" if seconds > 1 else "")
+        elif seconds < 60 * 60:
+            return f"{seconds // 60} minute" + ("s" if seconds // 60 > 1 else "")
+        elif seconds < 60 * 60 * 24:
+            return f"{seconds // (60 * 60)} hour" + ("s" if seconds // (60 * 60) > 1 else "")
+        else:
+            return f"{seconds // (60 * 60 * 24)} day" + ("s" if seconds // (60 * 60 * 24) > 1 else "")
     
 
 class YearlyStatsView(MethodView):
