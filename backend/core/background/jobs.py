@@ -260,7 +260,7 @@ class GenerateFullStatisticsJob(Job):
 
 
         MIN_COUNTRY_COUNT_FOR_STATS = 10
-        MIN_CITY_COUNT_FOR_STATS = 100
+        MIN_CITY_COUNT_FOR_STATS = 500
 
         
         i = 0
@@ -320,7 +320,7 @@ class GenerateFullStatisticsJob(Job):
         for stat in daily_stats.values():
             if self.stop_requested:
                 break
-            
+
             self.progress = 0.8 + (i / total_count) * 0.1
 
             key = f"{stat.year}-{stat.month}-{stat.day}"
