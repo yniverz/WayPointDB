@@ -77,7 +77,7 @@ class JobsView(MethodView):
             safe_progress = max(0.01, progress)
 
             time_passed = time.time() - start_time
-            time_left = (100 - job[3]) * ((time.time() - start_time) / safe_progress)
+            time_left = max(0, (100 - job[3]) * ((time.time() - start_time) / safe_progress) - time_passed)
 
             time_passed_str = time.strftime("%H:%M:%S", time.gmtime(time_passed))
             if time_passed > 60*60*24:
