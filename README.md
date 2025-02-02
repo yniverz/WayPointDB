@@ -1,20 +1,20 @@
 # WayPointDB
 
 ## Overview
-WayPointDB is a lightweight GPS data collection API that interacts with a PostgreSQL database and is deployed using Docker and Nginx. WayPointDB is focused on fast and efficient data collection and retrieval, so the user wont have to wait around for the webpage to load or the data to be processed.
+WayPointDB is a lightweight GPS data collection API, just like Google's Timeline feature, that interacts with a PostgreSQL database and is deployed using Docker and Nginx. 
+WayPointDB is focused on fast and efficient data collection and retrieval, so the user wont have to wait around for the webpage to load or the data to be processed, and can easily sift through their data using the Stats and Map pages.
 
-## Features
+## Key Benefits
 - Multi-user support
 - REST API for GPS data collection
-- Pure Flask-based interface
-- PostgreSQL as the database backend
-- Reverse proxy using Nginx
+- Pure Flask-Jinja-based interface
+    - Server side rendering for fast page loads
 - Dockerized deployment
 
 ## Prerequisites
-Before running the project, ensure you have the following installed:
+To run this project, you could use the following tools:
 - [Docker](https://www.docker.com/)
-- [Docker Compose](https://docs.docker.com/compose/)
+- [Docker Compose Standalone](https://docs.docker.com/compose/install/standalone/)
 
 ## Installation
 To install the project, clone the repository, change directory to the project folder, build the Docker image, and run the Docker container (```-d``` for detached mode)
