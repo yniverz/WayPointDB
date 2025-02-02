@@ -169,6 +169,42 @@ class PhotonFillJob(QueryPhotonJob):
 
 
 
+class ResetPointsWithNoGeocodingJob(Job):
+    PARAMETERS = {
+        "user": User
+    }
+
+    def __init__(self, user: User):
+        super().__init__()
+        self.user_id = user.id
+
+    def run(self):
+        user = User.query.get(self.user_id)
+        if not user:
+            self.done = True
+            return
+
+        points: list[GPSData] = GPSData.query.filter_by(user_id=user.id, reverse_geocoded=True, country=None).all()
+
+        i = 0
+        total_count = len(points)
+        for point in points:
+            if self.stop_requested:
+                break
+
+            point.reverse_geocoded = False
+
+            i += 1
+            self.progress = i / total_count
+
+            if i % 1000 == 0:
+                db.session.commit()
+
+        db.session.commit()
+
+        self.done = True
+
+
 
 
 class GenerateSpeedDataJob(Job):
@@ -212,7 +248,6 @@ class GenerateSpeedDataJob(Job):
                 time_diff = (data.timestamp - prev.timestamp).total_seconds()
                 if time_diff > 0:
                     data.speed = distance / time_diff
-                    db.session.add(data)
                     added += 1
 
             if added % 1000 == 0:
@@ -656,6 +691,7 @@ JOB_TYPES: dict[str, Job] = {
     "filter_accuracy": FilterLargeAccuracyJob,
     "filter_clusters": FilterClustersJob,
     "delete_duplicates": DeleteDuplicatesJob,
+    "reset_no_geocoding": ResetPointsWithNoGeocodingJob,
 }
 
 if len(Config.PHOTON_SERVER_HOST) != 0:
