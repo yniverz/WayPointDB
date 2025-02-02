@@ -1,12 +1,12 @@
 {% extends "base.jinja" %}
 
 {% block heading %}
-    Dashboard
+    Jobs
 {% endblock %}
 
 {% block content %}
     <div style="display: flex;">
-        <form method="POST">
+        {# <form method="POST">
             {% if photon_active %}
             <h3>Reverse Geocoding</h3><br>
             <button type="submit" name="newJob" value="photon_full" title="Query Photon to reverse geocode, and overwrite any existing records" >Geocode all points</button>
@@ -14,7 +14,7 @@
             <button type="submit" name="newJob" value="photon_fill" title="Only query points which havent yet been reverse geocoded">Geocode new points</button>
             <br>
             {% endif %}
-            <h3>Statustucs</h3><br>
+            <h3>Statistics</h3><br>
             <button type="submit" name="newJob" value="full_stats">Generate Statistics</button>
             <button type="submit" name="newJob" value="speed_data">Generate Speed Data</button>
             <br>
@@ -24,7 +24,24 @@
         &nbsp;
         <button type="submit" name="newJob" value="filter_accuracy" onclick="startFilterAccuracyJob()" title="Will ask for a number input first">Filter Large Accuracy</button>
         &nbsp;
-        <button type="submit" name="newJob" value="filter_clusters" onclick="startFilterclustersJob()" title="Will ask for a number input first">Reduce Clusters</button>
+        <button type="submit" name="newJob" value="filter_clusters" onclick="startFilterclustersJob()" title="Will ask for a number input first">Reduce Clusters</button> #}
+
+        <h4>Reverse Geocoding</h4><br>
+        <button onclick="startJob('photon_full')" title="Query Photon to reverse geocode, and overwrite any existing records">Geocode all points</button>
+        &nbsp;
+        <button onclick="startJob('photon_fill')" title="Only query points which havent yet been reverse geocoded">Geocode new points</button>
+
+        <h4>Statistics</h4><br>
+        <button onclick="startJob('full_stats')">Generate Statistics</button>
+        &nbsp;
+        <button onclick="startJob('speed_data')">Generate Speed Data</button>
+
+        <h4>Data Cleaning</h4><br>
+        <button onclick="startJob('delete_duplicates')">Delete Duplicates</button>
+        &nbsp;
+        <button onclick="startJob('filter_accuracy', 'Enter the maximum meter accuracy that should be allowed in the dataset', '500')" title="Will ask for a number input first">Filter Large Accuracy</button>
+        &nbsp;
+        <button onclick="startJob('filter_clusters', 'Enter the minimum distance between points that is allowed in the dataset', '14')" title="Will ask for a number input first">Reduce Clusters</button>
     </div>
     <br>
     <h2>Jobs</h2>
@@ -148,7 +165,44 @@
 
 
 
+    function startJob(jobName, promptText = null, defaultValue = null) {
+        if (promptText !== null) {
+            const value = prompt(promptText, defaultValue);
+            if (value === null) {
+                return;
+            }
 
+            fetch(window.location.pathname, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                },
+                body: `newJob=${jobName}&value=${value}`,
+            })
+                .then(response => response.json())
+                .then(data => {
+                    // data is a list of jobs in the same format as `jobs` from the server
+                    updateJobsTable(data);
+                })
+                .catch(error => console.error(`Error starting ${jobName} job:`, error));
+        } else {
+            fetch(window.location.pathname, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                },
+                body: `newJob=${jobName}`,
+            })
+                .then(response => response.json())
+                .then(data => {
+                    // data is a list of jobs in the same format as `jobs` from the server
+                    updateJobsTable(data);
+                })
+                .catch(error => console.error(`Error starting ${jobName} job:`, error));
+        }
+    }
+
+{# 
     function startFilterAccuracyJob() {
         // ask the user for a meter value
         const meterValue = prompt("Enter the maximum meter accuracy that should be allowed in the dataset", "500");
@@ -193,7 +247,7 @@
                 updateJobsTable(data);
             })
             .catch(error => console.error("Error starting filter clusters job:", error));
-    }
+    } #}
 
 
     </script>
