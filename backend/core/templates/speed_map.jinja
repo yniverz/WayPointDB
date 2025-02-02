@@ -4,16 +4,15 @@
 Speed Map
 {% endblock %}
 
-{% block content %}
-
+{% block head %}
 <!-- Leaflet.js CSS & JS -->
 <link rel="stylesheet" href="/static/css/leaflet.css" />
 <script src="/static/js/leaflet.js"></script>
 <script src="/static/js/leaflet-heat.js"></script>
 
 <!-- Chart.js and Annotation Plugin (loaded from CDN) -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1"></script>
+<script src="/static/js/chart.js"></script>
+<script src="/static/js/chartjs-plugin-annotation@3.0.1"></script>
 
 <style>
     /* Reduced map height */
@@ -73,6 +72,9 @@ Speed Map
         margin-top: 20px;
     }
 </style>
+{% endblock %}
+
+{% block content %}
 
 <div class="container mt-4">
     <div class="date-selector">

@@ -242,7 +242,8 @@ class GenerateFullStatisticsJob(Job):
     def get_distance(self, point1: GPSData, point2: GPSData):
         coords1 = (point1.latitude, point1.longitude)
         coords2 = (point2.latitude, point2.longitude)
-        return geopy.distance.distance(coords1, coords2).m
+        return geopy.distance.distance(coords1, coords2).m # most accurate
+        # return geopy.distance.great_circle(coords1, coords2).m # about 20 times faster
 
     def run(self):
         user = User.query.get(self.user_id)

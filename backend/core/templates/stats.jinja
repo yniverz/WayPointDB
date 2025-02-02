@@ -4,7 +4,7 @@
   Statistics
 {% endblock %}
 
-{% block content %}
+{% block head %}
   <style>
         .stat-container {
             display: grid;
@@ -87,6 +87,13 @@
           visibility: visible;
         }
   </style>
+
+  <!-- Include Chart.js (CDN link for simplicity) -->
+  <script src="/static/js/chart.js"></script>
+{% endblock %}
+
+{% block content %}
+  
 
   <div class="stat-container">
     <div>
@@ -220,8 +227,6 @@
   {% endfor %}
   </div>
 
-  <!-- Include Chart.js (CDN link for simplicity) -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
   <script>
     document.addEventListener('DOMContentLoaded', function() {
