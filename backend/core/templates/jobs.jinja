@@ -8,14 +8,14 @@
     <div style="display: flex;">
         <form method="POST">
             {% if photon_active %}
-            <button type="submit" name="newJob" value="photon_full">Geocode all points</button>
-            <button type="submit" name="newJob" value="photon_fill">Geocode new points</button>
+            <button type="submit" name="newJob" value="photon_full" title="Query Photon to reverse geocode, and overwrite any existing records" >Geocode all points</button>
+            <button type="submit" name="newJob" value="photon_fill" title="Only query points which havent yet been reverse geocoded">Geocode new points</button>
             {% endif %}
             <button type="submit" name="newJob" value="full_stats">Generate Statistics</button>
             <button type="submit" name="newJob" value="speed_data">Generate Speed Data</button>
             <button type="submit" name="newJob" value="delete_duplicates">Delete Duplicates</button>
         </form>&nbsp;
-        <button type="submit" name="newJob" value="filter_accuracy" onclick="startFilterAccuracyJob()">Filter Large Accuracy</button>
+        <button type="submit" name="newJob" value="filter_accuracy" onclick="startFilterAccuracyJob()" title="Will ask for a meter accuracy first">Filter Large Accuracy</button>
     </div>
     <br>
     <h2>Jobs</h2>

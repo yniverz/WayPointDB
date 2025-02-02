@@ -68,12 +68,12 @@ GPS Map
 
 <div class="container mt-4">
     <div class="date-selector">
-        <button onclick="adjustDate(-1)">&lt;&lt;</button>
+        <button title="Move back one day" onclick="adjustDate(-1)">&lt;&lt;</button>
         <div>
             <input type="date" id="start-date"> to 
             <input type="date" id="end-date">
         </div>
-        <button onclick="adjustDate(1)">&gt;&gt;</button>
+        <button title="Move forward one day" onclick="adjustDate(1)">&gt;&gt;</button>
         <button onclick="setDateRange('today')">Today</button>
         <button onclick="setDateRange('yesterday')">Yesterday</button>
         <button onclick="setDateRange('last_week')">Last Week</button>
@@ -102,7 +102,7 @@ GPS Map
                     id="toggleAccuracy" 
                     onchange="toggleAccuracy(this)" 
                 />
-                Enable Accuracy (< 20m)
+                Filter Accuracy (< 20m)
         </div>
     </div>
 </div>
