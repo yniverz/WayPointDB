@@ -257,9 +257,14 @@ class GenerateFullStatisticsJob(Job):
             return
         
         DailyStatistic.query.filter_by(user_id=user.id).delete()
+
+
+        MIN_VISIT_COUNT_FOR_STATS = 50
+
         
         i = 0
         daily_stats: dict[str, DailyStatistic] = {}
+        daily_stats_country_city_count: dict[str, tuple[dict[str, int], dict[str, int]]] = {}
         total_count = len(gps_data)
         for data in gps_data:
             if self.stop_requested:
@@ -281,18 +286,43 @@ class GenerateFullStatisticsJob(Job):
                     daily_stats[key].total_distance_m = 0.0
                 daily_stats[key].total_distance_m += distance
                 
+            # if data.country:
+            #     if not daily_stats[key].visited_countries:
+            #         daily_stats[key].visited_countries = []
+            #     daily_stats[key].visited_countries = list(set(daily_stats[key].visited_countries + [data.country]))
+            # if data.city:
+            #     if not daily_stats[key].visited_cities:
+            #         daily_stats[key].visited_cities = []
+            #     daily_stats[key].visited_cities = list(set(daily_stats[key].visited_cities + [data.city]))
+
             if data.country:
-                if not daily_stats[key].visited_countries:
-                    daily_stats[key].visited_countries = []
-                daily_stats[key].visited_countries = list(set(daily_stats[key].visited_countries + [data.country]))
+                if key not in daily_stats_country_city_count:
+                    daily_stats_country_city_count[key] = ({}, {})
+
+                if data.country not in daily_stats_country_city_count[key][0]:
+                    daily_stats_country_city_count[key][0][data.country] = 0
+
+                daily_stats_country_city_count[key][0][data.country] += 1
+
             if data.city:
-                if not daily_stats[key].visited_cities:
-                    daily_stats[key].visited_cities = []
-                daily_stats[key].visited_cities = list(set(daily_stats[key].visited_cities + [data.city]))
+                if key not in daily_stats_country_city_count:
+                    daily_stats_country_city_count[key] = ({}, {})
+
+                if data.city not in daily_stats_country_city_count[key][1]:
+                    daily_stats_country_city_count[key][1][data.city] = 0
+
+                daily_stats_country_city_count[key][1][data.city] += 1
 
             i += 1
 
             self.progress = (i / total_count) * 0.9
+
+        for stat in daily_stats.values():
+            key = f"{stat.year}-{stat.month}-{stat.day}"
+            if key in daily_stats_country_city_count:
+                if daily_stats_country_city_count[key][1] >= MIN_VISIT_COUNT_FOR_STATS:
+                    stat.visited_countries = daily_stats_country_city_count[key][0].keys()
+                    stat.visited_cities = daily_stats_country_city_count[key][1].keys()
 
         i = 0
         total_count = len(daily_stats)
@@ -303,10 +333,12 @@ class GenerateFullStatisticsJob(Job):
             db.session.add(stat)
             self.progress = 0.9 + (i / total_count) * 0.1
 
-            if i % 1000 == 0:
+            if i % 500 == 0:
                 db.session.commit()
 
             i += 1
+
+        print("COMMITTING", i)
 
         db.session.commit()
 
@@ -314,53 +346,53 @@ class GenerateFullStatisticsJob(Job):
 
 
 
-class GenerateWeeklyStatisticsJob(Job):
-    PARAMETERS = {
-        "user": User
-    }
+# class GenerateWeeklyStatisticsJob(Job):
+#     PARAMETERS = {
+#         "user": User
+#     }
 
-    def __init__(self, user: User):
-        super().__init__()
-        self.concurrency_limit_type = ConcurrencyLimitType.GENERATE_STATS
-        self.user_id = user.id
+#     def __init__(self, user: User):
+#         super().__init__()
+#         self.concurrency_limit_type = ConcurrencyLimitType.GENERATE_STATS
+#         self.user_id = user.id
 
-    def run(self):
-        user = User.query.get(self.user_id)
-        if not user:
-            self.done = True
-            return
+#     def run(self):
+#         user = User.query.get(self.user_id)
+#         if not user:
+#             self.done = True
+#             return
         
-        # regenerate daily stats for past 7 days
-        for i in range(7):
-            date = time.localtime(time.time() - i * 86400)
-            stats = DailyStatistic.query.filter_by(user_id=user.id, year=date.tm_year, month=date.tm_mon, day=date.tm_mday).all()
-            for stat in stats:
-                db.session.delete(stat)
+#         # regenerate daily stats for past 7 days
+#         for i in range(7):
+#             date = time.localtime(time.time() - i * 86400)
+#             stats = DailyStatistic.query.filter_by(user_id=user.id, year=date.tm_year, month=date.tm_mon, day=date.tm_mday).all()
+#             for stat in stats:
+#                 db.session.delete(stat)
 
-            # get all GPS data for the user on that day
-            start = datetime(date.tm_year, date.tm_mon, date.tm_mday, 0, 0, 0)
-            end = datetime(date.tm_year, date.tm_mon, date.tm_mday, 23, 59, 59)
+#             # get all GPS data for the user on that day
+#             start = datetime(date.tm_year, date.tm_mon, date.tm_mday, 0, 0, 0)
+#             end = datetime(date.tm_year, date.tm_mon, date.tm_mday, 23, 59, 59)
             
-            gps_data: list[GPSData] = GPSData.query.filter_by(user_id=user.id).filter(GPSData.timestamp >= start, GPSData.timestamp <= end).all()
-            if not gps_data:
-                continue
+#             gps_data: list[GPSData] = GPSData.query.filter_by(user_id=user.id).filter(GPSData.timestamp >= start, GPSData.timestamp <= end).all()
+#             if not gps_data:
+#                 continue
 
-            daily_stat = DailyStatistic(
-                user_id=user.id,
-                year=date.tm_year,
-                month=date.tm_mon,
-                day=date.tm_mday,
-            )
+#             daily_stat = DailyStatistic(
+#                 user_id=user.id,
+#                 year=date.tm_year,
+#                 month=date.tm_mon,
+#                 day=date.tm_mday,
+#             )
 
-            i = 0
-            for data in gps_data:
-                if i > 0:
-                    prev = gps_data[i - 1]
-                    daily_stat.total_distance_m += geopy.distance.distance((prev.latitude, prev.longitude), (data.latitude, data.longitude)).m
-                i += 1
+#             i = 0
+#             for data in gps_data:
+#                 if i > 0:
+#                     prev = gps_data[i - 1]
+#                     daily_stat.total_distance_m += geopy.distance.distance((prev.latitude, prev.longitude), (data.latitude, data.longitude)).m
+#                 i += 1
 
-            db.session.add(daily_stat)
-            db.session.commit()
+#             db.session.add(daily_stat)
+#             db.session.commit()
 
 
 

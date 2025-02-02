@@ -6,7 +6,7 @@ from flask import Flask
 
 from ..models import User
 from ..config import Config
-from .jobs import ConcurrencyLimitType, GenerateWeeklyStatisticsJob, Job, PhotonFillJob
+from .jobs import ConcurrencyLimitType, GenerateFullStatisticsJob, Job, PhotonFillJob
 
 
 
@@ -108,8 +108,8 @@ class JobManager:
                     if PhotonFillJob.__name__ not in [job.__class__.__name__ for job in self.queued_jobs + self.running_jobs]:
                         self.add_job(PhotonFillJob(user))
 
-                if GenerateWeeklyStatisticsJob.__name__ not in [job.__class__.__name__ for job in self.queued_jobs + self.running_jobs]:
-                    self.add_job(GenerateWeeklyStatisticsJob(user))
+                if GenerateFullStatisticsJob.__name__ not in [job.__class__.__name__ for job in self.queued_jobs + self.running_jobs]:
+                    self.add_job(GenerateFullStatisticsJob(user))
 
             
 
