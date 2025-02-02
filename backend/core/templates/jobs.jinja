@@ -57,16 +57,16 @@
             <h4>Statistics</h4>
             <div class="button-group">
                 <button onclick="startJob('full_stats')">Generate Statistics</button>
-                <button onclick="startJob('speed_data')">Generate Speed Data</button>
+                <button onclick="startJob('speed_data')" title="Will add speed information to points which dont already have any.">Generate Speed Data</button>
             </div>
         </div>
 
         <div class="category">
             <h4>Data Cleaning</h4>
             <div class="button-group">
-                <button onclick="startJob('delete_duplicates')">Delete Duplicates</button>
-                <button onclick="startJob('filter_accuracy', 'Enter the maximum meter accuracy that should be allowed in the dataset', 'maximum_accuracy', '500')">Filter Large Accuracy</button>
-                <button onclick="startJob('filter_clusters', 'Enter the minimum distance between points that is allowed in the dataset', 'maximum_distance', '14')">Reduce Clusters</button>
+                <button onclick="startJob('delete_duplicates')" title="Usefull in the case of bugs in tracking for example">Delete Duplicates</button>
+                <button onclick="startJob('filter_accuracy', 'Enter the maximum meter accuracy that should be allowed in the dataset', 'maximum_accuracy', '500')" title="Will remove points with horizontal accuracy greater than set value">Filter Large Accuracy</button>
+                <button onclick="startJob('filter_clusters', 'Enter the minimum distance between points that is allowed in the dataset', 'maximum_distance', '14')" title="Will remove points closer than set distance to each other">Reduce Clusters</button>
             </div>
         </div>
     </div>
