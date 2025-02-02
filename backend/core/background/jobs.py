@@ -297,17 +297,16 @@ class GenerateFullStatisticsJob(Job):
             #         daily_stats[key].visited_cities = []
             #     daily_stats[key].visited_cities = list(set(daily_stats[key].visited_cities + [data.city]))
 
+            if key not in daily_stats_country_city_count:
+                daily_stats_country_city_count[key] = ({}, {})
+
             if data.country:
-                if key not in daily_stats_country_city_count:
-                    daily_stats_country_city_count[key] = {}
                 if data.country not in daily_stats_country_city_count[key][0]:
                     daily_stats_country_city_count[key][0][data.country] = 0
                 daily_stats_country_city_count[key][0][data.country] += 1
 
             if data.city:
                 country_city_key = (data.country, data.city)
-                if key not in daily_stats_country_city_count:
-                    daily_stats_country_city_count[key] = {}
                 if country_city_key not in daily_stats_country_city_count[key][1]:
                     daily_stats_country_city_count[key][1][country_city_key] = 0
                 daily_stats_country_city_count[key][1][country_city_key] += 1
