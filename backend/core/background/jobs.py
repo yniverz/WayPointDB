@@ -260,7 +260,7 @@ class GenerateFullStatisticsJob(Job):
 
 
         MIN_COUNTRY_COUNT_FOR_STATS = 10
-        MIN_CITY_COUNT_FOR_STATS = 500
+        MIN_CITY_COUNT_FOR_STATS = 200
 
         
         i = 0
