@@ -292,10 +292,6 @@ class GenerateFullStatisticsJob(Job):
         
         DailyStatistic.query.filter_by(user_id=user.id).delete()
 
-
-        MIN_COUNTRY_VISIT_DURATION_FOR_STATS = 60 * 5 # seconds
-        MIN_CITY_VISIT_DURATION_FOR_STATS = 60 * 60 # seconds
-
         
         i = 0
         daily_stats: dict[str, DailyStatistic] = {}
@@ -368,9 +364,9 @@ class GenerateFullStatisticsJob(Job):
             if key in daily_stats_country_city_count:
                 country_count, city_count = daily_stats_country_city_count[key]
                 if country_count:
-                    stat.visited_countries = [country for country, duration in country_count.items() if duration > MIN_COUNTRY_VISIT_DURATION_FOR_STATS]
+                    stat.visited_countries = [country for country, duration in country_count.items() if duration > self.config.MIN_COUNTRY_VISIT_DURATION_FOR_STATS]
                 if city_count:
-                    stat.visited_cities = [city for city, duration in city_count.items() if duration > MIN_CITY_VISIT_DURATION_FOR_STATS]
+                    stat.visited_cities = [city for city, duration in city_count.items() if duration > self.config.MIN_CITY_VISIT_DURATION_FOR_STATS]
 
         i = 0
         total_count = len(daily_stats)
