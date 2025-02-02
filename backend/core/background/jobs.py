@@ -260,7 +260,7 @@ class GenerateFullStatisticsJob(Job):
 
 
         MIN_COUNTRY_COUNT_FOR_STATS = 10
-        MIN_CITY_COUNT_FOR_STATS = 200
+        MIN_CITY_DURATION_FOR_STATS = 60 * 60 # seconds
 
         
         i = 0
@@ -268,22 +268,23 @@ class GenerateFullStatisticsJob(Job):
         # daily_stats_country_city_count: dict[str, dict[tuple[str, str], int]] = {}
         daily_stats_country_city_count: dict[str, tuple[dict[str, int], dict[tuple[str, str], int]]] = {}
         total_count = len(gps_data)
-        for data in gps_data:
+        last_point: GPSData = None
+        for point in gps_data:
             if self.stop_requested:
                 break
 
-            key = f"{data.timestamp.year}-{data.timestamp.month}-{data.timestamp.day}"
+            key = f"{point.timestamp.year}-{point.timestamp.month}-{point.timestamp.day}"
             if key not in daily_stats:
                 daily_stats[key] = DailyStatistic(
                     user_id=user.id,
-                    year=data.timestamp.year,
-                    month=data.timestamp.month,
-                    day=data.timestamp.day,
+                    year=point.timestamp.year,
+                    month=point.timestamp.month,
+                    day=point.timestamp.day,
                 )
                 
             if i > 0:
                 prev = gps_data[i - 1]
-                distance = self.get_distance(prev, data)
+                distance = self.get_distance(prev, point)
                 if daily_stats[key].total_distance_m is None:
                     daily_stats[key].total_distance_m = 0.0
                 daily_stats[key].total_distance_m += distance
@@ -300,19 +301,21 @@ class GenerateFullStatisticsJob(Job):
             if key not in daily_stats_country_city_count:
                 daily_stats_country_city_count[key] = ({}, {})
 
-            if data.country:
-                if data.country not in daily_stats_country_city_count[key][0]:
-                    daily_stats_country_city_count[key][0][data.country] = 0
-                daily_stats_country_city_count[key][0][data.country] += 1
+            if point.country:
+                if point.country not in daily_stats_country_city_count[key][0]:
+                    daily_stats_country_city_count[key][0][point.country] = 0
+                daily_stats_country_city_count[key][0][point.country] += 1
 
-            if data.city:
-                country_city_key = (data.country, data.city)
+            if last_point.city and point.city:
+                country_city_key = (last_point.country, last_point.city)
+                duration = (point.timestamp - last_point.timestamp).total_seconds()
                 if country_city_key not in daily_stats_country_city_count[key][1]:
                     daily_stats_country_city_count[key][1][country_city_key] = 0
-                daily_stats_country_city_count[key][1][country_city_key] += 1
+                daily_stats_country_city_count[key][1][country_city_key] += duration
+
+            last_point = point
 
             i += 1
-
             self.progress = (i / total_count) * 0.9
 
         i = 0
@@ -329,7 +332,7 @@ class GenerateFullStatisticsJob(Job):
                 if country_count:
                     stat.visited_countries = [country for country, count in country_count.items() if count > MIN_COUNTRY_COUNT_FOR_STATS]
                 if city_count:
-                    stat.visited_cities = [city for (country, city), count in city_count.items() if count > MIN_CITY_COUNT_FOR_STATS]
+                    stat.visited_cities = [city for (country, city), duration in city_count.items() if duration > MIN_CITY_DURATION_FOR_STATS]
 
         i = 0
         total_count = len(daily_stats)
