@@ -1,68 +1,7 @@
-{% extends "base.jinja" %}
+{% extends "stats.jinja" %}
 
 {% block heading %}
 <strong>{{ year }}</strong>
-{% endblock %}
-
-{% block head %}
-<style>
-    .stat-container {
-        display: grid;
-        grid-template-columns: repeat({% if is_photon_connected %}3{% else %}1{% endif %}, 1fr);;
-        grid-gap: 10px;
-        padding: 10px;
-        border-radius: 20px;
-        box-shadow: 0 0 20px rgba(0, 0, 0, 0.317);
-        margin-bottom: 20px;
-    }
-
-    /* Stack vertically when the container is too small */
-    @media (max-width: 1000px) { 
-        .stat-container {
-            grid-template-columns: 1fr; /* Force single column */
-        }
-    }
-
-    .stat-container div {
-        text-align: center;
-    }
-
-    .stat-container p {
-        font-size: 2em;
-        font-weight: bold;
-        margin-bottom: 0;
-    }
-
-    .stat-container small {
-        font-size: 1em;
-        color: #6c757d;
-    }
-
-    .stat-button {
-        text-decoration: underline;
-        cursor: pointer;
-    }
-
-    .stat-button:hover {
-        color: #007bff;
-    }
-
-    .charts-container {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-        grid-gap: 20px;
-    }
-
-    .chart-container {
-        padding: 20px;
-        border-radius: 20px;
-        box-shadow: 0 0 20px rgba(0, 0, 0, 0.317);
-    }
-</style>
-
-<!-- Include Chart.js (CDN link for simplicity) -->
-<script src="/static/js/chart.js"></script>
-
 {% endblock %}
 
 {% block content %}
@@ -71,6 +10,10 @@
     <div>
         <p style="color: #747fff">{{ total_distance }}</p>
         <small>Total Distance (km) in {{ year }}</small>
+    </div>
+    <div>
+      <p style="color: #00aa6e">{{ total_points }}</p>
+      <small>Total points</small>
     </div>
 
     {% if is_photon_connected %}
