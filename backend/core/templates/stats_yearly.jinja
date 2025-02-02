@@ -131,7 +131,7 @@
         <strong>
           {{ month|month_name }} <!-- "month_name" is a custom filter or you can do a dictionary if you like -->
         </strong>
-        <a style="margin-bottom: 10px; color: #6c757d;" href="/map?start_date={{ year }}-{% if month < 10 %}0{% endif %}{{ month }}-01&end_date={{ year }}-{% if month + 1 < 10 %}0{% endif %}{{ month + 1 }}-01"><strong>[Map]</strong></a>
+        <a style="margin-bottom: 10px; color: #6c757d;" href="/map?start_date={{ year }}-{% if month < 10 %}0{% endif %}{{ month }}-01&end_date={% if month + 1 == 13 %}{{ year + 1 }}{% else %}{{ year }}{% endif %}-{% if month + 1 == 13 %}01{% else %}{% if month + 1 < 10 %}0{% endif %}{{ month + 1 }}{% endif %}-01"><strong>[Map]</strong></a>
       </p>
       <!-- quick overview for that month -->
       <div style="display: flex; font-size: 0.8em; color: #6c757d;">
