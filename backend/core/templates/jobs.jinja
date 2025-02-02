@@ -4,8 +4,24 @@
     Jobs
 {% endblock %}
 
+{% block head %}
+<style>
+  /* Add some spacing between categories */
+  .category {
+    margin-bottom: 20px;
+  }
+
+  /* Flex container for buttons to align them in one row */
+  .button-group {
+    display: flex;
+    gap: 10px; /* Optional: adds spacing between buttons */
+    flex-wrap: wrap; /* Ensures buttons wrap nicely on smaller screens */
+  }
+</style>
+{% endblock %}
+
 {% block content %}
-    <div style="display: flex;">
+    <div>
         <!-- <form method="POST">
             {% if photon_active %}
             <h3>Reverse Geocoding</h3><br>
@@ -28,26 +44,34 @@
         -->
 
         {% if photon_active %}
-        <h4>Reverse Geocoding</h4><br>
-        <button onclick="startJob('photon_full')" title="Query Photon to reverse geocode, and overwrite any existing records">Geocode all points</button>
-        &nbsp;
-        <button onclick="startJob('photon_fill')" title="Only query points which havent yet been reverse geocoded">Geocode new points</button>
-        <br>
+        <div class="category">
+            <h4>Reverse Geocoding</h4>
+            <div class="button-group">
+                <button onclick="startJob('photon_full')" title="Query Photon to reverse geocode, and overwrite any existing records">Geocode all points</button>
+                <button onclick="startJob('photon_fill')" title="Only query points which havent yet been reverse geocoded">Geocode new points</button>
+            </div>
+        </div>
         {% endif %}
-        <h4>Statistics</h4><br>
-        <button onclick="startJob('full_stats')">Generate Statistics</button>
-        &nbsp;
-        <button onclick="startJob('speed_data')">Generate Speed Data</button>
-        <br>
 
-        <h4>Data Cleaning</h4><br>
-        <button onclick="startJob('delete_duplicates')">Delete Duplicates</button>
-        &nbsp;
-        <button onclick="startJob('filter_accuracy', 'Enter the maximum meter accuracy that should be allowed in the dataset', '500')" title="Will ask for a number input first">Filter Large Accuracy</button>
-        &nbsp;
-        <button onclick="startJob('filter_clusters', 'Enter the minimum distance between points that is allowed in the dataset', '14')" title="Will ask for a number input first">Reduce Clusters</button>
-        <br>
+        <div class="category">
+            <h4>Statistics</h4>
+            <div class="button-group">
+                <button onclick="startJob('full_stats')">Generate Statistics</button>
+                <button onclick="startJob('speed_data')">Generate Speed Data</button>
+            </div>
+        </div>
+
+        <div class="category">
+            <h4>Data Cleaning</h4>
+            <div class="button-group">
+                <button onclick="startJob('delete_duplicates')">Delete Duplicates</button>
+                <button onclick="startJob('filter_accuracy', 'Enter the maximum meter accuracy that should be allowed in the dataset', 'maximum_accuracy', '500')">Filter Large Accuracy</button>
+                <button onclick="startJob('filter_clusters', 'Enter the minimum distance between points that is allowed in the dataset', 'maximum_distance', '14')">Reduce Clusters</button>
+            </div>
+        </div>
     </div>
+
+
     <br>
     <h2>Jobs</h2>
     <table border="1" cellpadding="5" cellspacing="0">
@@ -170,7 +194,7 @@
 
 
 
-    function startJob(jobName, promptText = null, defaultValue = null) {
+    function startJob(jobName, promptText = null, varName = null, defaultValue = null) {
         if (promptText !== null) {
             const value = prompt(promptText, defaultValue);
             if (value === null) {
@@ -182,7 +206,7 @@
                 headers: {
                     "Content-Type": "application/x-www-form-urlencoded",
                 },
-                body: `newJob=${jobName}&value=${value}`,
+                body: `newJob=${jobName}&${varName}=${value}`,
             })
                 .then(response => response.json())
                 .then(data => {
