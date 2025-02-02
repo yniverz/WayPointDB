@@ -259,8 +259,8 @@ class GenerateFullStatisticsJob(Job):
         DailyStatistic.query.filter_by(user_id=user.id).delete()
 
 
-        MIN_COUNTRY_COUNT_FOR_STATS = 50
-        MIN_CITY_COUNT_FOR_STATS = 50
+        MIN_COUNTRY_COUNT_FOR_STATS = 10
+        MIN_CITY_COUNT_FOR_STATS = 100
 
         
         i = 0
