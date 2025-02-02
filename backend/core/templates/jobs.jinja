@@ -8,11 +8,17 @@
     <div style="display: flex;">
         <form method="POST">
             {% if photon_active %}
+            <h3>Reverse Geocoding</h3><br>
             <button type="submit" name="newJob" value="photon_full" title="Query Photon to reverse geocode, and overwrite any existing records" >Geocode all points</button>
+            {# <button type="submit" name="newJob" value="reset_no_geocoding">Reset points without geocoding</button> #}
             <button type="submit" name="newJob" value="photon_fill" title="Only query points which havent yet been reverse geocoded">Geocode new points</button>
+            <br>
             {% endif %}
+            <h3>Statustucs</h3><br>
             <button type="submit" name="newJob" value="full_stats">Generate Statistics</button>
             <button type="submit" name="newJob" value="speed_data">Generate Speed Data</button>
+            <br>
+            <h3>Data Cleaning</h3><br>
             <button type="submit" name="newJob" value="delete_duplicates">Delete Duplicates</button>
         </form>
         &nbsp;

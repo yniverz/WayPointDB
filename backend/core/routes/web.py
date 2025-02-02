@@ -154,7 +154,7 @@ class StatsView(MethodView):
         # total_geocoded = GPSData.query.filter_by(user_id=user.id, reverse_geocoded=True).count()
         total_geocoded = GPSData.query.filter_by(user_id=user.id).filter(GPSData.reverse_geocoded == True).count()
         # where reverse_geocoded = true and city is none
-        total_not_geocoded = GPSData.query.filter_by(user_id=user.id).filter(GPSData.reverse_geocoded == True).filter(GPSData.city == None).count()
+        total_not_geocoded = GPSData.query.filter_by(user_id=user.id).filter(GPSData.reverse_geocoded == True).filter(GPSData.country == None).count()
 
         stats: list[DailyStatistic] = DailyStatistic.query.filter_by(user_id=user.id).all()
 
