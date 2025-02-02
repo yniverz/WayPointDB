@@ -16,7 +16,7 @@
         {% endif %}
     </p>
 
-    <form method="POST" action="{{ url_for('web.account') }}">
+    <form method="POST" action="{{ url_for('web.account') }}" onsubmit="return confirm('Are you sure you want to generate a new API key? This will replace your current key.');">
         <button type="submit" name="generate_key" value="1">Generate New API Key</button>
     </form>
     <br/>
