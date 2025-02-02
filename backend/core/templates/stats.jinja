@@ -187,7 +187,9 @@
       <!-- two elements next to each other horizontally -->
       <div style="display: flex; font-size: 0.8em; color: #6c757d;">
         <p>{{ data.total_distance|round(2) }} km</p>
+        {% if is_photon_connected %}
         <p style="margin-left: auto; margin-right: 0;"><p class="stat-button" data-bs-toggle="modal" data-bs-target="#modal-countries-{{ year }}">{{ data.countries|length }}</p>&nbsp; countries,&nbsp; <p class="stat-button" data-bs-toggle="modal" data-bs-target="#modal-cities-{{ year }}">{{ data.cities|length }}</p>&nbsp; cities</p>
+        {% endif %}
       </div>
 
       <!-- The bar chart canvas for this year -->

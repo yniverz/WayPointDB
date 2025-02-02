@@ -288,6 +288,7 @@ class YearlyStatsView(MethodView):
             total_cities=sorted(list(all_cities)),
             total_countries=sorted(list(all_countries)),
             total_distance=f"{total_distance / 1000.0:,.0f}",  # Convert to KM
+            is_photon_connected=len(Config.PHOTON_SERVER_HOST) != 0,
         )
 
 

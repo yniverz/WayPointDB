@@ -8,7 +8,7 @@
 <style>
     .stat-container {
         display: grid;
-        grid-template-columns: repeat(3, 1fr);
+        grid-template-columns: repeat({% if is_photon_connected %}3{% else %}1{% endif %}, 1fr);;
         grid-gap: 10px;
         padding: 10px;
         border-radius: 20px;
@@ -73,6 +73,7 @@
         <small>Total Distance (km) in {{ year }}</small>
     </div>
 
+    {% if is_photon_connected %}
     <div>
         <p style="color: #ffbe00" class="stat-button" data-bs-toggle="modal" data-bs-target="#modal-countries-year">
             {{ total_countries|length }}
@@ -86,8 +87,10 @@
         </p>
         <small>Cities Visited</small>
     </div>
+    {% endif %}
 </div>
 
+{% if is_photon_connected %}
 <!-- All-Cities modal -->
 <div class="modal fade" id="modal-cities-year" tabindex="-1" aria-labelledby="modalLabelCitiesAll" aria-hidden="true">
     <div class="modal-dialog">
@@ -128,6 +131,8 @@
     </div>
 </div>
 
+{% endif %}
+
 <hr>
 
 <div class="charts-container">
@@ -143,10 +148,12 @@
       <!-- quick overview for that month -->
       <div style="display: flex; font-size: 0.8em; color: #6c757d;">
         <p>{{ data.total_distance|round(2) }} km</p>
+        {% if is_photon_connected %}
         <p style="margin-left: auto; margin-right: 0;">
           <span class="stat-button" data-bs-toggle="modal" data-bs-target="#modal-countries-{{ month }}">{{ data.countries|length }}</span> countries,
           <span class="stat-button" data-bs-toggle="modal" data-bs-target="#modal-cities-{{ month }}">{{ data.cities|length }}</span> cities
         </p>
+        {% endif %}
       </div>
 
       <canvas id="chart-{{ month }}" width="800" height="400"></canvas>
