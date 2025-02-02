@@ -216,6 +216,7 @@ class StatsView(MethodView):
         )
     
     def formatTimeDelta(self, seconds: int):
+        seconds = int(seconds)
         if seconds < 60:
             return f"{seconds} second" + ("s" if seconds > 1 else "")
         elif seconds < 60 * 60:
