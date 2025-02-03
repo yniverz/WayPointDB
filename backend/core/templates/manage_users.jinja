@@ -27,8 +27,9 @@
                                 <input type="hidden" name="user_id" value="{{ user.id }}">
                                 <button type="submit">Remove</button>
                             </form>
+                            <button onclick="changePassword('{{ user.id }}', '{{ user.email }}')">Change Password</button>
                         {% else %}
-                            (Cannot remove self)
+                            (Cannot edit self)
                         {% endif %}
                     </td>
                 </tr>
@@ -59,6 +60,34 @@
     <script>
         function confirmDelete(userEmail) {
             return confirm("Are you sure you want to remove user " + userEmail + "? This action cannot be undone and will REMOVE ALL GPS DATA associated with this user.");
+        }
+
+        function changePassword(userId, userEmail) {
+            // ask for new password
+            new_password = prompt("Please enter the new password for user " + userEmail + ". The new password will be the user's email address.");
+
+            if (!new_password) {
+                return;
+            }
+
+            // escape password for URL
+            new_password = encodeURIComponent(new_password);
+
+            fetch(window.location.pathname, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                },
+                body: "action=change_password&user_id=" + userId + "&password=" + new_password,
+            })
+                .then(response => {
+                    if (response.ok) {
+                        alert("Password reset successfully.");
+                    } else {
+                        alert("Error changing password");
+                    }
+                })
+                .catch(error => alert("Error changing password:" + error));
         }
     </script>
 {% endblock %}

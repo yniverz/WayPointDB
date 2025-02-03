@@ -39,7 +39,7 @@ class JobManager:
             ...
         ]
         """ 
-        return [(job.id, job.__class__.__name__, job.running, job.progress, job.start_time) for job in self.queued_jobs + self.running_jobs]
+        return [(job.user, job.__class__.__name__, job.running, job.progress, job.start_time) for job in self.queued_jobs + self.running_jobs]
 
     def run_safely(self, job: Job):
         print(f"Running job {job.__class__.__name__}...")
