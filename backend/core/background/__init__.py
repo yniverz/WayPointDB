@@ -61,7 +61,7 @@ class JobManager:
                 break
 
             try:
-                if len(self.threads) < int(self.config.BACKGROUND_MAX_THREADS):
+                if len(self.threads) < self.config.BACKGROUND_MAX_THREADS:
                     concurrent_types = [job.concurrency_limit_type for job in self.running_jobs if job.concurrency_limit_type != None]
                     if self.queued_jobs and ConcurrencyLimitType.GLOBAl not in concurrent_types:
                         to_remove = []
