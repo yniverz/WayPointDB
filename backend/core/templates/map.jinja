@@ -514,7 +514,7 @@ GPS Map
         } else if (prevent_auto_move) {
             params.delete('view_location');
             window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
-            setDateRange('all', false);
+            setDateRange('all', full_date_range=false);
         } else {
             setDateRange('today');
         }
