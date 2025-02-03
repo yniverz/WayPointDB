@@ -56,6 +56,7 @@
     <table border="1" cellpadding="5" cellspacing="0">
         <thead>
             <tr>
+                <th>User</th>
                 <th>Job Name</th>
                 <th>Running</th>
                 <th>Progress</th>
@@ -67,6 +68,7 @@
         <tbody id="jobs-tbody">
             {% for job in jobs %}
                 <tr>
+                    <td>{{ job[6] }}</td>
                     <td>{{ job[1] }}</td>
                     <td>{{ job[2] }}</td>
                     <td>{{ job[3]|round(2) }}%</td>
@@ -118,6 +120,11 @@
         for (let job of jobs) {
             const [ jobId, jobName, running, progress, timePassed, timeLeft ] = job;
             const row = document.createElement("tr");
+
+            // User
+            const userCell = document.createElement("td");
+            userCell.textContent = job[6];
+            row.appendChild(userCell);
             
             // Job Name
             const nameCell = document.createElement("td");

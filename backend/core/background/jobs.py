@@ -29,6 +29,7 @@ class Job:
         """
         self.config = Config
         self.app: Flask = None
+        self.user: User = None
         self.thread: Thread = None
         self.start_time = None
         self.progress = 0 # 0-1
@@ -143,10 +144,10 @@ class PhotonFullJob(QueryPhotonJob):
 
     def __init__(self, user: User):
         super().__init__()
-        self.user_id = user.id
+        self.user = user
 
     def run(self):
-        points = GPSData.query.filter_by(user_id=self.user_id).all()
+        points = GPSData.query.filter_by(user_id=self.user.id).all()
         point_ids = [point.id for point in points]
         self.point_ids = point_ids
         super().run()
@@ -158,10 +159,10 @@ class PhotonFillJob(QueryPhotonJob):
 
     def __init__(self, user: User):
         super().__init__()
-        self.user_id = user.id
+        self.user = user
 
     def run(self):
-        points = GPSData.query.filter_by(user_id=self.user_id, reverse_geocoded=False).all()
+        points = GPSData.query.filter_by(user_id=self.user.id, reverse_geocoded=False).all()
         point_ids = [point.id for point in points]
         self.point_ids = point_ids
         super().run()
@@ -176,15 +177,10 @@ class ResetPointsWithNoGeocodingJob(Job):
 
     def __init__(self, user: User):
         super().__init__()
-        self.user_id = user.id
+        self.user = user
 
     def run(self):
-        user = User.query.get(self.user_id)
-        if not user:
-            self.done = True
-            return
-
-        points: list[GPSData] = GPSData.query.filter_by(user_id=user.id, reverse_geocoded=True, country=None).all()
+        points: list[GPSData] = GPSData.query.filter_by(user_id=self.user.id, reverse_geocoded=True, country=None).all()
 
         i = 0
         total_count = len(points)
@@ -214,16 +210,11 @@ class GenerateSpeedDataJob(Job):
 
     def __init__(self, user: User):
         super().__init__()
-        self.user_id = user.id
+        self.user = user
 
     def run(self):
-        user = User.query.get(self.user_id)
-        if not user:
-            self.done = True
-            return
-        
         # Get all GPS data for the user sorted by timestamp
-        gps_data: list[GPSData] = GPSData.query.filter_by(user_id=user.id).order_by(GPSData.timestamp).all()
+        gps_data: list[GPSData] = GPSData.query.filter_by(user_id=self.user.id).order_by(GPSData.timestamp).all()
         if not gps_data:
             self.done = True
             return
@@ -270,7 +261,7 @@ class GenerateFullStatisticsJob(Job):
     def __init__(self, user: User):
         super().__init__()
         self.concurrency_limit_type = ConcurrencyLimitType.GENERATE_STATS
-        self.user_id = user.id
+        self.user = user
 
     def get_distance(self, point1: GPSData, point2: GPSData):
         coords1 = (point1.latitude, point1.longitude)
@@ -279,18 +270,13 @@ class GenerateFullStatisticsJob(Job):
         return geopy.distance.great_circle(coords1, coords2).m # about 20 times faster
 
     def run(self):
-        user = User.query.get(self.user_id)
-        if not user:
-            self.done = True
-            return
-        
         # Get all GPS data for the user sorted by timestamp
-        gps_data: list[GPSData] = GPSData.query.filter_by(user_id=user.id).order_by(GPSData.timestamp).all()
+        gps_data: list[GPSData] = GPSData.query.filter_by(user_id=self.user.id).order_by(GPSData.timestamp).all()
         if not gps_data:
             self.done = True
             return
         
-        DailyStatistic.query.filter_by(user_id=user.id).delete()
+        DailyStatistic.query.filter_by(user_id=self.user.id).delete()
 
         
         i = 0
@@ -306,7 +292,7 @@ class GenerateFullStatisticsJob(Job):
             key = f"{point.timestamp.year}-{point.timestamp.month}-{point.timestamp.day}"
             if key not in daily_stats:
                 daily_stats[key] = DailyStatistic(
-                    user_id=user.id,
+                    user_id=self.user.id,
                     year=point.timestamp.year,
                     month=point.timestamp.month,
                     day=point.timestamp.day,
@@ -382,57 +368,6 @@ class GenerateFullStatisticsJob(Job):
 
 
 
-# class GenerateWeeklyStatisticsJob(Job):
-#     PARAMETERS = {
-#         "user": User
-#     }
-
-#     def __init__(self, user: User):
-#         super().__init__()
-#         self.concurrency_limit_type = ConcurrencyLimitType.GENERATE_STATS
-#         self.user_id = user.id
-
-#     def run(self):
-#         user = User.query.get(self.user_id)
-#         if not user:
-#             self.done = True
-#             return
-        
-#         # regenerate daily stats for past 7 days
-#         for i in range(7):
-#             date = time.localtime(time.time() - i * 86400)
-#             stats = DailyStatistic.query.filter_by(user_id=user.id, year=date.tm_year, month=date.tm_mon, day=date.tm_mday).all()
-#             for stat in stats:
-#                 db.session.delete(stat)
-
-#             # get all GPS data for the user on that day
-#             start = datetime(date.tm_year, date.tm_mon, date.tm_mday, 0, 0, 0)
-#             end = datetime(date.tm_year, date.tm_mon, date.tm_mday, 23, 59, 59)
-            
-#             gps_data: list[GPSData] = GPSData.query.filter_by(user_id=user.id).filter(GPSData.timestamp >= start, GPSData.timestamp <= end).all()
-#             if not gps_data:
-#                 continue
-
-#             daily_stat = DailyStatistic(
-#                 user_id=user.id,
-#                 year=date.tm_year,
-#                 month=date.tm_mon,
-#                 day=date.tm_mday,
-#             )
-
-#             i = 0
-#             for data in gps_data:
-#                 if i > 0:
-#                     prev = gps_data[i - 1]
-#                     daily_stat.total_distance_m += geopy.distance.distance((prev.latitude, prev.longitude), (data.latitude, data.longitude)).m
-#                 i += 1
-
-#             db.session.add(daily_stat)
-#             db.session.commit()
-
-
-
-
 
 class FilterLargeAccuracyJob(Job):
     PARAMETERS = {
@@ -443,17 +378,12 @@ class FilterLargeAccuracyJob(Job):
     def __init__(self, user: User, maximum_accuracy: float):
         super().__init__()
         self.concurrency_limit_type = ConcurrencyLimitType.GLOBAl
-        self.user_id = user.id
+        self.user = user
         self.maximum_accuracy = maximum_accuracy
 
     def run(self):
-        user = User.query.get(self.user_id)
-        if not user:
-            self.done = True
-            return
-        
         # Get all GPS data for the user sorted by timestamp
-        gps_data: list[GPSData] = GPSData.query.filter_by(user_id=user.id).order_by(GPSData.timestamp).all()
+        gps_data: list[GPSData] = GPSData.query.filter_by(user_id=self.user.id).order_by(GPSData.timestamp).all()
         if not gps_data:
             self.done = True
             return
@@ -492,17 +422,12 @@ class FilterClustersJob(Job):
     def __init__(self, user: User, maximum_distance: float):
         super().__init__()
         self.concurrency_limit_type = ConcurrencyLimitType.GLOBAl
-        self.user_id = user.id
+        self.user = user
         self.maximum_distance = maximum_distance
 
     def run(self):
-        user = User.query.get(self.user_id)
-        if not user:
-            self.done = True
-            return
-        
         # Get all GPS data for the user sorted by timestamp
-        gps_data: list[GPSData] = GPSData.query.filter_by(user_id=user.id).order_by(GPSData.timestamp).all()
+        gps_data: list[GPSData] = GPSData.query.filter_by(user_id=self.user.id).order_by(GPSData.timestamp).all()
         if not gps_data:
             self.done = True
             return
@@ -544,15 +469,10 @@ class ImportJob(Job):
 
     def __init__(self, user: User, import_obj: Import):
         super().__init__()
-        self.user_id = user.id
+        self.user = user
         self.import_obj = import_obj
 
     def run(self):
-        user = User.query.get(self.user_id)
-        if not user:
-            self.done = True
-            return
-
         # Read the file and parse the GPS data
         with open(Config.UPLOAD_FOLDER + "/" + self.import_obj.filename, "r") as f:
             data = f.read()
@@ -586,7 +506,7 @@ class ImportJob(Job):
                 continue
 
             gps_record = GPSData(
-                user_id=user.id,
+                user_id=self.user.id,
                 import_id=self.import_obj.id,
                 timestamp=ts,
                 latitude=lat,
@@ -632,16 +552,11 @@ class DeleteDuplicatesJob(Job):
     def __init__(self, user: User):
         super().__init__()
         self.concurrency_limit_type = ConcurrencyLimitType.GLOBAl
-        self.user_id = user.id
+        self.user = user
 
     def run(self):
-        user = User.query.get(self.user_id)
-        if not user:
-            self.done = True
-            return
-
         # Get all GPS data for the user sorted by timestamp
-        gps_data: list[GPSData] = GPSData.query.filter_by(user_id=user.id).order_by(GPSData.timestamp).all()
+        gps_data: list[GPSData] = GPSData.query.filter_by(user_id=self.user.id).order_by(GPSData.timestamp).all()
         if not gps_data:
             self.done = True
             return

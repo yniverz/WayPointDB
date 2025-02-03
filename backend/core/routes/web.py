@@ -90,12 +90,13 @@ class JobsView(MethodView):
                 time_left_str = f"{time_left // (60*60*24):.0f}d " + time_left_str
             
             jobs.append((
-                job[0], 
+                job[0].id if job[0] else None, 
                 job[1], 
                 job[2], 
                 progress, 
                 time_passed_str,
-                time_left_str
+                time_left_str,
+                job[0].email if job[0] else None
             ))
 
 
@@ -671,7 +672,7 @@ class MapView(MethodView):
 
         if not last_point:
             # Some default coords
-            last_point = {"id": -1, "lat": 52.516310, "lon": 13.378208}
+            last_point = {"id": -1, "lat": 52.516310, "lng": 13.378208}
 
         else:
             last_point = {
@@ -714,9 +715,6 @@ class MapView(MethodView):
 
         except ValueError:
             return jsonify({"error": "Invalid bounds"}), 400
-
-        # if None in [ne_lat, ne_lng, sw_lat, sw_lng]:
-        #     return jsonify({"error": "Invalid or missing bounds"}), 400
         
 
         user = g.current_user
@@ -752,7 +750,6 @@ class MapView(MethodView):
             time_delta = (datetime.fromisoformat(end_date) - datetime.fromisoformat(start_date)).total_seconds()
 
         if ne_lat is None and ne_lng is None and sw_lat is None and sw_lng is None:
-            print("LOLOLOL")
             query = f"""
                 WITH filtered_data AS (
                     SELECT id, user_id, timestamp, latitude, longitude, horizontal_accuracy,
@@ -772,26 +769,6 @@ class MapView(MethodView):
             """
         
         elif time_delta != 0 and time_delta < 60 * 60 * 25:
-            # query = f"""
-            #     WITH filtered_data AS (
-            #         SELECT id, user_id, timestamp, latitude, longitude, horizontal_accuracy,
-            #             altitude, vertical_accuracy, heading, heading_accuracy, speed, speed_accuracy,
-            #             ROW_NUMBER() OVER (ORDER BY timestamp) AS row_num
-            #         FROM gps_data
-            #         WHERE user_id = '{user.id}'
-            #         {date_filter}
-            #     ),
-            #     row_count AS (
-            #         SELECT COUNT(*) AS total FROM filtered_data
-            #     )
-            #     SELECT id, user_id, timestamp, latitude, longitude, horizontal_accuracy,
-            #         altitude, vertical_accuracy, heading, heading_accuracy, speed, speed_accuracy
-            #     FROM filtered_data
-            #     WHERE row_num % (SELECT GREATEST(1, total / {max_points_count}) FROM row_count) = 1
-            #     OR (SELECT total FROM row_count) < {max_points_count}
-            #     ORDER BY timestamp;
-            # """
-
             query = f"""
                 SELECT id, user_id, timestamp, latitude, longitude, horizontal_accuracy,
                     altitude, vertical_accuracy, heading, heading_accuracy, speed, speed_accuracy
@@ -802,40 +779,6 @@ class MapView(MethodView):
                 {filters}
                 ORDER BY timestamp;
             """
-
-        #     # query = f"""
-        #     #     SELECT id, user_id, timestamp, latitude, longitude, horizontal_accuracy,
-        #     #         altitude, vertical_accuracy, heading, heading_accuracy, speed, speed_accuracy,
-        #     #         ROW_NUMBER() OVER (ORDER BY timestamp) AS row_num,
-        #     #         COUNT(*) OVER () AS total
-        #     #     FROM gps_data
-        #     #     WHERE user_id = '{user.id}'
-        #     #     AND latitude BETWEEN {sw_lat} AND {ne_lat}
-        #     #     AND longitude BETWEEN {sw_lng} AND {ne_lng}
-        #     #     {date_filter}
-        #     #     ORDER BY timestamp;
-        #     # """
-
-        # elif zoom > 18:
-        #     query = f"""
-        #         WITH filtered_data AS (
-        #             SELECT id, user_id, timestamp, latitude, longitude, horizontal_accuracy,
-        #                 altitude, vertical_accuracy, heading, heading_accuracy, speed, speed_accuracy,
-        #                 ROW_NUMBER() OVER (ORDER BY timestamp) AS row_num,
-        #                 COUNT(*) OVER () AS total
-        #             FROM gps_data
-        #             WHERE user_id = '{user.id}'
-        #             AND latitude BETWEEN {sw_lat} AND {ne_lat}
-        #             AND longitude BETWEEN {sw_lng} AND {ne_lng}
-        #             {filters}
-        #         )
-        #         SELECT id, user_id, timestamp, latitude, longitude, horizontal_accuracy,
-        #             altitude, vertical_accuracy, heading, heading_accuracy, speed, speed_accuracy
-        #         FROM filtered_data
-        #         WHERE total <= {max_points_count} 
-        #         OR row_num % CEIL(total::FLOAT / {max_points_count})::INTEGER = 1
-        #         ORDER BY timestamp;
-        #     """
         else:
             query = f"""
                 WITH filtered_data AS (
@@ -921,17 +864,15 @@ class SpeedMapView(MethodView):
 
         last_point: GPSData = GPSData.query.filter_by(user_id=user.id).order_by(GPSData.timestamp.desc()).first()
 
-        return render_template("speed_map.jinja", latitude=last_point.latitude, longitude=last_point.longitude)
+        if not last_point:
+            last_point = {"latitude": 52.516310, "longitude": 13.378208}
+        else:
+            last_point = {"latitude": last_point.latitude, "longitude": last_point.longitude}
 
+        return render_template("speed_map.jinja", latitude=last_point["latitude"], longitude=last_point["longitude"])
+    
     def post(self):
-        #param point id will allways be set, will define the viewed point.
-        # will return all the points around the point with a defined margin amount of points in each direction
-
         user = g.current_user
-
-        # point_id = request.form.get("point_id")
-        # date = request.form.get("date") # format: "YYYY-MM-DD"
-        # time = request.form.get("time") # format: "HH:MM:SS"
 
         # get them from post body json
         data: dict = request.json
@@ -1008,8 +949,6 @@ class ManageUsersView(MethodView):
         
         action = request.form.get("action")
 
-        print(request.form)
-
         if action == "remove_user":
             user_id = request.form.get("user_id")
 
@@ -1041,6 +980,22 @@ class ManageUsersView(MethodView):
             new_user.set_password(password)
             db.session.add(new_user)
             db.session.commit()
+
+        elif action == "change_password":
+            user_id = request.form.get("user_id")
+            password = request.form.get("password")
+
+            if not user_id or not password:
+                return "Missing user_id or password", 400
+
+            user: User = User.query.filter_by(id=user_id).first()
+            if not user:
+                return "User not found", 404
+
+            user.set_password(password)
+            db.session.commit()
+
+            return "OK", 200
 
         return redirect(url_for("web.manage_users"))
 
