@@ -615,6 +615,8 @@ class ImportJob(Job):
         if new_records:
             db.session.bulk_save_objects(new_records)
             db.session.commit()
+        
+        self.import_obj.done_importing = True
 
         self.done = True
 

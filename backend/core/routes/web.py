@@ -513,7 +513,7 @@ class ImportsView(MethodView):
         user = g.current_user
 
         # Fetch all 'Import' records for this user
-        raw_imports = Import.query.filter_by(user_id=user.id).order_by(Import.created_at.desc()).all()
+        raw_imports: list[Import] = Import.query.filter_by(user_id=user.id).order_by(Import.created_at.desc()).all()
 
         imports = []
         for imp in raw_imports:
@@ -522,7 +522,8 @@ class ImportsView(MethodView):
                 "name": imp.original_filename,
                 "created_at": imp.created_at,
                 "total_entries": imp.total_entries,
-                "total_imported": GPSData.query.filter_by(user_id=user.id, import_id=imp.id).count()
+                "total_imported": GPSData.query.filter_by(user_id=user.id, import_id=imp.id).count(),
+                "done_importing": imp.done_importing,
             })
 
 

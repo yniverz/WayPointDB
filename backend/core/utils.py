@@ -4,6 +4,8 @@ import flask
 
 from flask import session, redirect, url_for, g
 from functools import wraps
+
+import psycopg2
 from .models import User
 from .config import Config
 from .models import GPSData, Import, User, db
@@ -50,6 +52,25 @@ def get_current_user():
 
 def create_default_user():
     """Create a default admin user if none exists."""
+
+    # db.engine.execute("ALTER TABLE import ADD COLUMN done_importing BOOLEAN DEFAULT FALSE")
+    # # set it to true for all existing imports
+    # db.engine.execute("UPDATE import SET done_importing = TRUE")
+
+    conn = psycopg2.connect(
+        dbname=Config.DB_NAME,
+        user=Config.DB_USER,
+        password=Config.DB_PASS,
+        host=Config.DB_HOST
+    )
+    cursor = conn.cursor()
+
+    cursor.execute("ALTER TABLE import ADD COLUMN done_importing BOOLEAN DEFAULT FALSE")
+    cursor.execute("UPDATE import SET done_importing = TRUE")
+    conn.commit()
+    cursor.close()
+    conn.close()
+
     db.create_all()
 
     # make sure the tables conform to the latest schema

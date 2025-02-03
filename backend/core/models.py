@@ -28,6 +28,7 @@ class Import(db.Model):
     original_filename = db.Column(db.String(255), nullable=True)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.now(timezone.utc))
     total_entries = db.Column(db.Integer, default=0)
+    done_importing = db.Column(db.Boolean, default=True)
 
     user = db.relationship("User", backref=db.backref("imports", lazy=True))
 
