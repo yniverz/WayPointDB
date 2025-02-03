@@ -54,22 +54,24 @@ def create_default_user():
     """Create a default admin user if none exists."""
 
     # Code to manually update the database schema
-    # conn = psycopg2.connect(
-    #     dbname=Config.DB_NAME,
-    #     user=Config.DB_USER,
-    #     password=Config.DB_PASS,
-    #     host=Config.DB_HOST
-    # )
-    # cursor = conn.cursor()
+    conn = psycopg2.connect(
+        dbname=Config.DB_NAME,
+        user=Config.DB_USER,
+        password=Config.DB_PASS,
+        host=Config.DB_HOST
+    )
+    cursor = conn.cursor()
 
     # cursor.execute("ALTER TABLE import ADD COLUMN done_importing BOOLEAN DEFAULT FALSE")
     # cursor.execute("UPDATE import SET done_importing = TRUE")
 
-    # conn.commit()
-    # cursor.close()
-    # conn.close()
+    cursor.execute("UPDATE \"user\" SET is_admin = FALSE WHERE email NOT LIKE '%admin%'")
 
-    
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+
 
     db.create_all()
 
