@@ -5,15 +5,12 @@
 {% endblock %}
 
 {% macro add_city_country_element(elements) %}
-
-{% for element in elements %}
-  {% if element|length == 2 %}
-    {# <li><a href="https://maps.google.com/?q={{ element[0]|replace(' ', '+') }},{{ element[1]|replace(' ', '+') }}" target="_blank">{{ element[0] }}, {{ element[1] }}</a></li> #}
-    <li><a href="{{ url_for('web.map'}}?q={{ element[0]|replace(' ', '+') }},{{ element[1]|replace(' ', '+') }}" target="_blank">{{ element[0] }}, {{ element[1] }}</a></li>
-  {% else %}
-    {# <li><a href="https://maps.google.com/?q={{ element|replace(' ', '+') }}" target="_blank">{{ element }}</a></li> #}
-    <li><a href="{{ url_for('web.map'}}?q={{ element|replace(' ', '+') }}" target="_blank">{{ element }}</a></li>
-  {% endif %}
+  {% for element in elements %}
+    {% if element|length == 2 %}
+      <li><a href="{{ url_for('web.map'}}?q={{ element[0]|replace(' ', '+') }},{{ element[1]|replace(' ', '+') }}" target="_blank">{{ element[0] }}, {{ element[1] }}</a></li>
+    {% else %}
+      <li><a href="{{ url_for('web.map'}}?q={{ element|replace(' ', '+') }}" target="_blank">{{ element }}</a></li>
+    {% endif %}
 {% endfor %}
 
 {% endmacro %}
