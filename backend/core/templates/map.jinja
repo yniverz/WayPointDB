@@ -505,13 +505,13 @@ GPS Map
         const startDate = params.get('start_date');
         const endDate = params.get('end_date');
 
-        const autoMove = params.get('view_location') !== 'true';
+        const prevent_auto_move = params.get('view_location') === 'true';
 
         if (startDate && endDate) {
             document.getElementById("start-date").value = startDate;
             document.getElementById("end-date").value = endDate;
             fetchGPSData(true, true);
-        } else if (autoMove) {
+        } else if (prevent_auto_move) {
             params.delete('view_location');
             window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
             fetchGPSData(true, false);
