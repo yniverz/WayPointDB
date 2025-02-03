@@ -57,12 +57,14 @@ GPS Imports
                     <td>{{ imp.total_entries }}</td>
                     <td>{{ imp.total_imported }}</td>
                     <td>
-                        <!-- Start Import Job -->
-                        <form method="POST" style="display:inline;">
-                            <input type="hidden" name="action" value="start_import">
-                            <input type="hidden" name="import_id" value="{{ imp.id }}">
-                            <button type="submit">Start Import Job</button>
-                        </form>
+                        {% if not imp.done_importing %}
+                            <!-- Start Import Job -->
+                            <form method="POST" style="display:inline;">
+                                <input type="hidden" name="action" value="start_import">
+                                <input type="hidden" name="import_id" value="{{ imp.id }}">
+                                <button type="submit">Start Import Job</button>
+                            </form>
+                        {% endif %}
                         
                         <!-- Delete Import (with confirmation) -->
                         <form method="POST" style="display:inline;" onsubmit="return confirmDelete();">
