@@ -656,8 +656,15 @@ class MapView(MethodView):
                     feature = res["features"][0]
                     geometry = feature.get("geometry", {})
                     coords = geometry.get("coordinates", [])
+                    properties = feature.get("properties", {})
+                    type = properties.get("type")
+
+                    zoom = 13
+                    if type == "country":
+                        zoom = 6
+
                     if len(coords) == 2:
-                        return redirect(url_for("web.map")+f"?lat={coords[1]}&lng={coords[0]}&zoom=13&view_location=true")
+                        return redirect(url_for("web.map")+f"?lat={coords[1]}&lng={coords[0]}&zoom={zoom}&view_location=true")
             except Exception as e:
                 traceback.print_exc()
                 pass
