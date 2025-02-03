@@ -6,10 +6,18 @@
 
 {% macro add_city_country_element(elements) %}
   {% for element in elements %}
-    {% if element|length == 2 %}
-      <li><a href="{{ url_for('web.map') }}?q={{ element[0]|replace(' ', '+') }},{{ element[1]|replace(' ', '+') }}" target="_blank">{{ element[0] }}, {{ element[1] }}</a></li>
+    {% if is_photon_connected %}
+      {% if element|length == 2 %}
+        <li><a href="{{ url_for('web.map') }}?q={{ element[0]|replace(' ', '+') }},{{ element[1]|replace(' ', '+') }}" target="_blank">{{ element[0] }}, {{ element[1] }}</a></li>
+      {% else %}
+        <li><a href="{{ url_for('web.map') }}?q={{ element|replace(' ', '+') }}" target="_blank">{{ element }}</a></li>
+      {% endif %}
     {% else %}
-      <li><a href="{{ url_for('web.map') }}?q={{ element|replace(' ', '+') }}" target="_blank">{{ element }}</a></li>
+      {% if element|length == 2 %}
+        <li><p>{{ element[0] }}, {{ element[1] }}</p></li>
+      {% else %}
+        <li><p>{{ element }}</p></li>
+      {% endif %}
     {% endif %}
 {% endfor %}
 
@@ -117,7 +125,7 @@
       <small>Total points</small>
     </div>
 
-    {% if is_photon_connected %}
+    {% if is_photon_connected or total_cities|length > 0 or total_countries|length > 0 %}
     <div>
       <p style="color: #00aa6e">{{ total_geocoded }}</p>
       <small>Total reverse geocoded<br>
@@ -147,7 +155,7 @@
   </div>
 
 
-  {% if is_photon_connected %}
+  {% if is_photon_connected or total_cities|length > 0 or total_countries|length > 0 %}
   <!-- Overall modal -->
   <div class="modal fade" id="modal-cities" tabindex="-1" aria-labelledby="modalLabelAll" aria-hidden="true">
     <div class="modal-dialog">
@@ -195,7 +203,7 @@
       <!-- two elements next to each other horizontally -->
       <div style="display: flex; font-size: 0.8em; color: #6c757d;">
         <p>{{ data.total_distance|round(2) }} km</p>
-        {% if is_photon_connected %}
+        {% if is_photon_connected or total_cities|length > 0 or total_countries|length > 0 %}
         <p style="margin-left: auto; margin-right: 0;"><p class="stat-button" data-bs-toggle="modal" data-bs-target="#modal-countries-{{ year }}">{{ data.countries|length }}</p>&nbsp; countries,&nbsp; <p class="stat-button" data-bs-toggle="modal" data-bs-target="#modal-cities-{{ year }}">{{ data.cities|length }}</p>&nbsp; cities</p>
         {% endif %}
       </div>

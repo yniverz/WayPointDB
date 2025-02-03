@@ -16,7 +16,7 @@
       <small>Total points</small>
     </div>
 
-    {% if is_photon_connected %}
+    {% if is_photon_connected or total_cities|length > 0 or total_countries|length > 0 %}
     <div>
         <p style="color: #ffbe00" class="stat-button" data-bs-toggle="modal" data-bs-target="#modal-countries-year">
             {{ total_countries|length }}
@@ -33,7 +33,7 @@
     {% endif %}
 </div>
 
-{% if is_photon_connected %}
+{% if is_photon_connected or total_cities|length > 0 or total_countries|length > 0 %}
 <!-- All-Cities modal -->
 <div class="modal fade" id="modal-cities-year" tabindex="-1" aria-labelledby="modalLabelCitiesAll" aria-hidden="true">
     <div class="modal-dialog">
@@ -87,7 +87,7 @@
       <!-- quick overview for that month -->
       <div style="display: flex; font-size: 0.8em; color: #6c757d;">
         <p>{{ data.total_distance|round(2) }} km</p>
-        {% if is_photon_connected %}
+        {% if is_photon_connected or total_cities|length > 0 or total_countries|length > 0 %}
         <p style="margin-left: auto; margin-right: 0;">
           <span class="stat-button" data-bs-toggle="modal" data-bs-target="#modal-countries-{{ month }}">{{ data.countries|length }}</span> countries,
           <span class="stat-button" data-bs-toggle="modal" data-bs-target="#modal-cities-{{ month }}">{{ data.cities|length }}</span> cities
