@@ -511,13 +511,14 @@ GPS Map
             document.getElementById("start-date").value = startDate;
             document.getElementById("end-date").value = endDate;
             fetchGPSData(true, true);
-        } else {
-            setDateRange('today', autoMove);
-        }
-        if (autoMove) {
+        } else if (autoMove) {
             params.delete('view_location');
             window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
+            fetchGPSData(true, false);
+        } else {
+            setDateRange('today');
         }
+        
     }
 
     // ------------- HEATMAP TOGGLING -------------
