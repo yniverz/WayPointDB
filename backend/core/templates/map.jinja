@@ -465,7 +465,7 @@ GPS Map
             .catch(error => console.error("Error deleting point:", error));
     }
 
-    function setDateRange(range, fetch_after = true) {
+    function setDateRange(range, fetch_after = true, full_date_range = true) {
         let today = new Date();
         let startDate, endDate;
 
@@ -496,7 +496,7 @@ GPS Map
         updateURLParams(startDate, endDate);
 
         if (fetch_after) {
-            fetchGPSData(true, true);
+            fetchGPSData(true, full_date_range);
         }
     }
 
@@ -514,7 +514,7 @@ GPS Map
         } else if (prevent_auto_move) {
             params.delete('view_location');
             window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
-            fetchGPSData(true, false);
+            setDateRange('all', false);
         } else {
             setDateRange('today');
         }
