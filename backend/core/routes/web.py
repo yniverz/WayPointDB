@@ -660,7 +660,7 @@ class MapView(MethodView):
                     type = properties.get("type")
 
                     zoom = 13
-                    if type == "country":
+                    if type in ["country", "state"]:
                         zoom = 6
 
                     if len(coords) == 2:
