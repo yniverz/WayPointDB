@@ -142,7 +142,8 @@ Points Overview
                             <!-- Checkbox for each row -->
                             <input type="checkbox" name="selected_points" value="{{ point.id }}">
                         </td>
-                        <td><a href="{{ url_for('web.map') }}?point_id={{ point.id }}&start_date={{ point.timestamp|split(' ')[0] }}&end_date={{ point.timestamp|split(' ')[0] }}">{{ point.timestamp }}</a></td>
+                        {% set date, _ = point.timestamp.split(' ') %}
+                        <td><a href="{{ url_for('web.map') }}?point_id={{ point.id }}&start_date={{ date }}&end_date={{ date }}">{{ point.timestamp }}</a></td>
                         <td>{{ point.latitude }}</td>
                         <td>{{ point.longitude }}</td>
                         <td>{{ point.speed }}</td>
