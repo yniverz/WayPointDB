@@ -7,7 +7,11 @@
 {% macro add_city_country_element(elements) %}
 
 {% for element in elements %}
-  <li><a href="https://maps.google.com/?q={{ element|replace(' ', '+') }}" target="_blank">{{ element }}</a></li>
+  {% if element is iterable %}
+    <li><a href="https://maps.google.com/?q={{ element[0]|replace(' ', '+') }}" target="_blank">{{ element[0] }} ({{ element[1] }})</a></li>
+  {% else %}
+    <li><a href="https://maps.google.com/?q={{ element|replace(' ', '+') }}" target="_blank">{{ element }}</a></li>
+  {% endif %}
 {% endfor %}
 
 {% endmacro %}
