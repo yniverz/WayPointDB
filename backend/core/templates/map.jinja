@@ -465,7 +465,7 @@ GPS Map
             .catch(error => console.error("Error deleting point:", error));
     }
 
-    function setDateRange(range) {
+    function setDateRange(range, fetch_after = true) {
         let today = new Date();
         let startDate, endDate;
 
@@ -494,7 +494,10 @@ GPS Map
         document.getElementById("end-date").value = endDate;
 
         updateURLParams(startDate, endDate);
-        fetchGPSData(true, true);
+
+        if (fetch_after) {
+            fetchGPSData(true, true);
+        }
     }
 
     function loadDateFromURL() {
@@ -508,12 +511,13 @@ GPS Map
             document.getElementById("start-date").value = startDate;
             document.getElementById("end-date").value = endDate;
             fetchGPSData(true, true);
-        } else if (autoMove) {
-            setDateRange('today');
-            return;
+        } else{
+            setDateRange('today', !autoMove);
         }
-        params.delete('view_location');
-        window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
+        if (autoMove) {
+            params.delete('view_location');
+            window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
+        }
     }
 
     // ------------- HEATMAP TOGGLING -------------
