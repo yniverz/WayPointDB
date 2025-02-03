@@ -1028,7 +1028,7 @@ class ManageUsersView(MethodView):
         elif action == "add_user":
             email = request.form.get("email")
             password = request.form.get("password")
-            is_admin = "is_admin" in request.form
+            is_admin = request.form.get("is_admin").lower() == "true"
 
             if not email or not password:
                 return "Missing email or password", 400
