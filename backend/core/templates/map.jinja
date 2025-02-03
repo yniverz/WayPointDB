@@ -502,13 +502,18 @@ GPS Map
         const startDate = params.get('start_date');
         const endDate = params.get('end_date');
 
+        const autoMove = params.get('view_location') !== 'true';
+
         if (startDate && endDate) {
             document.getElementById("start-date").value = startDate;
             document.getElementById("end-date").value = endDate;
             fetchGPSData(true, true);
-        } else {
+        } else if (autoMove) {
             setDateRange('today');
+            return;
         }
+        params.delete('view_location');
+        window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
     }
 
     // ------------- HEATMAP TOGGLING -------------
