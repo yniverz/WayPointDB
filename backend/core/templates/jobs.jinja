@@ -28,6 +28,7 @@
             <div class="button-group">
                 <button onclick="startJob('photon_full')" title="Query Photon to reverse geocode, and overwrite any existing records">Geocode all points</button>
                 <button onclick="startJob('photon_fill')" title="Only query points which havent yet been reverse geocoded">Geocode new points</button>
+                <button onclick="startJob('reset_no_geocoding')" title="Reset to retry points with no geocoding data">Reset No Geocoding</button>
             </div>
         </div>
         {% endif %}
