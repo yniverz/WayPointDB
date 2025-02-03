@@ -8,9 +8,11 @@
 
 {% for element in elements %}
   {% if element|length == 2 %}
-    <li><a href="https://maps.google.com/?q={{ element[0]|replace(' ', '+') }},{{ element[1]|replace(' ', '+') }}" target="_blank">{{ element[0] }}, {{ element[1] }}</a></li>
+    {# <li><a href="https://maps.google.com/?q={{ element[0]|replace(' ', '+') }},{{ element[1]|replace(' ', '+') }}" target="_blank">{{ element[0] }}, {{ element[1] }}</a></li> #}
+    <li><a href="{{ url_for('web.map'}}?q={{ element[0]|replace(' ', '+') }},{{ element[1]|replace(' ', '+') }}" target="_blank">{{ element[0] }}, {{ element[1] }}</a></li>
   {% else %}
-    <li><a href="https://maps.google.com/?q={{ element|replace(' ', '+') }}" target="_blank">{{ element }}</a></li>
+    {# <li><a href="https://maps.google.com/?q={{ element|replace(' ', '+') }}" target="_blank">{{ element }}</a></li> #}
+    <li><a href="{{ url_for('web.map'}}?q={{ element|replace(' ', '+') }}" target="_blank">{{ element }}</a></li>
   {% endif %}
 {% endfor %}
 
@@ -191,7 +193,7 @@
   <div class="charts-container">
   {% for year, data in stats_by_year.items() %}
     <div class="chart-container">
-      <p style="margin-bottom: 10px;"><a href="/stats/{{ year }}"><strong>{{ year }}</strong></a> <a style="color: #6c757d;" href="/map?start_date={{ year }}-01-01&end_date={{ year }}-12-31"><strong>[Map]</strong></a></p>
+      <p style="margin-bottom: 10px;"><a href="{{ url_for('web.yearly_stats', year=year) }}"><strong>{{ year }}</strong></a> <a style="color: #6c757d;" href="/map?start_date={{ year }}-01-01&end_date={{ year }}-12-31"><strong>[Map]</strong></a></p>
 
       <!-- two elements next to each other horizontally -->
       <div style="display: flex; font-size: 0.8em; color: #6c757d;">
