@@ -638,7 +638,8 @@ class MapView(MethodView):
     decorators = [login_required]
 
     def get_geocode(self, query):
-        url = f"{Config.PHOTON_SERVER_HOST}/api/?q={query}&limit=1"
+        url = "https://" if Config.PHOTON_SERVER_HTTPS else "http://"
+        url += f"{Config.PHOTON_SERVER_HOST}/api/?q={query}&limit=1"
         res = requests.get(url, headers={"X-Api-Key": Config.PHOTON_SERVER_API_KEY})
         return res.json()
 
