@@ -175,7 +175,8 @@ class StatsView(MethodView):
 
             # Update visited cities / countries (they are stored in JSON columns)
             if stat.visited_cities:
-                stats_by_year[year]["cities"].update(stat.visited_cities)
+
+                stats_by_year[year]["cities"].update([tuple(city) for city in stat.visited_cities])
             if stat.visited_countries:
                 stats_by_year[year]["countries"].update(stat.visited_countries)
 
@@ -257,7 +258,7 @@ class YearlyStatsView(MethodView):
 
             # Update visited cities / countries (they are stored in JSON columns)
             if stat.visited_cities:
-                stats_by_month[month]["cities"].update(stat.visited_cities)
+                stats_by_month[month]["cities"].update([tuple(city) for city in stat.visited_cities])
             if stat.visited_countries:
                 stats_by_month[month]["countries"].update(stat.visited_countries)
 
