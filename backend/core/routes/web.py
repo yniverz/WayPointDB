@@ -12,6 +12,7 @@ from flask import (
     session, g, jsonify
 )
 from flask.views import MethodView
+import requests
 from sqlalchemy import func
 
 from ..background.jobs import JOB_TYPES, GenerateFullStatisticsJob, ImportJob
@@ -636,8 +637,24 @@ class ImportsView(MethodView):
 class MapView(MethodView):
     decorators = [login_required]
 
+    def get_geocode(self, query):
+        url = f"{Config.PHOTON_SERVER_HOST}/api/?q={query}&limit=1"
+        res = requests.get(url, headers={"X-Api-Key": Config.PHOTON_SERVER_API_KEY})
+        return res.json()
+
     def get(self):
         user = g.current_user
+
+        if request.args.get("q") and Config.PHOTON_SERVER_HOST:
+            res = self.get_geocode(request.args.get("q"))
+
+            if res.get("features"):
+                feature = res["features"][0]
+                geometry = feature.get("geometry", {})
+                coords = geometry.get("coordinates", [])
+                if len(coords) == 2:
+                    return redirect(url_for("web.map")+f"?lat={coords[1]}&lng={coords[0]}&zoom=13")
+                
 
         point_id = request.args.get("point_id")
 
