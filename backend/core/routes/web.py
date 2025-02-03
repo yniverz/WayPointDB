@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 import math
 import os
 import re
+import traceback
 import uuid
 import time
 import psycopg2
@@ -647,14 +648,18 @@ class MapView(MethodView):
         user = g.current_user
 
         if request.args.get("q") and Config.PHOTON_SERVER_HOST:
-            res = self.get_geocode(request.args.get("q"))
+            try:
+                res = self.get_geocode(request.args.get("q"))
 
-            if res.get("features"):
-                feature = res["features"][0]
-                geometry = feature.get("geometry", {})
-                coords = geometry.get("coordinates", [])
-                if len(coords) == 2:
-                    return redirect(url_for("web.map")+f"?lat={coords[1]}&lng={coords[0]}&zoom=13")
+                if res.get("features"):
+                    feature = res["features"][0]
+                    geometry = feature.get("geometry", {})
+                    coords = geometry.get("coordinates", [])
+                    if len(coords) == 2:
+                        return redirect(url_for("web.map")+f"?lat={coords[1]}&lng={coords[0]}&zoom=13")
+            except Exception as e:
+                traceback.print_exc()
+                pass
                 
 
         point_id = request.args.get("point_id")
