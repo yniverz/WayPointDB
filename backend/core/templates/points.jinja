@@ -130,7 +130,7 @@ Points Overview
                     <th>Timestamp</th>
                     <th>Latitude</th>
                     <th>Longitude</th>
-                    <th>Speed (m/s)</th>
+                    <th>Speed (km/h)</th>
                     {# <th>Actions</th> #}
                 </tr>
             </thead>
@@ -144,9 +144,9 @@ Points Overview
                         </td>
                         {% set date = point.timestamp.strftime("%Y-%m-%d") %}
                         <td><a href="{{ url_for('web.map') }}?point_id={{ point.id }}&start_date={{ date }}&end_date={{ date }}">{{ point.timestamp }}</a></td>
-                        <td>{{ point.latitude }}</td>
-                        <td>{{ point.longitude }}</td>
-                        <td>{{ point.speed }}</td>
+                        <td>{{ point.latitude|round(8) }}</td>
+                        <td>{{ point.longitude|round(8) }}</td>
+                        <td>{{ point.speed * 3.6|round(2) }}</td>
                     </tr>
                     {% endfor %}
                 {% else %}
