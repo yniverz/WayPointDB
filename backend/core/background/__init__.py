@@ -62,24 +62,45 @@ class JobManager:
 
             try:
                 if len(self.threads) < self.config.BACKGROUND_MAX_THREADS:
-                    for user in [job.user for job in self.queued_jobs + self.running_jobs]:
-                        concurrent_types = [job.concurrency_limit_type for job in self.running_jobs if job.concurrency_limit_type != None and job.user in [None, user]]
-                        if self.queued_jobs and ConcurrencyLimitType.GLOBAl not in concurrent_types:
-                            to_remove = []
-                            for job in self.queued_jobs:
-                                if job.concurrency_limit_type in concurrent_types and job.user not in [None, user]:
-                                    continue
+                    running_global_types = [job.concurrency_limit_type for job in self.running_jobs if job.user is None]
+                    running_user_types = [str(job.user.email)+str(job.concurrency_limit_type) for job in self.running_jobs if job.user is not None]
 
-                                job.running = True
-                                job.start_time = time.time()
-                                job.thread = threading.Thread(target=self.run_safely, args=(job,))
-                                job.thread.start()
-                                self.threads.append(job.thread)
-                                self.running_jobs.append(job)
-                                to_remove.append(job)
 
-                            for job in to_remove:
-                                self.queued_jobs.remove(job)
+                    for job in self.queued_jobs:
+                        if job.concurrency_limit_type in running_global_types or (job.user is not None and str(job.user.email)+str(job.concurrency_limit_type) in running_user_types):
+                            continue
+
+                        job.running = True
+                        job.start_time = time.time()
+                        job.thread = threading.Thread(target=self.run_safely, args=(job,))
+                        job.thread.start()
+                        self.threads.append(job.thread)
+                        self.running_jobs.append(job)
+
+                    self.queued_jobs = [job for job in self.queued_jobs if job not in self.running_jobs]
+
+
+
+
+
+                    # for user in [job.user for job in self.queued_jobs + self.running_jobs]:
+                    #     concurrent_types = [job.concurrency_limit_type for job in self.running_jobs if job.concurrency_limit_type != None and job.user in [None, user]]
+                    #     if self.queued_jobs and ConcurrencyLimitType.GLOBAl not in concurrent_types:
+                    #         to_remove = []
+                    #         for job in self.queued_jobs:
+                    #             if job.concurrency_limit_type in concurrent_types and job.user not in [None, user]:
+                    #                 continue
+
+                    #             job.running = True
+                    #             job.start_time = time.time()
+                    #             job.thread = threading.Thread(target=self.run_safely, args=(job,))
+                    #             job.thread.start()
+                    #             self.threads.append(job.thread)
+                    #             self.running_jobs.append(job)
+                    #             to_remove.append(job)
+
+                    #         for job in to_remove:
+                    #             self.queued_jobs.remove(job)
 
                 for job in self.running_jobs:
                     if job.done:
