@@ -62,7 +62,7 @@ class JobManager:
 
             try:
                 if len(self.threads) < self.config.BACKGROUND_MAX_THREADS:
-                    for user in User.query.all():
+                    for user in [job.user for job in self.queued_jobs + self.running_jobs]:
                         concurrent_types = [job.concurrency_limit_type for job in self.running_jobs if job.concurrency_limit_type != None and job.user in [None, user]]
                         if self.queued_jobs and ConcurrencyLimitType.GLOBAl not in concurrent_types:
                             to_remove = []
