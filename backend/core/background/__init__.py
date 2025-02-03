@@ -62,23 +62,24 @@ class JobManager:
 
             try:
                 if len(self.threads) < self.config.BACKGROUND_MAX_THREADS:
-                    concurrent_types = [job.concurrency_limit_type for job in self.running_jobs if job.concurrency_limit_type != None]
-                    if self.queued_jobs and ConcurrencyLimitType.GLOBAl not in concurrent_types:
-                        to_remove = []
-                        for job in self.queued_jobs:
-                            if job.concurrency_limit_type in concurrent_types:
-                                continue
+                    for user in User.query.all():
+                        concurrent_types = [job.concurrency_limit_type for job in self.running_jobs if job.concurrency_limit_type != None and job.user in [None, user]]
+                        if self.queued_jobs and ConcurrencyLimitType.GLOBAl not in concurrent_types:
+                            to_remove = []
+                            for job in self.queued_jobs:
+                                if job.concurrency_limit_type in concurrent_types and job.user not in [None, user]:
+                                    continue
 
-                            job.running = True
-                            job.start_time = time.time()
-                            job.thread = threading.Thread(target=self.run_safely, args=(job,))
-                            job.thread.start()
-                            self.threads.append(job.thread)
-                            self.running_jobs.append(job)
-                            to_remove.append(job)
+                                job.running = True
+                                job.start_time = time.time()
+                                job.thread = threading.Thread(target=self.run_safely, args=(job,))
+                                job.thread.start()
+                                self.threads.append(job.thread)
+                                self.running_jobs.append(job)
+                                to_remove.append(job)
 
-                        for job in to_remove:
-                            self.queued_jobs.remove(job)
+                            for job in to_remove:
+                                self.queued_jobs.remove(job)
 
                 for job in self.running_jobs:
                     if job.done:
