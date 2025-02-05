@@ -46,6 +46,7 @@
             <div class="button-group">
                 <button onclick="startJob('delete_duplicates')" title="Usefull in the case of bugs in tracking for example">Delete Duplicates</button>
                 <button onclick="startJob('filter_accuracy', 'Enter the maximum meter accuracy that should be allowed in the dataset', 'maximum_accuracy', '500')" title="Will remove points with horizontal accuracy greater than set value">Filter Large Accuracy</button>
+                <button onclick="startJob('filter_speed', 'Enter the maximum speed that should be allowed in the dataset (km/h)', 'maximum_speed_kmh', '1000')" title="Will remove points with speed greater than set value. Useful to generate speed data first.">Filter Large Speed</button>
                 <button onclick="startJob('filter_clusters', 'Enter the minimum distance between points that is allowed in the dataset', 'maximum_distance', '14')" title="Will remove points closer than set distance to each other">Reduce Clusters</button>
             </div>
         </div>
