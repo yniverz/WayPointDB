@@ -781,8 +781,6 @@ class MapView(MethodView):
                     altitude, vertical_accuracy, heading, heading_accuracy, speed, speed_accuracy
                 FROM gps_data
                 WHERE user_id = '{user.id}'
-                AND latitude BETWEEN {sw_lat} AND {ne_lat}
-                AND longitude BETWEEN {sw_lng} AND {ne_lng}
                 {filters}
                 ORDER BY timestamp;
             """
