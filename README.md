@@ -11,6 +11,18 @@ WayPointDB is focused on fast and efficient data collection and retrieval, so th
     - Server side rendering for fast page loads
 - Dockerized deployment
 
+<i>Map page</i>
+![Screenshot of the Map page](screenshot01.jpg)
+
+<i>Stats page</i>
+![Screenshot of the Stats page](screenshot02.jpg)
+
+<i>Import page</i>
+![Screenshot of the Import page](screenshot03.jpg)
+
+<i>Lifetime Heatmap</i>
+![Screenshot of the Lifetime Heatmap](screenshot04.jpg)
+
 ## Prerequisites
 To run this project, you could use the following tools:
 - [Docker](https://www.docker.com/)
