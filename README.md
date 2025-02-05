@@ -37,15 +37,21 @@ The first port is the port at which WayPointDB is accessible, and can be customi
 ### First Steps
 The project can be accessed by navigating to the IP address of the host machine on the specified port. Log in with the default credentials: ```admin@example.com``` and ```password```. The E-Mail and password can be changed in the ```Account``` page and is strongly recommended.
 
-### API
-An API key for each user can be generated in the respective ```Account``` page, and is required for API requests.
-
-WayPointDB has a Swagger API documentation page that can be accessed by navigating to ```/api/v1/docs```.
-
 ### Data Collection
 There are currently two ways to collect GPS data using a mobile device:
 - Using the Overland app, which can be configured to send data to WayPointDB using the ```/api/v1/gps/overland``` API endpoint
 - Using the [WayPointDB iOS App](https://github.com/yniverz/WayPointDB-iOS) which however has to be built and installed yourself as it is not available on the App Store
+
+### Imports
+GPS data can be imported from a json file using the ```Import``` page, accessible from the ```Account``` page. The json file should be in a specific format, and an example can be found on the import page.
+
+#### Common Formats
+You can import GPS data from various sources, such as <b>Google Timeline</b> and <b>GPX</b> files. In order to do so, you need to transform the data to the required format. WayPointDB provides a transformation tool that can be accessed by visiting the ```/static/transform``` page and selecting the appropriate format.
+
+### API
+An API key for each user can be generated in the respective ```Account``` page, and is required for API requests.
+
+WayPointDB has a Swagger API documentation page that can be accessed by navigating to ```/api/v1/docs```.
 
 ### Users
 Users can be added, edited, and deleted in the ```Manage Users``` page. Only ```admin``` users can view this page.
