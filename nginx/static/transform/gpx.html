@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPX Transformer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            background-color: #f4f4f9;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        input[type="file"] {
+            margin: 10px 0;
+        }
+        button {
+            padding: 10px 20px;
+            margin-top: 10px;
+            border: none;
+            background-color: #007BFF;
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>GPX Export</h1>
+        <p>Upload your .gpx file to convert it to a format that can be used with WayPointDB.</p>
+        <input type="file" id="gpxFile" accept=".gpx">
+        <button onclick="processGPX()">Transform and Download</button>
+    </div>
+
+    <script>
+        function processGPX() {
+            const fileInput = document.getElementById('gpxFile');
+            const file = fileInput.files[0];
+
+            if (!file) {
+                alert('Please upload a GPX file first.');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                try {
+                    const parser = new DOMParser();
+                    const xmlDoc = parser.parseFromString(event.target.result, "application/xml");
+                    const transformedData = transformGPX(xmlDoc);
+                    downloadJSON(transformedData, 'transformed.json');
+                } catch (error) {
+                    alert('Invalid GPX file. Please upload a valid GPX.');
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function transformGPX(xmlDoc) {
+            const trkpts = xmlDoc.getElementsByTagName('trkpt');
+            const fullTrace = [];
+
+            for (let i = 0; i < trkpts.length; i++) {
+                const trkpt = trkpts[i];
+                const lat = parseFloat(trkpt.getAttribute('lat'));
+                const lon = parseFloat(trkpt.getAttribute('lon'));
+                const timeElement = trkpt.getElementsByTagName('time')[0];
+                const time = timeElement ? timeElement.textContent : null;
+
+                const hdopElement = trkpt.getElementsByTagName('hdop')[0];
+                const accuracy = hdopElement ? parseFloat(hdopElement.textContent) : null;
+
+                const tracePoint = {
+                    timestamp: time,
+                    latitude: lat,
+                    longitude: lon
+                };
+
+                if (accuracy !== null) {
+                    tracePoint.accuracy = accuracy;
+                }
+
+                fullTrace.push(tracePoint);
+            }
+
+            return fullTrace;
+        }
+
+        function downloadJSON(data, filename) {
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        }
+    </script>
+</body>
+</html>
