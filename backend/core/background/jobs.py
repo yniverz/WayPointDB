@@ -15,7 +15,7 @@ from ..extensions import db
 
 
 class ConcurrencyLimitType:
-    GLOBAl = "global"
+    GLOBAl = None
     PHOTON = "photon"
     GENERATE_STATS = "generate_stats"
 
@@ -412,6 +412,52 @@ class FilterLargeAccuracyJob(Job):
 
 
 
+class FilterLargeSpeedJob(Job):
+    PARAMETERS = {
+        "user": User,
+        "maximum_speed_kmh": float
+    }
+
+    def __init__(self, user: User, maximum_speed_kmh: float):
+        super().__init__()
+        self.concurrency_limit_type = ConcurrencyLimitType.GLOBAl
+        self.user = user
+        self.maximum_speed = maximum_speed_kmh / 3.6
+
+    def run(self):
+        gps_data: list[GPSData] = GPSData.query.filter_by(user_id=self.user.id).order_by(GPSData.timestamp).all()
+        if not gps_data:
+            self.done = True
+            return
+        
+        i = 0
+        total_count = len(gps_data)
+        deleted = 1
+        delete_buffer = []
+        for data in gps_data:
+            if self.stop_requested:
+                break
+
+            if data.speed is not None and data.speed > self.maximum_speed:
+                delete_buffer.append(data)
+            else:
+                while delete_buffer:
+                    db.session.delete(delete_buffer.pop(0))
+                    deleted += 1
+
+            i += 1
+            self.progress = (i / total_count)
+
+            if deleted % 1000 == 0:
+                db.session.commit()
+                deleted = 1
+
+        db.session.commit()
+
+        self.done = True
+
+
+
 
 class FilterClustersJob(Job):
     PARAMETERS = {
@@ -596,6 +642,7 @@ JOB_TYPES: dict[str, Job] = {
     "full_stats": GenerateFullStatisticsJob,
     "speed_data": GenerateSpeedDataJob,
     "filter_accuracy": FilterLargeAccuracyJob,
+    "filter_speed": FilterLargeSpeedJob,
     "filter_clusters": FilterClustersJob,
     "delete_duplicates": DeleteDuplicatesJob,
     "reset_no_geocoding": ResetPointsWithNoGeocodingJob,
