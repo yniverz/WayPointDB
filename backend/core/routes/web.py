@@ -1110,3 +1110,4 @@ web_bp.add_url_rule("/manage_users", view_func=ManageUsersView.as_view("manage_u
 web_bp.add_url_rule("/account", view_func=AccountView.as_view("account"), methods=["GET", "POST"])
 web_bp.add_url_rule("/jobs", view_func=JobsView.as_view("jobs"), methods=["GET", "POST"])
 web_bp.add_url_rule("/imports", view_func=ImportsView.as_view("imports"), methods=["GET", "POST"])
+web_bp.add_url_rule("/exports", view_func=ExportsView.as_view("exports"), methods=["GET", "POST"])
