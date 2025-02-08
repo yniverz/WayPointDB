@@ -1,0 +1,19 @@
+{% extends "base.jinja" %}
+
+{% block heading %}
+Export GPS Data
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>Export GPS Data</h2>
+    <p>
+        Click the button below to generate and download all your GPS points in JSON format.
+        This export will be streamed to your browser so that large downloads don’t time out.
+    </p>
+
+    <form method="POST" action="{{ url_for('web.exports') }}">
+        <button type="submit" class="btn btn-primary">Download JSON Export</button>
+    </form>
+</div>
+{% endblock %}

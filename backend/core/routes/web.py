@@ -9,7 +9,7 @@ import time
 import psycopg2
 import json
 from flask import (
-    Blueprint, render_template, request, redirect, url_for, 
+    Blueprint, Response, render_template, request, redirect, stream_with_context, url_for, 
     session, g, jsonify
 )
 from flask.views import MethodView
@@ -633,6 +633,74 @@ class ImportsView(MethodView):
             os.remove(file_path)
 
         return redirect(url_for("web.imports"))
+
+
+
+class ExportsView(MethodView):
+    decorators = [login_required]
+
+    def get(self):
+        # Render a simple page that has a button to trigger the download
+        return render_template("exports.jinja")
+
+    def post(self):
+        user = g.current_user
+
+        # Query all GPSData for the current user.
+        # Use 'yield_per' to minimize memory usage for large tables:
+        points_query = (
+            GPSData.query
+            .filter_by(user_id=user.id)
+            .order_by(GPSData.timestamp.asc())
+            .yield_per(1000)
+        )
+
+        def generate_json():
+            """
+            A generator function to stream JSON in a memory-efficient way.
+            We'll manually build a JSON array of objects, yielding piece by piece.
+            """
+            yield '['
+            first = True
+
+            for point in points_query:
+                if not first:
+                    # Separate JSON objects with a comma
+                    yield ','
+                else:
+                    first = False
+
+                # Build a dict for each GPSData row
+                item = {
+                    "timestamp": point.timestamp.isoformat() if point.timestamp else None,
+                    "latitude": point.latitude,
+                    "longitude": point.longitude,
+                    "horizontal_accuracy": point.horizontal_accuracy,
+                    "altitude": point.altitude,
+                    "vertical_accuracy": point.vertical_accuracy,
+                    "heading": point.heading,
+                    "heading_accuracy": point.heading_accuracy,
+                    "speed": point.speed,
+                    "speed_accuracy": point.speed_accuracy,
+                    "reverse_geocoded": point.reverse_geocoded,
+                    "city": point.city,
+                    "country": point.country,
+                }
+                yield json.dumps(item, separators=(',', ':'))
+
+            yield ']'
+
+        # Wrap the generator in a streaming response
+        response = Response(
+            stream_with_context(generate_json()),
+            mimetype='application/json'
+        )
+        # Force a download with the given filename
+        response.headers['Content-Disposition'] = 'attachment; filename="gps_export.json"'
+
+        return response
+
+
 
 
 
