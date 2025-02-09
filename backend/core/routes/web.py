@@ -184,10 +184,10 @@ class StatsView(MethodView):
             # Update visited cities / countries (they are stored in JSON columns)
             if stat.visited_cities:
                 stats_by_year[year]["cities"].update([tuple(city) for city in stat.visited_cities])
-                last_visit_cities.update([(tuple(city), f"{stat.year}-{stat.month:02d}-{stat.day:02d}") for city in stat.visited_cities])
+                last_visit_cities.update([(tuple(city), f"{stat.day:02d}-{stat.month:02d}-{stat.year}") for city in stat.visited_cities])
             if stat.visited_countries:
                 stats_by_year[year]["countries"].update(stat.visited_countries)
-                last_visit_countries.update([(country, f"{stat.year}-{stat.month:02d}-{stat.day:02d}") for country in stat.visited_countries])
+                last_visit_countries.update([(country, f"{stat.day:02d}-{stat.month:02d}-{stat.year}") for country in stat.visited_countries])
 
             # Track total distance in meters for each year
             stats_by_year[year]["total_distance"] += stat.total_distance_m
