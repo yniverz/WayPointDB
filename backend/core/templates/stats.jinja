@@ -11,12 +11,12 @@
         <li class="info-tooltip" >
           <a href="{{ url_for('web.map') }}?q={{ element[0]|replace(' ', '+') }},{{ element[1]|replace(' ', '+') }}" target="_blank">{{ element[0] }}, {{ element[1] }}</a>
           <span class="info-tooltip-text">Last visit: {{ last_visit_cities[element] }}</span>
-        </li>
+        </li><br>
       {% else %}
         <li class="info-tooltip">
           <a href="{{ url_for('web.map') }}?q={{ element|replace(' ', '+') }}" target="_blank">{{ element }}</a>
           <span class="info-tooltip-text">Last visit: {{ last_visit_countries[element] }}</span>
-        </li>
+        </li><br>
       {% endif %}
     {% else %}
       {% if element|length == 2 %}
