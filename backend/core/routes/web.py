@@ -171,8 +171,8 @@ class StatsView(MethodView):
 
         stats.sort(key=lambda x: (x.year, x.month, x.day))
 
-        last_visit_cities = set()
-        last_visit_countries = set()
+        last_visit_cities = dict()
+        last_visit_countries = dict()
 
         for stat in stats:
             year = stat.year
