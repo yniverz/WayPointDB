@@ -192,9 +192,9 @@ class StatsView(MethodView):
 
             # Track last visit cities / countries
             if stat.visited_cities:
-                last_visit_cities.update([(tuple(city), stat.timestamp.strftime("%Y-%m-%d")) for city in stat.visited_cities])
+                last_visit_cities.update([(tuple(city), f"{stat.year}-{stat.month:02d}-{stat.day:02d}") for city in stat.visited_cities])
             if stat.visited_countries:
-                last_visit_countries.update([(country, stat.timestamp.strftime("%Y-%m-%d")) for country in stat.visited_countries])
+                last_visit_countries.update([(country, f"{stat.year}-{stat.month:02d}-{stat.day:02d}") for country in stat.visited_countries])
 
         # Collect overall unique sets across **all** years
         all_cities = set()
