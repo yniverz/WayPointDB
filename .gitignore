@@ -6,6 +6,8 @@
 # Apple files
 .DS_Store
 
+old/
+
 # User-specific files
 *.rsuser
 *.suo
