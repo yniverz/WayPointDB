@@ -191,10 +191,7 @@ class StatsView(MethodView):
 
             # Track total distance in meters for each year
             stats_by_year[year]["total_distance"] += stat.total_distance_m
-
-
-        print(last_visit_cities)
-        print(last_visit_countries)
+            
 
         # Collect overall unique sets across **all** years
         all_cities = set()
