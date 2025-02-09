@@ -169,6 +169,10 @@ class StatsView(MethodView):
             "total_distance": 0.0
         })
 
+
+        last_visit_cities = set()
+        last_visit_countries = set()
+
         for stat in stats:
             year = stat.year
             month_idx = stat.month - 1  # January -> 0, etc.
@@ -185,6 +189,12 @@ class StatsView(MethodView):
 
             # Track total distance in meters for each year
             stats_by_year[year]["total_distance"] += stat.total_distance_m
+
+            # Track last visit cities / countries
+            if stat.visited_cities:
+                last_visit_cities.update([(tuple(city), stat.timestamp.strftime("%Y-%m-%d")) for city in stat.visited_cities])
+            if stat.visited_countries:
+                last_visit_countries.update([(country, stat.timestamp.strftime("%Y-%m-%d")) for country in stat.visited_countries])
 
         # Collect overall unique sets across **all** years
         all_cities = set()
@@ -205,11 +215,14 @@ class StatsView(MethodView):
                 "total_distance": int(data["total_distance"] / 1000.0),  # store in KM
             }
 
+
         return render_template(
             "stats.jinja",
             stats_by_year=stats_by_year_processed,   # Dict of years → aggregated data
             total_cities=sorted(list(all_cities)),
             total_countries=sorted(list(all_countries)),
+            last_visit_cities=last_visit_cities,
+            last_visit_countries=last_visit_countries,
             total_distance=f"{total_distance / 1000.0:,.0f}",  # Convert to KM
             total_points=f"{total_points:,}",
             is_photon_connected=len(Config.PHOTON_SERVER_HOST) != 0,
