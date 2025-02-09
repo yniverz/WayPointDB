@@ -756,7 +756,11 @@ class MapView(MethodView):
                 "lng": last_point.longitude
             }
 
-        return render_template("map.jinja", last_point=last_point)
+        earliest_point: GPSData = GPSData.query.filter_by(user_id=user.id).order_by(GPSData.timestamp.asc()).first()
+        earliest_year = earliest_point.timestamp.year if earliest_point else None
+        earliest_month = earliest_point.timestamp.month if earliest_point else None
+
+        return render_template("map.jinja", last_point=last_point, earliest_year=earliest_year, earliest_month=earliest_month)
 
     def is_valid_date_format(self, s):
         pattern = r"^\d{4}-\d{2}-\d{2}$"
