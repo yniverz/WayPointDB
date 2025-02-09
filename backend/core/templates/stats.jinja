@@ -15,7 +15,7 @@
       {% else %}
         <li class="info-tooltip">
           <a href="{{ url_for('web.map') }}?q={{ element|replace(' ', '+') }}" target="_blank">{{ element }}</a>
-          <span class="info-tooltip-text">Last visit: {{ last_visit_countries["United States"] }}</span>
+          <span class="info-tooltip-text">Last visit: {{ last_visit_countries[element] }}</span>
         </li><br>
       {% endif %}
     {% else %}
