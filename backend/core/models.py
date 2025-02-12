@@ -30,7 +30,7 @@ class Import(db.Model):
     total_entries = db.Column(db.Integer, default=0)
     done_importing = db.Column(db.Boolean, default=True)
 
-    user = db.relationship("User", backref=db.backref("imports", lazy=True))
+    # user = db.relationship("User", backref=db.backref("imports", lazy=True))
 
 
 class GPSData(db.Model):
@@ -59,7 +59,7 @@ class GPSData(db.Model):
     street_number = db.Column(db.String(255))
 
 
-    user = db.relationship("User", backref=db.backref("gps_data", lazy=True))
+    # user = db.relationship("User", backref=db.backref("gps_data", lazy=True))
 
 
 
@@ -75,4 +75,4 @@ class DailyStatistic(db.Model):
     visited_cities = db.Column(db.JSON, default=[])
 
 
-    user = db.relationship("User", backref=db.backref("daily_stats", lazy=True))
+    # user = db.relationship("User", backref=db.backref("daily_stats", lazy=True))
