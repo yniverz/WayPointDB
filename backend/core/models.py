@@ -7,6 +7,8 @@ from sqlalchemy.dialects.postgresql import UUID
 
 class User(db.Model):
     """Simple User model with is_admin boolean and a single API key."""
+    __tablename__ = "user"
+
     id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     email = db.Column(db.String(255), unique=True, nullable=False)
     password = db.Column(db.String(255), nullable=False)
@@ -20,8 +22,20 @@ class User(db.Model):
         return check_password_hash(self.password, raw_password)
     
 
+class AdditionalTrace(db.Model):
+    """Stores additional traces for a user."""
+    __tablename__ = "additional_trace"
+
+    id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = db.Column(db.String(255), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    user_id_list = db.Column(db.JSON, default=[])
+    
+
 class Import(db.Model):
     """Stores information about a GPS data import."""
+    __tablename__ = "import"
+
     id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = db.Column(UUID(as_uuid=True), db.ForeignKey("user.id"), nullable=False)
     filename = db.Column(db.String(255), nullable=False)
@@ -35,8 +49,11 @@ class Import(db.Model):
 
 class GPSData(db.Model):
     """Stores GPS data tied to a user."""
+    __tablename__ = "gps_data"
+
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    user_id = db.Column(UUID(as_uuid=True), db.ForeignKey("user.id"), nullable=False)
+    user_id = db.Column(UUID(as_uuid=True), db.ForeignKey("user.id"), nullable=True)
+    trace_id = db.Column(UUID(as_uuid=True), db.ForeignKey("trace.id"), nullable=True)
     import_id = db.Column(UUID(as_uuid=True), db.ForeignKey("import.id"), nullable=True)
 
     timestamp = db.Column(db.DateTime, nullable=False, default=datetime.now(timezone.utc))
@@ -61,10 +78,17 @@ class GPSData(db.Model):
 
     # user = db.relationship("User", backref=db.backref("gps_data", lazy=True))
 
+    __table_args__ = (
+        db.CheckConstraint("user_id IS NOT NULL OR trace_id IS NOT NULL"),
+    )
+
+
 
 
 class DailyStatistic(db.Model):
     """Stores daily statistics for a user."""
+    __tablename__ = "daily_statistic"
+
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     user_id = db.Column(UUID(as_uuid=True), db.ForeignKey("user.id"), nullable=False)
     year = db.Column(db.Integer, nullable=False)

@@ -53,30 +53,39 @@ def get_current_user():
 def create_default_user():
     """Create a default admin user if none exists."""
 
-    # # Code to manually update the database schema
-    # conn = psycopg2.connect(
-    #     dbname=Config.DB_NAME,
-    #     user=Config.DB_USER,
-    #     password=Config.DB_PASS,
-    #     host=Config.DB_HOST
-    # )
-    # cursor = conn.cursor()
-
-    # # cursor.execute("ALTER TABLE import ADD COLUMN done_importing BOOLEAN DEFAULT FALSE")
-    # # cursor.execute("UPDATE import SET done_importing = TRUE")
-
-    # # cursor.execute("UPDATE \"user\" SET is_admin = FALSE WHERE email NOT LIKE '%admin%'")
-
-    # conn.commit()
-    # cursor.close()
-    # conn.close()
-
-
-
     db.create_all()
 
     # make sure the tables conform to the latest schema
     db.session.commit()
+
+
+
+    # Code to manually update the database schema
+    conn = psycopg2.connect(
+        dbname=Config.DB_NAME,
+        user=Config.DB_USER,
+        password=Config.DB_PASS,
+        host=Config.DB_HOST
+    )
+    cursor = conn.cursor()
+
+    #user_id = db.Column(UUID(as_uuid=True), db.ForeignKey("user.id"), nullable=True) # change nullable to true
+    cursor.execute("ALTER TABLE gps_data ALTER COLUMN user_id DROP NOT NULL")
+
+    #trace_id = db.Column(UUID(as_uuid=True), db.ForeignKey("trace.id"), nullable=True)
+    cursor.execute("ALTER TABLE gps_data ADD COLUMN trace_id UUID")
+
+
+
+    # cursor.execute("UPDATE import SET done_importing = TRUE")
+
+    # cursor.execute("UPDATE \"user\" SET is_admin = FALSE WHERE email NOT LIKE '%admin%'")
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+
 
     # if no user with is_admin=True exists, create one
     existing_admin = User.query.filter_by(is_admin=True).first()
