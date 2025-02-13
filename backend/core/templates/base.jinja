@@ -204,6 +204,9 @@
         function setTraceId(traceId) {
             fetch("{{ url_for('web.set_trace_id') }}", {
                 method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
                 body: "trace_id=" + traceId,
             }).then(() => {
                 location.reload();

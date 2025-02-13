@@ -2,13 +2,14 @@ from datetime import datetime
 import json
 from threading import Thread
 import traceback
+from typing import Optional
 import uuid
 from flask import Flask
 import requests
 import time
 import geopy.distance
 
-from ..models import DailyStatistic, GPSData, Import, User
+from ..models import AdditionalTrace, DailyStatistic, GPSData, Import, User
 from . import Config
 from ..extensions import db
 
@@ -148,6 +149,10 @@ class PhotonFullJob(QueryPhotonJob):
 
     def run(self):
         points = GPSData.query.filter_by(user_id=self.user.id).all()
+
+        additional_traces = AdditionalTrace.query.filter_by(owner_id=self.user.id).all()
+        points += [point for trace in additional_traces for point in GPSData.query.filter_by(trace_id=trace.id).all()]
+
         point_ids = [point.id for point in points]
         self.point_ids = point_ids
         super().run()
@@ -163,6 +168,10 @@ class PhotonFillJob(QueryPhotonJob):
 
     def run(self):
         points = GPSData.query.filter_by(user_id=self.user.id, reverse_geocoded=False).all()
+
+        additional_traces = AdditionalTrace.query.filter_by(owner_id=self.user.id).all()
+        points += [point for trace in additional_traces for point in GPSData.query.filter_by(trace_id=trace.id, reverse_geocoded=False).all()]
+
         point_ids = [point.id for point in points]
         self.point_ids = point_ids
         super().run()
@@ -181,6 +190,9 @@ class ResetPointsWithNoGeocodingJob(Job):
 
     def run(self):
         points: list[GPSData] = GPSData.query.filter_by(user_id=self.user.id, reverse_geocoded=True, country=None).all()
+
+        additional_traces = AdditionalTrace.query.filter_by(owner_id=self.user.id).all()
+        points += [point for trace in additional_traces for point in GPSData.query.filter_by(trace_id=trace.id, reverse_geocoded=True, country=None).all()]
 
         i = 0
         total_count = len(points)
@@ -212,27 +224,21 @@ class GenerateSpeedDataJob(Job):
         super().__init__()
         self.user = user
 
-    def run(self):
-        # Get all GPS data for the user sorted by timestamp
-        gps_data: list[GPSData] = GPSData.query.filter_by(user_id=self.user.id).order_by(GPSData.timestamp).all()
-        if not gps_data:
-            self.done = True
-            return
-        
+    def generate_speed(self, points: list[GPSData], points_done=0, total_points=0):
+
         i = 0
-        total_count = len(gps_data)
         added = 1
-        for data in gps_data:
+        for data in points:
             if self.stop_requested:
                 break
 
             if data.speed is not None and data.speed > 0:
                 i += 1
-                self.progress = (i / total_count)
+                self.progress = ((points_done + i) / total_points)
                 continue
 
             if i > 0:
-                prev = gps_data[i - 1]
+                prev = points[i - 1]
                 distance = geopy.distance.distance((prev.latitude, prev.longitude), (data.latitude, data.longitude)).m
                 time_diff = (data.timestamp - prev.timestamp).total_seconds()
                 if time_diff > 0:
@@ -244,9 +250,27 @@ class GenerateSpeedDataJob(Job):
                 added = 1
 
             i += 1
-            self.progress = (i / total_count)
+            self.progress = ((points_done + i) / total_points)
 
         db.session.commit()
+
+    def run(self):
+        gps_data = GPSData.query.filter_by(user_id=self.user.id).order_by(GPSData.timestamp).all()
+        additional_traces = AdditionalTrace.query.filter_by(owner_id=self.user.id).all()
+        additional_traces = [GPSData.query.filter_by(trace_id=trace.id).order_by(GPSData.timestamp).all() for trace in additional_traces]
+
+        total_points = len(gps_data) + sum([len(trace) for trace in additional_traces])
+        points_done = 0
+
+        if gps_data:
+            self.generate_speed(gps_data, total_points=total_points)
+            points_done += len(gps_data)
+        
+        for trace_data in additional_traces:
+            if trace_data:
+                self.generate_speed(trace_data, points_done=points_done, total_points=total_points)
+                points_done += len(trace_data)
+        
 
         self.done = True
 
@@ -382,8 +406,10 @@ class FilterLargeAccuracyJob(Job):
         self.maximum_accuracy = maximum_accuracy
 
     def run(self):
-        # Get all GPS data for the user sorted by timestamp
-        gps_data: list[GPSData] = GPSData.query.filter_by(user_id=self.user.id).order_by(GPSData.timestamp).all()
+        gps_data: list[GPSData] = GPSData.query.filter_by(user_id=self.user.id).all()
+        additional_traces = AdditionalTrace.query.filter_by(owner_id=self.user.id).all()
+        gps_data += [point for trace in additional_traces for point in GPSData.query.filter_by(trace_id=trace.id).all()]
+
         if not gps_data:
             self.done = True
             return
@@ -425,7 +451,10 @@ class FilterLargeSpeedJob(Job):
         self.maximum_speed = maximum_speed_kmh / 3.6
 
     def run(self):
-        gps_data: list[GPSData] = GPSData.query.filter_by(user_id=self.user.id).order_by(GPSData.timestamp).all()
+        gps_data: list[GPSData] = GPSData.query.filter_by(user_id=self.user.id).all()
+        additional_traces = AdditionalTrace.query.filter_by(owner_id=self.user.id).all()
+        gps_data += [point for trace in additional_traces for point in GPSData.query.filter_by(trace_id=trace.id).all()]
+
         if not gps_data:
             self.done = True
             return
@@ -510,13 +539,15 @@ class FilterClustersJob(Job):
 class ImportJob(Job):
     PARAMETERS = {
         "user": User,
-        "import": Import
+        "import": Import,
+        "trace": Optional[AdditionalTrace]
     }
 
-    def __init__(self, user: User, import_obj: Import):
+    def __init__(self, user: User, import_obj: Import, trace: Optional[AdditionalTrace] = None):
         super().__init__()
         self.user = user
         self.import_obj = import_obj
+        self.trace = trace
 
     def run(self):
         # Read the file and parse the GPS data
@@ -551,8 +582,12 @@ class ImportJob(Job):
             if (ts, lat, lon) in existing_points:
                 continue
 
+            kwarg = {"user_id": self.user.id}
+            if self.trace:
+                kwarg = {"trace_id": self.trace.id}
+
             gps_record = GPSData(
-                user_id=self.user.id,
+                **kwarg,
                 import_id=self.import_obj.id,
                 timestamp=ts,
                 latitude=lat,
@@ -603,6 +638,9 @@ class DeleteDuplicatesJob(Job):
     def run(self):
         # Get all GPS data for the user sorted by timestamp
         gps_data: list[GPSData] = GPSData.query.filter_by(user_id=self.user.id).order_by(GPSData.timestamp).all()
+        additional_traces = AdditionalTrace.query.filter_by(owner_id=self.user.id).all()
+        gps_data += [point for trace in additional_traces for point in GPSData.query.filter_by(trace_id=trace.id).order_by(GPSData.timestamp).all()]
+
         if not gps_data:
             self.done = True
             return
