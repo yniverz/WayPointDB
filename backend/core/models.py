@@ -57,7 +57,7 @@ class Import(db.Model):
     original_filename = db.Column(db.String(255), nullable=True)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.now(timezone.utc))
     total_entries = db.Column(db.Integer, default=0)
-    done_importing = db.Column(db.Boolean, default=True)
+    done_importing = db.Column(db.Boolean, default=False)
 
     __table_args__ = (
         db.CheckConstraint("user_id IS NOT NULL OR trace_id IS NOT NULL"),
