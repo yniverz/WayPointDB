@@ -26,7 +26,7 @@ def login_required(f):
             return login_with_old_page()
 
         g.current_trace = get_current_trace()
-        
+
         g.trace_query = {"user_id": g.current_user.id}
         if g.current_trace:
             g.trace_query = {"trace_id": g.current_trace.id}
@@ -107,6 +107,7 @@ def create_default_user():
     # cursor.execute("ALTER TABLE daily_statistic ADD COLUMN trace_id UUID")
     # cursor.execute("ALTER TABLE additional_trace ADD COLUMN owner_id UUID NOT NULL")
     # cursor.execute("ALTER TABLE additional_trace RENAME COLUMN user_id_list TO share_with_list")
+    cursor.execute("ALTER TABLE import ADD COLUMN trace_id UUID")
 
 
 

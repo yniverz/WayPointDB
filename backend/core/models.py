@@ -14,8 +14,6 @@ class User(db.Model):
     email = db.Column(db.String(255), unique=True, nullable=False)
     password = db.Column(db.String(255), nullable=False)
     is_admin = db.Column(db.Boolean, default=False)
-    # api_key = db.Column(db.String(255), unique=True, nullable=True)
-    # api_keys = db.Column(db.JSON, default=[]) # [ (key, optional trace_id) ]
     api_keys = db.Column(MutableList.as_mutable(JSON), default=list[tuple[str, str]])
 
     def set_password(self, raw_password):
@@ -53,12 +51,17 @@ class Import(db.Model):
     __tablename__ = "import"
 
     id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = db.Column(UUID(as_uuid=True), db.ForeignKey("user.id"), nullable=False)
+    user_id = db.Column(UUID(as_uuid=True), db.ForeignKey("user.id"), nullable=True)
+    trace_id = db.Column(UUID(as_uuid=True), db.ForeignKey("additional_trace.id"), nullable=True)
     filename = db.Column(db.String(255), nullable=False)
     original_filename = db.Column(db.String(255), nullable=True)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.now(timezone.utc))
     total_entries = db.Column(db.Integer, default=0)
     done_importing = db.Column(db.Boolean, default=True)
+
+    __table_args__ = (
+        db.CheckConstraint("user_id IS NOT NULL OR trace_id IS NOT NULL"),
+    )
 
 
 class GPSData(db.Model):

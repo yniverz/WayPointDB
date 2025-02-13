@@ -16,7 +16,7 @@ from flask.views import MethodView
 import requests
 from sqlalchemy import func
 
-from ..background.jobs import JOB_TYPES, GenerateFullStatisticsJob, ImportJob
+from ..background.jobs import JOB_TYPES, ImportJob
 from ..background import job_manager
 from ..models import DailyStatistic, Import, User, GPSData, db, AdditionalTrace
 from ..utils import login_required
@@ -148,10 +148,10 @@ class StatsView(MethodView):
         trace = g.current_trace
         
 
-        total_points = GPSData.query.filter_by(user_id=user.id).count()
-        total_geocoded = GPSData.query.filter_by(user_id=user.id).filter(GPSData.reverse_geocoded == True).count()
-        total_not_geocoded = GPSData.query.filter_by(user_id=user.id).filter(GPSData.reverse_geocoded == True).filter(GPSData.country == None).count()
-        stats: list[DailyStatistic] = DailyStatistic.query.filter_by(user_id=user.id).all()
+        total_points = GPSData.query.filter_by(**g.trace_query).count()
+        total_geocoded = GPSData.query.filter_by(**g.trace_query).filter(GPSData.reverse_geocoded == True).count()
+        total_not_geocoded = GPSData.query.filter_by(**g.trace_query).filter(GPSData.reverse_geocoded == True).filter(GPSData.country == None).count()
+        stats: list[DailyStatistic] = DailyStatistic.query.filter_by(**g.trace_query).all()
 
         # We'll group stats by year
         stats_by_year = defaultdict(lambda: {
@@ -242,9 +242,9 @@ class YearlyStatsView(MethodView):
         if not year:
             return "Missing year", 400
         
-        total_points = GPSData.query.filter_by(user_id=user.id).filter(func.extract("year", GPSData.timestamp) == year).count()
+        total_points = GPSData.query.filter_by(**g.trace_query).filter(func.extract("year", GPSData.timestamp) == year).count()
 
-        stats = DailyStatistic.query.filter_by(user_id=user.id, year=year).all()
+        stats = DailyStatistic.query.filter_by(**g.trace_query, year=year).all()
 
         # We'll group stats by month
         stats_by_month = defaultdict(lambda: {
@@ -301,88 +301,6 @@ class YearlyStatsView(MethodView):
         )
 
 
-# class PointsView(MethodView):
-#     decorators = [login_required]  # or your own login decorator
-
-#     def get(self):
-#         user = g.current_user
-
-#         # Single-date parameter
-#         the_date_str = request.args.get("date")
-#         import_id = request.args.get("import")
-#         now = datetime.now()
-
-#         if not the_date_str:
-#             # Default to today
-#             start_date = datetime(now.year, now.month, now.day, 0, 0, 0)
-#         else:
-#             # Parse user-provided date
-#             try:
-#                 parsed = datetime.strptime(the_date_str, "%Y-%m-%d")
-#                 start_date = datetime(parsed.year, parsed.month, parsed.day, 0, 0, 0)
-#             except ValueError:
-#                 # Fallback to today if error
-#                 start_date = datetime(now.year, now.month, now.day, 0, 0, 0)
-
-#         end_date = start_date + timedelta(hours=24)
-
-#         # Query user’s points from start_date to end_date
-#         points_query = GPSData.query.filter_by(user_id=user.id).filter(
-#             GPSData.timestamp >= start_date,
-#             GPSData.timestamp < end_date
-#         )
-
-#         if import_id:
-#             points_query = points_query.filter_by(import_id=import_id)
-
-#         # Sort newest -> oldest
-#         points = points_query.order_by(GPSData.timestamp.desc()).all()
-
-#         raw_imports = Import.query.filter_by(user_id=user.id).all()
-
-#         imports = []
-#         for imp in raw_imports:
-#             imports.append({
-#                 "id": imp.id,
-#                 "name": imp.original_filename,
-#             })
-
-#         return render_template("points.jinja", points=points, imports=imports)
-
-#     def post(self):
-#         user = g.current_user
-
-#         action = request.form.get("action", None)
-
-#         # if action == "delete_point":
-#         #     # Single-delete logic
-#         #     point_id = request.form.get("point_id")
-#         #     if not point_id:
-#         #         return "Missing point_id", 400
-
-#         #     point = GPSData.query.filter_by(id=point_id, user_id=user.id).first()
-#         #     if not point:
-#         #         return "Point not found or not yours", 404
-
-#         #     db.session.delete(point)
-#         #     db.session.commit()
-
-#         if action == "batch_delete":
-#             # Batch delete: get all selected point IDs
-#             selected_ids = request.form.getlist("selected_points")
-#             if selected_ids:
-#                 # Convert to int if needed
-#                 selected_ids = [int(x) for x in selected_ids if x.isdigit()]
-#                 # Delete all points matching these IDs for this user
-#                 GPSData.query.filter(
-#                     GPSData.user_id == user.id,
-#                     GPSData.id.in_(selected_ids)
-#                 ).delete(synchronize_session=False)
-#                 db.session.commit()
-
-#         # Keep the date param in the redirect so we stay on the same day
-#         return redirect(url_for("web.points", date=request.args.get("date", "")))
-
 class PointsView(MethodView):
     decorators = [login_required]  # Ensure the user is logged in
 
@@ -428,7 +346,7 @@ class PointsView(MethodView):
         end_date = start_date + timedelta(days=1)  # Use days=1 for clarity
 
         # Build the base query
-        points_query = GPSData.query.filter_by(user_id=user.id).filter(
+        points_query = GPSData.query.filter_by(**g.trace_query).filter(
             GPSData.timestamp >= start_date,
             GPSData.timestamp < end_date
         )
@@ -453,7 +371,7 @@ class PointsView(MethodView):
         points = points_query.order_by(GPSData.timestamp.desc()).offset(offset).limit(per_page).all()
 
         # Fetch imports for the selector
-        raw_imports = Import.query.filter_by(user_id=user.id).all()
+        raw_imports = Import.query.filter_by(**g.trace_query).all()
 
         imports = []
         for imp in raw_imports:
@@ -518,7 +436,7 @@ class ImportsView(MethodView):
         user = g.current_user
 
         # Fetch all 'Import' records for this user
-        raw_imports: list[Import] = Import.query.filter_by(user_id=user.id).order_by(Import.created_at.desc()).all()
+        raw_imports: list[Import] = Import.query.filter_by(**g.trace_query).order_by(Import.created_at.desc()).all()
 
         imports = []
         for imp in raw_imports:
@@ -527,7 +445,7 @@ class ImportsView(MethodView):
                 "name": imp.original_filename,
                 "created_at": imp.created_at,
                 "total_entries": imp.total_entries,
-                "total_imported": GPSData.query.filter_by(user_id=user.id, import_id=imp.id).count(),
+                "total_imported": GPSData.query.filter_by(**g.trace_query, import_id=imp.id).count(),
                 "done_importing": imp.done_importing,
             })
 
@@ -544,7 +462,7 @@ class ImportsView(MethodView):
         if action == "upload_json":
             return self.upload_json_file(user)
         elif action == "start_import":
-            return self.start_import_job(user)
+            return self.start_import_job(user, trace=g.current_trace)
         elif action == "delete_import":
             return self.delete_import(user)
         else:
@@ -578,10 +496,13 @@ class ImportsView(MethodView):
         except json.JSONDecodeError:
             return "Invalid JSON file", 400
         
+        kwarg = {"user_id": user.id}
+        if g.current_trace:
+            kwarg = {"trace_id": g.current_trace.id}
 
         # Create a new Import record
         new_import = Import(
-            user_id=user.id,
+            **kwarg,
             filename=unique_name,
             original_filename=filename,
             created_at=datetime.now(timezone.utc),
@@ -593,7 +514,7 @@ class ImportsView(MethodView):
         # Redirect back to /imports
         return redirect(url_for("web.imports"))
 
-    def start_import_job(self, user):
+    def start_import_job(self, user, trace=None):
         """Queue a background job to parse and insert data from the specified import."""
         import_id = request.form.get("import_id")
         if not import_id:
@@ -601,12 +522,14 @@ class ImportsView(MethodView):
 
         import_record = Import.query.filter_by(id=import_id, user_id=user.id).first()
         if not import_record:
-            return "Import not found or not yours", 404
+            import_record = Import.query.filter_by(id=import_id, trace_id=trace.id).first()
+            if not import_record:
+                return "Import not found or not yours", 404
 
         # Add job to job manager
         # The job itself (ImportJob) will handle reading the file from disk,
         # validating JSON, inserting GPSData, etc.
-        job_instance = ImportJob(user=user, import_obj=import_record)
+        job_instance = ImportJob(user=user, import_obj=import_record, trace=trace)
         job_manager.add_job(job_instance)
 
         return redirect(url_for("web.imports"))
@@ -619,11 +542,13 @@ class ImportsView(MethodView):
 
         import_record = Import.query.filter_by(id=import_id, user_id=user.id).first()
         if not import_record:
-            return "Import not found or not yours", 404
+            import_record = Import.query.filter_by(id=import_id, trace_id=g.current_trace.id).first()
+            if not import_record:
+                return "Import not found or not yours", 404
 
         # First delete associated GPSData by this import_id
         # Note the "import_id" in GPSData is a string field, so match accordingly
-        GPSData.query.filter_by(user_id=user.id, import_id=str(import_record.id)).delete(synchronize_session=False)
+        GPSData.query.filter_by(import_id=str(import_record.id)).delete(synchronize_session=False)
 
         # Remove the import record itself
         db.session.delete(import_record)
@@ -652,7 +577,7 @@ class ExportsView(MethodView):
         # Use 'yield_per' to minimize memory usage for large tables:
         points_query = (
             GPSData.query
-            .filter_by(user_id=user.id)
+            .filter_by(**g.trace_query)
             .order_by(GPSData.timestamp.asc())
             .yield_per(1000)
         )
@@ -743,9 +668,9 @@ class MapView(MethodView):
         point_id = request.args.get("point_id")
 
         if point_id:
-            last_point = GPSData.query.filter_by(id=point_id, user_id=user.id).first()
+            last_point = GPSData.query.filter_by(id=point_id, **g.trace_query).first()
         else:
-            last_point = GPSData.query.filter_by(user_id=user.id).order_by(GPSData.timestamp.desc()).first()
+            last_point = GPSData.query.filter_by(**g.trace_query).order_by(GPSData.timestamp.desc()).first()
 
         if not last_point:
             # Some default coords
@@ -758,7 +683,7 @@ class MapView(MethodView):
                 "lng": last_point.longitude
             }
 
-        earliest_point: GPSData = GPSData.query.filter_by(user_id=user.id).order_by(GPSData.timestamp.asc()).first()
+        earliest_point: GPSData = GPSData.query.filter_by(**g.trace_query).order_by(GPSData.timestamp.asc()).first()
         earliest_year = earliest_point.timestamp.year if earliest_point else None
         earliest_month = earliest_point.timestamp.month if earliest_point else None
 
@@ -915,7 +840,7 @@ class MapView(MethodView):
         point_id = request.args.get("id")
         if not point_id:
             return "Missing point_id", 400
-        point = GPSData.query.filter_by(id=point_id, user_id=user.id).first()
+        point = GPSData.query.filter_by(id=point_id, **g.trace_query).first()
         if not point:
             return "Point not found", 404
         db.session.delete(point)
@@ -930,7 +855,7 @@ class HeatMapDataView(MethodView):
 
         heatmap_query = GPSData.query.with_entities(
             func.json_agg(func.json_build_array(GPSData.latitude, GPSData.longitude))
-        ).filter_by(user_id=user.id).scalar()
+        ).filter_by(**g.trace_query).scalar()
 
         return heatmap_query, 200, {"Content-Type": "application/json"}
     
@@ -941,7 +866,7 @@ class SpeedMapView(MethodView):
         # get last point coordinates ordered by timestamp
         user = g.current_user
 
-        last_point: GPSData = GPSData.query.filter_by(user_id=user.id).order_by(GPSData.timestamp.desc()).first()
+        last_point: GPSData = GPSData.query.filter_by(**g.trace_query).order_by(GPSData.timestamp.desc()).first()
 
         if not last_point:
             last_point = {"latitude": 52.516310, "longitude": 13.378208}
@@ -960,7 +885,7 @@ class SpeedMapView(MethodView):
         time = data.get("time")
         
         if point_id:
-            point = GPSData.query.filter_by(id=point_id, user_id=user.id).first()
+            point = GPSData.query.filter_by(id=point_id, **g.trace_query).first()
         elif date and time:
             # find point closest to timestamp
             dateTimeObj = datetime.strptime(f"{date} {time}", "%Y-%m-%d %H:%M:%S")
@@ -970,7 +895,7 @@ class SpeedMapView(MethodView):
             # Order by the absolute difference in seconds between the point's timestamp
             # (converted to epoch seconds using extract('epoch', ...)) and ts.
             point = (
-                GPSData.query.filter_by(user_id=user.id)
+                GPSData.query.filter_by(**g.trace_query)
                 .order_by(func.abs(func.extract('epoch', GPSData.timestamp) - ts))
                 .first()
             )
@@ -985,8 +910,8 @@ class SpeedMapView(MethodView):
             margin = min(int(request.args.get("margin")), 1000)
 
         # select all points within the margin of the point, so margin amount of points (not time) before and after the point
-        before_points = GPSData.query.filter_by(user_id=user.id).order_by(GPSData.timestamp.desc()).filter(GPSData.timestamp < point.timestamp).limit(margin).all()
-        after_points = GPSData.query.filter_by(user_id=user.id).order_by(GPSData.timestamp.asc()).filter(GPSData.timestamp > point.timestamp).limit(margin).all()
+        before_points = GPSData.query.filter_by(**g.trace_query).order_by(GPSData.timestamp.desc()).filter(GPSData.timestamp < point.timestamp).limit(margin).all()
+        after_points = GPSData.query.filter_by(**g.trace_query).order_by(GPSData.timestamp.asc()).filter(GPSData.timestamp > point.timestamp).limit(margin).all()
 
         all_points: list[GPSData] = before_points[::-1] + [point] + after_points
 
@@ -1228,6 +1153,7 @@ class SetTraceView(MethodView):
 
     def post(self):
         trace_id = request.form.get("trace_id")
+        print(trace_id, request.form)
         if not trace_id:
             session.pop("trace_id", None)
             return "OK", 205
