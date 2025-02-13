@@ -224,7 +224,7 @@ class GenerateSpeedDataJob(Job):
         super().__init__()
         self.user = user
 
-    def generate_speed(self, points: list[GPSData], points_done=0, total_points=0):
+    def generate_speed(self, points: list[GPSData], points_done=0, total_points=1):
 
         i = 0
         added = 1
@@ -292,22 +292,16 @@ class GenerateFullStatisticsJob(Job):
         coords2 = (point2.latitude, point2.longitude)
         # return geopy.distance.distance(coords1, coords2).m # most accurate
         return geopy.distance.great_circle(coords1, coords2).m # about 20 times faster
+    
+    def generate_statistics(self, gps_data, query_kwargs: dict, points_done=0, total_points=1):
 
-    def run(self):
-        # Get all GPS data for the user sorted by timestamp
-        gps_data: list[GPSData] = GPSData.query.filter_by(user_id=self.user.id).order_by(GPSData.timestamp).all()
-        if not gps_data:
-            self.done = True
-            return
-        
-        DailyStatistic.query.filter_by(user_id=self.user.id).delete()
+        DailyStatistic.query.filter_by(**query_kwargs).delete()
 
         
         i = 0
         daily_stats: dict[str, DailyStatistic] = {}
         # daily_stats_country_city_count: dict[str, dict[tuple[str, str], int]] = {}
         daily_stats_country_city_count: dict[str, tuple[dict[str, int], dict[tuple[str, str], int]]] = {}
-        total_count = len(gps_data)
         last_point: GPSData = None
         for point in gps_data:
             if self.stop_requested:
@@ -316,7 +310,7 @@ class GenerateFullStatisticsJob(Job):
             key = f"{point.timestamp.year}-{point.timestamp.month}-{point.timestamp.day}"
             if key not in daily_stats:
                 daily_stats[key] = DailyStatistic(
-                    user_id=self.user.id,
+                    **query_kwargs,
                     year=point.timestamp.year,
                     month=point.timestamp.month,
                     day=point.timestamp.day,
@@ -352,15 +346,11 @@ class GenerateFullStatisticsJob(Job):
             last_point = point
 
             i += 1
-            self.progress = (i / total_count) * 0.9
+            self.progress = ((points_done + i) / total_points) * 0.9
 
-        i = 0
-        total_count = len(daily_stats)
         for stat in daily_stats.values():
             if self.stop_requested:
                 break
-
-            self.progress = 0.8 + (i / total_count) * 0.1
 
             key = f"{stat.year}-{stat.month}-{stat.day}"
             if key in daily_stats_country_city_count:
@@ -371,13 +361,11 @@ class GenerateFullStatisticsJob(Job):
                     stat.visited_cities = [(city, country) for (city, country), duration in city_count.items() if duration > self.config.MIN_CITY_VISIT_DURATION_FOR_STATS]
 
         i = 0
-        total_count = len(daily_stats)
         for stat in daily_stats.values():
             if self.stop_requested:
                 break
 
             db.session.add(stat)
-            self.progress = 0.9 + (i / total_count) * 0.1
 
             if i % 500 == 0:
                 db.session.commit()
@@ -388,6 +376,26 @@ class GenerateFullStatisticsJob(Job):
 
         db.session.commit()
 
+
+    def run(self):
+        # Get all GPS data for the user sorted by timestamp
+        gps_data: list[GPSData] = GPSData.query.filter_by(user_id=self.user.id).order_by(GPSData.timestamp).all()
+        additional_traces = AdditionalTrace.query.filter_by(owner_id=self.user.id).all()
+        additional_traces = [GPSData.query.filter_by(trace_id=trace.id).order_by(GPSData.timestamp).all() for trace in additional_traces]
+
+        total_points = len(gps_data) + sum([len(trace) for trace in additional_traces])
+        points_done = 0
+
+        if gps_data:
+            self.generate_statistics(gps_data, {"user_id": self.user.id}, total_points=total_points)
+            points_done += len(gps_data)
+
+        for trace_data in additional_traces:
+            if trace_data:
+                self.generate_statistics(trace_data, {"trace_id": trace_data[0].trace_id}, points_done=points_done, total_points=total_points)
+                points_done += len(trace_data)
+
+        
         self.done = True
 
 
@@ -503,6 +511,9 @@ class FilterClustersJob(Job):
     def run(self):
         # Get all GPS data for the user sorted by timestamp
         gps_data: list[GPSData] = GPSData.query.filter_by(user_id=self.user.id).order_by(GPSData.timestamp).all()
+        additional_traces = AdditionalTrace.query.filter_by(owner_id=self.user.id).all()
+        gps_data += [point for trace in additional_traces for point in GPSData.query.filter_by(trace_id=trace.id).order_by(GPSData.timestamp).all()]
+
         if not gps_data:
             self.done = True
             return
