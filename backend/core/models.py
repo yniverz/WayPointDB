@@ -67,7 +67,7 @@ class GPSData(db.Model):
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     user_id = db.Column(UUID(as_uuid=True), db.ForeignKey("user.id"), nullable=True)
-    trace_id = db.Column(UUID(as_uuid=True), db.ForeignKey("trace.id"), nullable=True)
+    trace_id = db.Column(UUID(as_uuid=True), db.ForeignKey("additional_trace.id"), nullable=True)
     import_id = db.Column(UUID(as_uuid=True), db.ForeignKey("import.id"), nullable=True)
 
     timestamp = db.Column(db.DateTime, nullable=False, default=datetime.now(timezone.utc))
@@ -103,7 +103,7 @@ class DailyStatistic(db.Model):
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     user_id = db.Column(UUID(as_uuid=True), db.ForeignKey("user.id"), nullable=True)
-    trace_id = db.Column(UUID(as_uuid=True), db.ForeignKey("trace.id"), nullable=True)
+    trace_id = db.Column(UUID(as_uuid=True), db.ForeignKey("additional_trace.id"), nullable=True)
     year = db.Column(db.Integer, nullable=False)
     month = db.Column(db.Integer, nullable=False)
     day = db.Column(db.Integer, nullable=False)
