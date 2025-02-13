@@ -7,29 +7,69 @@
 {% block content %}
     <h2>Settings</h2>
     <p>
-        <strong>Current Email:</strong> {{ current_user.email }}<br/>
-        <strong>API Key:</strong>
-        {% if current_user.api_key %}
-            {{ current_user.api_key }}
-        {% else %}
-            <em>No key generated yet</em>
-        {% endif %}
+        <strong>Current Email:</strong> {{ g.current_user.email }}
     </p>
 
-    <form method="POST" action="{{ url_for('web.account') }}" onsubmit="return confirm('Are you sure you want to generate a new API key? This will replace your current key.');">
+    <h3>API Keys</h3>
+    {% if g.current_user.api_keys %}
+        <table>
+            <thead>
+                <tr>
+                    <th>API Key</th>
+                    <th>Trace</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for key, trace_id, trace_name in api_keys %}
+                <tr>
+                    <td>{{ key }}</td>
+                    <td>
+                        {{ trace_name }}
+                    </td>
+                    <td>
+                        <form method="POST" style="display:inline;">
+                            <input type="hidden" name="api_key" value="{{ key }}">
+                            <button 
+                                type="submit" 
+                                name="delete_key" 
+                                value="1" 
+                                onclick="return confirm('Are you sure you want to delete this API key?');"
+                            >
+                                Delete
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p><em>You have no API keys yet.</em></p>
+    {% endif %}
+
+    <h4>Generate New API Key</h4>
+    <form method="POST" onsubmit="return confirm('Are you sure you want to generate a new API key?');">
+        <label for="trace_id">Select Trace:</label>
+        <select id="trace_id" name="trace_id">
+            <option value="">-- Choose a trace --</option>
+            {% for trace in available_traces %}
+                <option value="{{ trace.id }}">{{ trace.name }}</option>
+            {% endfor %}
+        </select>
         <button type="submit" name="generate_key" value="1">Generate New API Key</button>
     </form>
+
     <br/>
-    <button onclick="window.location.href='{{ url_for('web.jobs') }}'">Manage Jobs</button><br/>
-    <br/>
-    <button onclick="window.location.href='{{ url_for('web.imports') }}'">Manage Imports</button><br/>
-    <br/>
+    <button onclick="window.location.href='{{ url_for('web.manage_traces') }}'">Manage Traces</button><br/><br/>
+    <button onclick="window.location.href='{{ url_for('web.jobs') }}'">Manage Jobs</button><br/><br/>
+    <button onclick="window.location.href='{{ url_for('web.imports') }}'">Manage Imports</button><br/><br/>
     <button onclick="window.location.href='{{ url_for('web.exports') }}'">Exports</button><br/>
 
     <hr/>
 
     <h3>Change Email / Password</h3>
-    <form method="POST" action="{{ url_for('web.account') }}">
+    <form method="POST">
         <label for="new_email">New Email (optional):</label><br/>
         <input type="text" id="new_email" name="new_email"><br/>
         <br/>

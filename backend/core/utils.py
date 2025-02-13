@@ -34,10 +34,12 @@ def api_key_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         api_key = flask.request.args.get("api_key")
-        user = User.query.filter_by(api_key=api_key).first()
+        user = User.get_user_from_api_key(api_key)
+        trace_id = User.get_trace_id_from_api_key(api_key)
         if not user:
             return {"error": "Invalid or missing API key"}, 401
         g.current_user = user
+        g.current_trace_id = trace_id
         return f(*args, **kwargs)
     return decorated_function
 
@@ -54,14 +56,14 @@ def create_default_user():
     """Create a default admin user if none exists."""
 
 
-    # # Code to manually update the database schema
-    # conn = psycopg2.connect(
-    #     dbname=Config.DB_NAME,
-    #     user=Config.DB_USER,
-    #     password=Config.DB_PASS,
-    #     host=Config.DB_HOST
-    # )
-    # cursor = conn.cursor()
+    # Code to manually update the database schema
+    conn = psycopg2.connect(
+        dbname=Config.DB_NAME,
+        user=Config.DB_USER,
+        password=Config.DB_PASS,
+        host=Config.DB_HOST
+    )
+    cursor = conn.cursor()
 
     # #user_id = db.Column(UUID(as_uuid=True), db.ForeignKey("user.id"), nullable=True) # change nullable to true
     # cursor.execute("ALTER TABLE gps_data ALTER COLUMN user_id DROP NOT NULL")
@@ -69,15 +71,28 @@ def create_default_user():
     # #trace_id = db.Column(UUID(as_uuid=True), db.ForeignKey("trace.id"), nullable=True)
     # cursor.execute("ALTER TABLE gps_data ADD COLUMN trace_id UUID")
 
+    # # api_key = db.Column(db.String(255), unique=True, nullable=True)
+    # api_keys = db.Column(db.JSON, default=[])
 
 
-    # # cursor.execute("UPDATE import SET done_importing = TRUE")
 
-    # # cursor.execute("UPDATE \"user\" SET is_admin = FALSE WHERE email NOT LIKE '%admin%'")
 
-    # conn.commit()
-    # cursor.close()
-    # conn.close()
+    cursor.execute("ALTER TABLE \"user\" DROP COLUMN api_key")
+    cursor.execute("ALTER TABLE \"user\" ADD COLUMN api_keys JSON DEFAULT '[]'")
+    cursor.execute("ALTER TABLE daily_statistic ALTER COLUMN user_id DROP NOT NULL")
+    cursor.execute("ALTER TABLE daily_statistic ADD COLUMN trace_id UUID")
+    cursor.execute("ALTER TABLE additional_trace ADD COLUMN owner_id UUID NOT NULL")
+
+
+
+
+    # cursor.execute("UPDATE import SET done_importing = TRUE")
+
+    # cursor.execute("UPDATE \"user\" SET is_admin = FALSE WHERE email NOT LIKE '%admin%'")
+
+    conn.commit()
+    cursor.close()
+    conn.close()
 
 
 
