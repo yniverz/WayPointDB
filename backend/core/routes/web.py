@@ -1109,7 +1109,7 @@ class AccountView(MethodView):
 
         api_key_list = []
         for key, trace_id in api_keys:
-            name = "Self"
+            name = "Main Trace"
             if trace_id:
                 trace = AdditionalTrace.query.filter_by(id=trace_id).first()
                 if trace:
