@@ -49,6 +49,13 @@ class GPSBatch(Resource):
 
         # The user from the valid API key is in g.current_user
         user = g.current_user
+        trace = g.current_trace
+
+        user_id = user.id
+        trace_id = None
+        if trace:
+            user_id = None
+            trace_id = trace.id
 
         # Save each GPS entry
         for entry in gps_entries:
@@ -61,7 +68,8 @@ class GPSBatch(Resource):
                 ts = datetime.now()  # fallback if parse fails
 
             gps_record = GPSData(
-                user_id=user.id,
+                user_id=user_id,
+                trace_id=trace_id,
                 timestamp=ts,
                 latitude=entry["latitude"],
                 longitude=entry["longitude"],
@@ -188,6 +196,13 @@ class OverlandGPSBatch(Resource):
             return {"error": "Invalid data format: 'locations' should be a list"}, 400
 
         user = g.current_user  # Retrieved from @api_key_required decorator
+        trace = g.current_trace
+
+        user_id = user.id
+        trace_id = None
+        if trace:
+            user_id = None
+            trace_id = trace.id
 
         for feature in locations:
             # Validate that it follows the GeoJSON Feature structure
@@ -213,7 +228,8 @@ class OverlandGPSBatch(Resource):
 
             # Create a GPSData record
             gps_record = GPSData(
-                user_id=user.id,
+                user_id=user_id,
+                trace_id=trace_id,
                 timestamp=ts,
                 latitude=latitude,
                 longitude=longitude,

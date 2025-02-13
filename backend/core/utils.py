@@ -6,7 +6,7 @@ from flask import session, redirect, url_for, g
 from functools import wraps
 
 import psycopg2
-from .models import User
+from .models import User, AdditionalTrace
 from .config import Config
 from .models import GPSData, Import, User, db
 
@@ -21,11 +21,23 @@ def login_required(f):
         if "user_id" not in session:
             return login_with_old_page()
         
-        user = get_current_user()
-        if not user:
+        g.current_user = get_current_user()
+        if not g.current_user:
             return login_with_old_page()
+
+        g.current_trace = get_current_trace()
         
-        g.current_user = user
+        g.trace_query = {"user_id": g.current_user.id}
+        if g.current_trace:
+            g.trace_query = {"trace_id": g.current_trace.id}
+
+
+
+        g.available_traces = []
+        for trace in AdditionalTrace.query.all():
+            if str(g.current_user.id) in trace.share_with_list or trace.owner_id == g.current_user.id:
+                g.available_traces.append(trace)
+
         return f(*args, **kwargs)
     return decorated_function
 
@@ -35,11 +47,14 @@ def api_key_required(f):
     def decorated_function(*args, **kwargs):
         api_key = flask.request.args.get("api_key")
         user = User.get_user_from_api_key(api_key)
-        trace_id = User.get_trace_id_from_api_key(api_key)
+        trace = User.get_trace_from_api_key(api_key)
+
         if not user:
             return {"error": "Invalid or missing API key"}, 401
+        
         g.current_user = user
-        g.current_trace_id = trace_id
+        g.current_trace = trace
+
         return f(*args, **kwargs)
     return decorated_function
 
@@ -48,6 +63,15 @@ def get_current_user():
     if "user_id" in session:
         try:
             return User.query.get(session["user_id"])
+        except:
+            print(traceback.format_exc())
+    return None
+
+def get_current_trace():
+    """Return the currently selected trace object (or None) using the session."""
+    if "trace_id" in session:
+        try:
+            return AdditionalTrace.query.get(session["trace_id"])
         except:
             print(traceback.format_exc())
     return None

@@ -144,8 +144,6 @@
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto">
-                    {# <li class="nav-item"><a class="nav-link" href="{{ url_for('web.dashboard') }}">Dashboard</a></li> #}
-                    {# <li class="nav-item"><a class="nav-link" href="{{ url_for('web.map') }}">Map</a></li> #}
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" id="mapDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                             Map
@@ -161,6 +159,17 @@
                     {% if current_user.is_admin %}
                         <li class="nav-item"><a class="nav-link" href="{{ url_for('web.manage_users') }}">Manage Users</a></li>
                     {% endif %}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="traceDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            Trace
+                        </a>
+                        <ul class="dropdown-menu" aria-labelledby="traceDropdown">
+                            <li><button style="color: #bebebe" class="dropdown-item" onclick="setTraceId('')" {% if g.current_trace is none %}disabled{% endif %}>Self</button></li>
+                            {% for trace in g.available_traces %}
+                                <li><button style="color: #bebebe" class="dropdown-item" onclick="setTraceId('{{ trace.id }}')" {% if trace.id == g.current_trace.id %}disabled{% endif %}>{{ trace.name }}</button></li>
+                            {% endfor %}
+                        </ul>
+                    </li>
                     <li class="nav-item"><a class="nav-link btn btn-danger text-white px-3" href="{{ url_for('web.logout') }}">Logout</a></li>
                     <!-- Dark Mode Toggle -->
                     <li class="nav-item">
@@ -190,6 +199,16 @@
 
     <!-- Dark Mode Toggle Script -->
     <script>
+
+        // Function to set the trace_id session variable
+        function setTraceId(traceId) {
+            fetch("{{ url_for('web.set_trace_id') }}", {
+                method: 'POST',
+                body: "trace_id=" + traceId,
+            }).then(() => {
+                location.reload();
+            });
+        }
 
         document.addEventListener("DOMContentLoaded", function () {
             const toggleButton = document.getElementById("darkModeToggle");

@@ -30,11 +30,11 @@ class User(db.Model):
                 if key == api_key:
                     return user
     
-    def get_trace_id_from_api_key(api_key):
+    def get_trace_from_api_key(api_key):
         for user in User.query.all():
             for key, trace_id in user.api_keys:
                 if key == api_key:
-                    return trace_id
+                    return AdditionalTrace.query.get(trace_id)
     
 
 class AdditionalTrace(db.Model):
