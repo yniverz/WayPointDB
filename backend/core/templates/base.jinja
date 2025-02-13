@@ -165,7 +165,7 @@
                                 {% if g.current_trace is none %}Trace{% else %}{{ g.current_trace.name }}{% endif %}
                             </a>
                             <ul class="dropdown-menu" aria-labelledby="traceDropdown">
-                                <li><button style="color: #bebebe" class="dropdown-item" onclick="setTraceId('')" {% if g.current_trace is none %}disabled{% endif %}>Self</button></li>
+                                <li><button style="color: #bebebe" class="dropdown-item" onclick="setTraceId('')" {% if g.current_trace is none %}disabled{% endif %}>Main Trace</button></li>
                                 {% for trace in g.available_traces %}
                                     <li><button style="color: #bebebe" class="dropdown-item" onclick="setTraceId('{{ trace.id }}')" {% if trace.id == g.current_trace.id %}disabled{% endif %}>{{ trace.name }}</button></li>
                                 {% endfor %}
