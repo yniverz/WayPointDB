@@ -5,7 +5,8 @@ WayPointDB is a lightweight GPS data collection API, just like Google's Timeline
 WayPointDB is focused on fast and efficient data collection and retrieval, so the user wont have to wait around for the webpage to load or the data to be processed, and can easily sift through their data using the Stats and Map pages.
 
 ## Key Benefits
-- Multi-user support
+- Multi-User support
+- Multi-Trace per User support
 - REST API for GPS data collection
 - Pure Flask-Jinja-based interface
     - Server side rendering for fast page loads
@@ -68,6 +69,8 @@ WayPointDB has a Swagger API documentation page that can be accessed by navigati
 ### Users
 Users can be added, edited, and deleted in the ```Manage Users``` page. Only ```admin``` users can view this page.
 
+### Additional Traces
+Users can add additional traces to their account in the ```Manage Traces``` page accessible from the ```Account``` page. These traces are like profiles for each account and can be selected in the menu bar. Traces can be shared or transfered to other users as well.
 
 ## Update
 To update the project, pull the latest changes from the repository and rebuild the Docker image
