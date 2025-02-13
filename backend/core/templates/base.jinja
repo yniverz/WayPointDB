@@ -161,7 +161,7 @@
                     {% endif %}
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" id="traceDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                            Trace
+                            {% if g.current_trace is none %}Trace{% else %}{{ g.current_trace.name }}{% endif %}
                         </a>
                         <ul class="dropdown-menu" aria-labelledby="traceDropdown">
                             <li><button style="color: #bebebe" class="dropdown-item" onclick="setTraceId('')" {% if g.current_trace is none %}disabled{% endif %}>Self</button></li>
