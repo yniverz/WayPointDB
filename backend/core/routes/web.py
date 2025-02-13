@@ -57,13 +57,6 @@ class LogoutView(MethodView):
         session.clear()
         return redirect(url_for("web.login"))
 
-# class DashboardView(MethodView):
-#     decorators = [login_required]
-
-#     def get(self):
-#         """Example protected dashboard."""
-#         return render_template("dashboard.jinja")
-    
 class JobsView(MethodView):
     decorators = [login_required]
 
@@ -152,13 +145,12 @@ class StatsView(MethodView):
 
     def get(self):
         user = g.current_user
+        trace = g.current_trace
+        
 
         total_points = GPSData.query.filter_by(user_id=user.id).count()
-        # total_geocoded = GPSData.query.filter_by(user_id=user.id, reverse_geocoded=True).count()
         total_geocoded = GPSData.query.filter_by(user_id=user.id).filter(GPSData.reverse_geocoded == True).count()
-        # where reverse_geocoded = true and city is none
         total_not_geocoded = GPSData.query.filter_by(user_id=user.id).filter(GPSData.reverse_geocoded == True).filter(GPSData.country == None).count()
-
         stats: list[DailyStatistic] = DailyStatistic.query.filter_by(user_id=user.id).all()
 
         # We'll group stats by year
@@ -1228,12 +1220,33 @@ class AccountView(MethodView):
             db.session.commit()
         
         return redirect(url_for("web.account"))
+    
+
+
+class SetTraceView(MethodView):
+    decorators = [login_required]
+
+    def post(self):
+        trace_id = request.form.get("trace_id")
+        if not trace_id:
+            session.pop("trace_id", None)
+            return "OK", 205
+
+        trace = AdditionalTrace.query.filter_by(id=trace_id).first()
+        if not trace:
+            return "Trace not found", 404
+
+        session["trace_id"] = trace_id
+
+        return "OK", 200
+
+
 
 # Register the class-based views with the Blueprint
 web_bp.add_url_rule("/", view_func=HomeView.as_view("home"))
 web_bp.add_url_rule("/login", view_func=LoginView.as_view("login"), methods=["GET", "POST"])
 web_bp.add_url_rule("/logout", view_func=LogoutView.as_view("logout"))
-# web_bp.add_url_rule("/dashboard", view_func=DashboardView.as_view("dashboard"))
+web_bp.add_url_rule("/set_trace_id", view_func=SetTraceView.as_view("set_trace_id"), methods=["POST"])
 web_bp.add_url_rule("/map", view_func=MapView.as_view("map"), methods=["GET", "POST", "DELETE"])
 web_bp.add_url_rule("/map/heatmap_data.json", view_func=HeatMapDataView.as_view("heatmap_data"))
 web_bp.add_url_rule("/map/speed", view_func=SpeedMapView.as_view("speed_map"), methods=["GET", "POST"])
