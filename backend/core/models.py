@@ -3,7 +3,8 @@ from datetime import datetime, timezone
 import uuid
 from werkzeug.security import generate_password_hash, check_password_hash
 from .extensions import db
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSON
+from sqlalchemy.ext.mutable import MutableList
 
 class User(db.Model):
     """Simple User model with is_admin boolean and a single API key."""
@@ -13,7 +14,9 @@ class User(db.Model):
     email = db.Column(db.String(255), unique=True, nullable=False)
     password = db.Column(db.String(255), nullable=False)
     is_admin = db.Column(db.Boolean, default=False)
-    api_key = db.Column(db.String(255), unique=True, nullable=True)
+    # api_key = db.Column(db.String(255), unique=True, nullable=True)
+    # api_keys = db.Column(db.JSON, default=[]) # [ (key, optional trace_id) ]
+    api_keys = db.Column(MutableList.as_mutable(JSON), default=list[tuple[str, str]])
 
     def set_password(self, raw_password):
         self.password = generate_password_hash(raw_password)
@@ -21,15 +24,28 @@ class User(db.Model):
     def check_password(self, raw_password):
         return check_password_hash(self.password, raw_password)
     
+    def get_user_from_api_key(api_key):
+        for user in User.query.all():
+            for key, trace_id in user.api_keys:
+                if key == api_key:
+                    return user
+    
+    def get_trace_id_from_api_key(api_key):
+        for user in User.query.all():
+            for key, trace_id in user.api_keys:
+                if key == api_key:
+                    return trace_id
+    
 
 class AdditionalTrace(db.Model):
     """Stores additional traces for a user."""
     __tablename__ = "additional_trace"
 
     id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    owner_id = db.Column(UUID(as_uuid=True), db.ForeignKey("user.id"), nullable=False)
     name = db.Column(db.String(255), nullable=False)
     description = db.Column(db.Text, nullable=True)
-    user_id_list = db.Column(db.JSON, default=[])
+    share_with_list = db.Column(MutableList.as_mutable(JSON), default=list[str])
     
 
 class Import(db.Model):
@@ -43,8 +59,6 @@ class Import(db.Model):
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.now(timezone.utc))
     total_entries = db.Column(db.Integer, default=0)
     done_importing = db.Column(db.Boolean, default=True)
-
-    # user = db.relationship("User", backref=db.backref("imports", lazy=True))
 
 
 class GPSData(db.Model):
@@ -76,8 +90,6 @@ class GPSData(db.Model):
     street_number = db.Column(db.String(255))
 
 
-    # user = db.relationship("User", backref=db.backref("gps_data", lazy=True))
-
     __table_args__ = (
         db.CheckConstraint("user_id IS NOT NULL OR trace_id IS NOT NULL"),
     )
@@ -90,7 +102,8 @@ class DailyStatistic(db.Model):
     __tablename__ = "daily_statistic"
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    user_id = db.Column(UUID(as_uuid=True), db.ForeignKey("user.id"), nullable=False)
+    user_id = db.Column(UUID(as_uuid=True), db.ForeignKey("user.id"), nullable=True)
+    trace_id = db.Column(UUID(as_uuid=True), db.ForeignKey("trace.id"), nullable=True)
     year = db.Column(db.Integer, nullable=False)
     month = db.Column(db.Integer, nullable=False)
     day = db.Column(db.Integer, nullable=False)
@@ -98,5 +111,6 @@ class DailyStatistic(db.Model):
     visited_countries = db.Column(db.JSON, default=[])
     visited_cities = db.Column(db.JSON, default=[])
 
-
-    # user = db.relationship("User", backref=db.backref("daily_stats", lazy=True))
+    __table_args__ = (
+        db.CheckConstraint("user_id IS NOT NULL OR trace_id IS NOT NULL"),
+    )

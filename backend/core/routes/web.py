@@ -18,7 +18,7 @@ from sqlalchemy import func
 
 from ..background.jobs import JOB_TYPES, GenerateFullStatisticsJob, ImportJob
 from ..background import job_manager
-from ..models import DailyStatistic, Import, User, GPSData, db
+from ..models import DailyStatistic, Import, User, GPSData, db, AdditionalTrace
 from ..utils import login_required
 from ..config import Config
 from werkzeug.utils import secure_filename
@@ -1085,19 +1085,138 @@ class ManageUsersView(MethodView):
             return "OK", 200
 
         return redirect(url_for("web.manage_users"))
+    
+class ManageTracesView(MethodView):
+    decorators = [login_required]
+
+    def get(self):
+        user = g.current_user
+
+        available_traces = AdditionalTrace.query.filter_by(owner_id=user.id).all()
+
+        users = [(str(u.id), u.email) for u in User.query.all()]
+
+        return render_template("manage_traces.jinja", available_traces=available_traces, users=users, current_user_id=str(user.id))
+    
+    def post(self):
+        user = g.current_user
+        
+        action = request.form.get("action")
+
+        print(request.form, action)
+
+        if action == "remove_trace":
+            trace_id = request.form.get("trace_id")
+
+            if not trace_id:
+                return "Missing trace_id", 400
+            
+            trace = AdditionalTrace.query.filter_by(id=trace_id).first()
+            if not trace:
+                return "Trace not found", 404
+            db.session.delete(trace)
+            db.session.commit()
+
+        elif action == "add_trace":
+            name = request.form.get("name")
+            description = request.form.get("description")
+
+            if not name:
+                return "Missing name", 400
+
+            new_trace = AdditionalTrace(name=name, owner_id=user.id, description=description)
+            db.session.add(new_trace)
+            db.session.commit()
+
+            print(AdditionalTrace.query.all())
+
+        elif action == "share_trace":
+            user_id = request.form.get("user_id")
+            trace_id = request.form.get("trace_id")
+
+            print(user_id, trace_id)
+
+            if not user_id or not trace_id:
+                return "Missing user_id or trace_id", 400
+            
+            if user_id == str(user.id):
+                return "Cannot share with yourself", 400
+            
+            trace = AdditionalTrace.query.filter_by(id=trace_id).first()
+            if not trace:
+                return "Trace not found", 404
+            
+            if user_id not in trace.share_with_list:
+                trace.share_with_list.append(user_id)
+                db.session.commit()
+
+        elif action == "unshare_trace":
+            user_id = request.form.get("user_id")
+            trace_id = request.form.get("trace_id")
+
+            if not user_id or not trace_id:
+                return "Missing user_id or trace_id", 400
+            
+            trace = AdditionalTrace.query.filter_by(id=trace_id).first()
+            if not trace:
+                return "Trace not found", 404
+            
+            if user_id in trace.share_with_list:
+                trace.share_with_list.remove(user_id)
+                db.session.commit()
+
+        elif "transfer_trace" in action:
+            user_id = request.form.get("user_id")
+            trace_id = request.form.get("trace_id")
+
+            if not user_id or not trace_id:
+                return "Missing user_id or trace_id", 400
+            
+            trace = AdditionalTrace.query.filter_by(id=trace_id).first()
+            if not trace:
+                return "Trace not found", 404
+            
+            if user_id != user.id:
+                trace.owner_id = user_id
+                db.session.commit()
+
+        return redirect(url_for("web.manage_traces"))
 
 class AccountView(MethodView):
     decorators = [login_required]
 
     def get(self):
-        return render_template("account.jinja")
+        user: User = g.current_user
+        api_keys = user.api_keys
+        traces = AdditionalTrace.query.filter_by(owner_id=user.id).all()
+
+        api_key_list = []
+        for key, trace_id in api_keys:
+            name = "Self"
+            if trace_id:
+                trace = AdditionalTrace.query.filter_by(id=trace_id).first()
+                if trace:
+                    name = trace.name
+
+            api_key_list.append((key, trace_id, name))
+
+        return render_template("account.jinja", api_keys=api_key_list, available_traces=traces)
 
     def post(self):
-        user = g.current_user
+        user: User = g.current_user
         if "generate_key" in request.form:
-            # Generate new API key
-            user.api_key = uuid.uuid4().hex
+            trace_id = request.form.get("trace_id")
+            if len(trace_id) == 0 or not AdditionalTrace.query.filter_by(id=trace_id).first():
+                trace_id = None
+
+            user.api_keys.append((uuid.uuid4().hex, trace_id))
             db.session.commit()
+
+        if "delete_key" in request.form:
+            api_key = request.form.get("api_key")
+            if api_key:
+                user.api_keys = [(key, trace_id) for key, trace_id in user.api_keys if key != api_key]
+                db.session.commit()
 
         if "update_account" in request.form:
             new_email = request.form.get("new_email")
@@ -1107,6 +1226,7 @@ class AccountView(MethodView):
             if new_password:
                 user.set_password(new_password)
             db.session.commit()
+        
         return redirect(url_for("web.account"))
 
 # Register the class-based views with the Blueprint
@@ -1122,6 +1242,7 @@ web_bp.add_url_rule("/stats", view_func=StatsView.as_view("stats"))
 web_bp.add_url_rule("/stats/<int:year>", view_func=YearlyStatsView.as_view("yearly_stats"))
 web_bp.add_url_rule("/manage_users", view_func=ManageUsersView.as_view("manage_users"), methods=["GET", "POST"])
 web_bp.add_url_rule("/account", view_func=AccountView.as_view("account"), methods=["GET", "POST"])
+web_bp.add_url_rule("/manage_traces", view_func=ManageTracesView.as_view("manage_traces"), methods=["GET", "POST"])
 web_bp.add_url_rule("/jobs", view_func=JobsView.as_view("jobs"), methods=["GET", "POST"])
 web_bp.add_url_rule("/imports", view_func=ImportsView.as_view("imports"), methods=["GET", "POST"])
 web_bp.add_url_rule("/exports", view_func=ExportsView.as_view("exports"), methods=["GET", "POST"])

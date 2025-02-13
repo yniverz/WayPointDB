@@ -1,0 +1,140 @@
+{% extends "base.jinja" %}
+
+{% block heading %}
+    Manage Traces
+{% endblock %}
+
+{% block content %}
+    <!-- List of Traces You Own -->
+    <h3>Your Traces</h3>
+    {% if available_traces %}
+        <table border="1" cellpadding="6" cellspacing="0">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Description</th>
+                    <th>Shared With</th>
+                    <th>Remove Trace</th>
+                    <th>Share Trace</th>
+                    <th>Unshare Trace</th>
+                    <th>Transfer Ownership</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for trace in available_traces %}
+                <tr>
+                    <!-- Name -->
+                    <td>{{ trace.name }}</td>
+
+                    <!-- Description -->
+                    <td>{{ trace.description or "" }}</td>
+
+                    <!-- Shared With (Convert IDs to Emails) -->
+                    <td>
+                        {% set shared_emails = [] %}
+                        {% for sid in trace.share_with_list %}
+                            {% for (u_id, email) in users %}
+                                {% if sid == u_id and current_user_id != u_id %}
+                                    {% set _ = shared_emails.append(email) %}
+                                {% endif %}
+                            {% endfor %}
+                        {% endfor %}
+                        {{ ", ".join(shared_emails) if shared_emails else "Not shared" }}
+                    </td>
+
+                    <!-- Remove Trace Form -->
+                    <td>
+                        <form method="POST" style="display:inline;">
+                            <input type="hidden" name="action" value="remove_trace">
+                            <input type="hidden" name="trace_id" value="{{ trace.id }}">
+                            <button 
+                                type="submit" 
+                                onclick="return confirm('Are you sure you want to remove this trace?');"
+                            >
+                                Remove
+                            </button>
+                        </form>
+                    </td>
+
+                    <!-- Share Trace Form -->
+                    <td>
+                        <form method="POST" style="display:inline;">
+                            <input type="hidden" name="action" value="share_trace">
+                            <input type="hidden" name="trace_id" value="{{ trace.id }}">
+
+                            <select name="user_id" required>
+                                <option value="">-- Select user --</option>
+                                {% for u_id, email in users %}
+                                    {% if u_id != current_user_id %}
+                                        <option value="{{ u_id }}">{{ email }}</option>
+                                    {% endif %}
+                                {% endfor %}
+                            </select>
+
+                            <button type="submit">Share</button>
+                        </form>
+                    </td>
+
+                    <!-- Unshare Trace Form -->
+                    <td>
+                        <form method="POST" style="display:inline;">
+                            <input type="hidden" name="action" value="unshare_trace">
+                            <input type="hidden" name="trace_id" value="{{ trace.id }}">
+
+                            <select name="user_id" required>
+                                <option value="">-- Select user --</option>
+                                {% for sid in trace.share_with_list %}
+                                    {% for (u_id, email) in users %}
+                                        {% if sid == u_id and current_user_id != u_id %}
+                                            <option value="{{ u_id }}">{{ email }}</option>
+                                        {% endif %}
+                                    {% endfor %}
+                                {% endfor %}
+                            </select>
+
+                            <button type="submit">Unshare</button>
+                        </form>
+                    </td>
+
+                    <!-- Transfer Ownership Form -->
+                    <td>
+                        <form method="POST" style="display:inline;">
+                            <input type="hidden" name="action" value="transfer_trace">
+                            <input type="hidden" name="trace_id" value="{{ trace.id }}">
+
+                            <select name="user_id" required>
+                                <option value="">-- Select user --</option>
+                                {% for u_id, email in users %}
+                                    {% if u_id != current_user_id %}
+                                        <option value="{{ u_id }}">{{ email }}</option>
+                                    {% endif %}
+                                {% endfor %}
+                            </select>
+
+                            <button type="submit">Transfer</button>
+                        </form>
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p><em>You have no traces yet.</em></p>
+    {% endif %}
+
+    <hr/>
+
+    <!-- Add a New Trace -->
+    <h3>Add a New Trace</h3>
+    <form method="POST">
+        <input type="hidden" name="action" value="add_trace">
+
+        <label for="trace_name">Trace Name:</label><br>
+        <input type="text" id="trace_name" name="name" required><br><br>
+
+        <label for="trace_description">Description (optional):</label><br>
+        <textarea id="trace_description" name="description"></textarea><br><br>
+
+        <button type="submit">Add Trace</button>
+    </form>
+{% endblock %}
