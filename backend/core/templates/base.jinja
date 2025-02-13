@@ -156,20 +156,22 @@
                     <li class="nav-item"><a class="nav-link" href="{{ url_for('web.stats') }}">Stats</a></li>
                     <li class="nav-item"><a class="nav-link" href="{{ url_for('web.points') }}">Points</a></li>
                     <li class="nav-item"><a class="nav-link" href="{{ url_for('web.account') }}">Account</a></li>
-                    {% if current_user.is_admin %}
-                        <li class="nav-item"><a class="nav-link" href="{{ url_for('web.manage_users') }}">Manage Users</a></li>
+                    {% if current_user is not none %}
+                        {% if current_user.is_admin %}
+                            <li class="nav-item"><a class="nav-link" href="{{ url_for('web.manage_users') }}">Manage Users</a></li>
+                        {% endif %}
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle" href="#" id="traceDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                {% if g.current_trace is none %}Trace{% else %}{{ g.current_trace.name }}{% endif %}
+                            </a>
+                            <ul class="dropdown-menu" aria-labelledby="traceDropdown">
+                                <li><button style="color: #bebebe" class="dropdown-item" onclick="setTraceId('')" {% if g.current_trace is none %}disabled{% endif %}>Self</button></li>
+                                {% for trace in g.available_traces %}
+                                    <li><button style="color: #bebebe" class="dropdown-item" onclick="setTraceId('{{ trace.id }}')" {% if trace.id == g.current_trace.id %}disabled{% endif %}>{{ trace.name }}</button></li>
+                                {% endfor %}
+                            </ul>
+                        </li>
                     {% endif %}
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" id="traceDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                            {% if g.current_trace is none %}Trace{% else %}{{ g.current_trace.name }}{% endif %}
-                        </a>
-                        <ul class="dropdown-menu" aria-labelledby="traceDropdown">
-                            <li><button style="color: #bebebe" class="dropdown-item" onclick="setTraceId('')" {% if g.current_trace is none %}disabled{% endif %}>Self</button></li>
-                            {% for trace in g.available_traces %}
-                                <li><button style="color: #bebebe" class="dropdown-item" onclick="setTraceId('{{ trace.id }}')" {% if trace.id == g.current_trace.id %}disabled{% endif %}>{{ trace.name }}</button></li>
-                            {% endfor %}
-                        </ul>
-                    </li>
                     <li class="nav-item"><a class="nav-link btn btn-danger text-white px-3" href="{{ url_for('web.logout') }}">Logout</a></li>
                     <!-- Dark Mode Toggle -->
                     <li class="nav-item">
