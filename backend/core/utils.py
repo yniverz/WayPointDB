@@ -77,12 +77,14 @@ def create_default_user():
 
 
 
-    cursor.execute("ALTER TABLE \"user\" DROP COLUMN api_key")
-    cursor.execute("ALTER TABLE \"user\" ADD COLUMN api_keys JSON DEFAULT '[]'")
-    cursor.execute("ALTER TABLE daily_statistic ALTER COLUMN user_id DROP NOT NULL")
-    cursor.execute("ALTER TABLE daily_statistic ADD COLUMN trace_id UUID")
-    cursor.execute("ALTER TABLE additional_trace ADD COLUMN owner_id UUID NOT NULL")
+    # cursor.execute("ALTER TABLE \"user\" DROP COLUMN api_key")
+    # cursor.execute("ALTER TABLE \"user\" ADD COLUMN api_keys JSON DEFAULT '[]'")
+    # cursor.execute("ALTER TABLE daily_statistic ALTER COLUMN user_id DROP NOT NULL")
+    # cursor.execute("ALTER TABLE daily_statistic ADD COLUMN trace_id UUID")
+    # cursor.execute("ALTER TABLE additional_trace ADD COLUMN owner_id UUID NOT NULL")
 
+    # rename additional_trace column "user_id_list" to "share_with_list"
+    cursor.execute("ALTER TABLE additional_trace RENAME COLUMN user_id_list TO share_with_list")
 
 
 
