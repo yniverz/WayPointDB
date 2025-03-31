@@ -1108,8 +1108,8 @@ class AccountView(MethodView):
         if "custom_api_key" in request.args:
             custom_api_key = request.args.get("custom_api_key")
             if custom_api_key:
-                existing_key = User.query.filter(User.api_keys.contains([custom_api_key])).first()
-                if not existing_key:
+                key_exists = custom_api_key in sum([u.api_keys for u in User.query.all()], [])
+                if not key_exists:
                     user.api_keys.append((custom_api_key, None))
                     db.session.commit()
                     return "OK", 200
