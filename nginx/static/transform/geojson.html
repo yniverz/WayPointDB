@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>GeoJSON Transformer</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      background-color: #f4f4f9;
+    }
+    .container {
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+      text-align: center;
+    }
+    input[type="file"] {
+      margin: 10px 0;
+    }
+    button {
+      padding: 10px 20px;
+      margin-top: 10px;
+      border: none;
+      background-color: #007BFF;
+      color: white;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>GeoJSON Transformer</h1>
+    <p>Upload your GeoJSON-like file to convert it to the new point format (expecting velocity in mk/h).</p>
+    <input type="file" id="jsonFile" accept=".json" />
+    <button onclick="processJSON()">Transform and Download</button>
+  </div>
+
+  <script>
+    function processJSON() {
+      const fileInput = document.getElementById('jsonFile');
+      const file = fileInput.files[0];
+
+      if (!file) {
+        alert('Please upload a JSON file first.');
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = function(event) {
+        try {
+          // Parse the file content as JSON
+          const data = JSON.parse(event.target.result);
+          // Transform to the desired output
+          const transformedData = transformData(data);
+          // Download the new JSON file
+          downloadJSON(transformedData, 'transformed.json');
+        } catch (error) {
+          alert('Invalid JSON file. Please upload a valid JSON.');
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    function transformData(jsonData) {
+      // Expecting something like:
+      // {
+      //   "type": "FeatureCollection",
+      //   "features": [
+      //     {
+      //       "type": "Feature",
+      //       "geometry": {
+      //         "type": "Point",
+      //         "coordinates": ["13.407278", "52.605508"]
+      //       },
+      //       "properties": {
+      //         "timestamp": 1740721883,
+      //         "latitude": "52.605508",
+      //         "longitude": "13.407278",
+      //         "accuracy": 10,
+      //         "vertical_accuracy": 19,
+      //         "altitude": 285,
+      //         "velocity": "12.964",
+      //         ...
+      //       }
+      //     },
+      //     ...
+      //   ]
+      // }
+
+      if (!jsonData || !Array.isArray(jsonData.features)) {
+        alert('JSON does not appear to be valid GeoJSON.');
+        return [];
+      }
+
+      const newFormat = jsonData.features.map(feature => {
+        // Some of these fields may be missing; check them safely.
+        const props = feature.properties || {};
+        const geometry = feature.geometry || {};
+        const coords = geometry.coordinates || [];
+
+        // 1) Minimum required fields
+        let timestamp = props.timestamp;
+        // If you'd like the timestamp as an ISO date from a Unix timestamp, uncomment below:
+        /*
+        if (!isNaN(timestamp)) {
+          const dateObj = new Date(timestamp * 1000);
+          timestamp = dateObj.toISOString();
+        }
+        */
+
+        const latitude = parseFloat(props.latitude || coords[1] || 0);
+        const longitude = parseFloat(props.longitude || coords[0] || 0);
+
+        // 2) Optional fields
+        const horizontalAccuracy = props.accuracy !== undefined 
+          ? parseFloat(props.accuracy) 
+          : undefined;
+        const verticalAccuracy = props.vertical_accuracy !== undefined 
+          ? parseFloat(props.vertical_accuracy) 
+          : undefined;
+        const altitude = props.altitude !== undefined 
+          ? parseFloat(props.altitude) 
+          : undefined;
+
+        // velocity is in km/h; convert to m/s
+        let speed;
+        if (props.velocity !== undefined) {
+          const velocityKmh = parseFloat(props.velocity);
+          if (!isNaN(velocityKmh)) {
+            speed = velocityKmh * (1000 / 3600); // => m/s
+          }
+        }
+
+        // Construct each record
+        const record = {
+          timestamp: timestamp,
+          latitude: latitude,
+          longitude: longitude
+        };
+
+        // Append optional fields if they exist
+        if (!isNaN(horizontalAccuracy)) record.horizontal_accuracy = horizontalAccuracy;
+        if (!isNaN(verticalAccuracy)) record.vertical_accuracy = verticalAccuracy;
+        if (!isNaN(altitude)) record.altitude = altitude;
+        if (!isNaN(speed)) record.speed = speed;
+
+        return record;
+      });
+
+      return newFormat;
+    }
+
+    function downloadJSON(data, filename) {
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+  </script>
+</body>
+</html>
