@@ -1104,6 +1104,20 @@ class AccountView(MethodView):
 
     def get(self):
         user: User = g.current_user
+
+        if "custom_api_key" in request.args:
+            custom_api_key = request.args.get("custom_api_key")
+            if custom_api_key:
+                existing_key = User.query.filter(User.api_keys.any(User.api_keys.contains(custom_api_key))).first()
+                if not existing_key:
+                    user.api_keys.append((custom_api_key, None))
+                    db.session.commit()
+                    return "OK", 200
+                else:
+                    return "Key already exists", 400
+            else:
+                return "Missing custom_api_key", 400
+
         api_keys = user.api_keys
         traces = AdditionalTrace.query.filter_by(owner_id=user.id).all()
 
@@ -1121,6 +1135,7 @@ class AccountView(MethodView):
 
     def post(self):
         user: User = g.current_user
+
         if "generate_key" in request.form:
             trace_id = request.form.get("trace_id")
             if len(trace_id) == 0 or not AdditionalTrace.query.filter_by(id=trace_id).first():
