@@ -59,7 +59,8 @@ There are currently two ways to collect GPS data using a mobile device:
 GPS data can be imported from a json file using the ```Import``` page, accessible from the ```Account``` page. The json file should be in a specific format, and an example can be found on the import page.
 
 #### Common Formats
-You can import GPS data from various sources, such as <b>Google Timeline</b> and <b>GPX</b> files. In order to do so, you need to transform the data to the required format. WayPointDB provides a transformation tool that can be accessed by visiting the ```/static/transform``` page and selecting the appropriate format.
+You can import GPS data from various sources, such as **Google Timeline**, **GPX** and **GeoJson** files. In order to do so, you need to transform the data to the required format. WayPointDB provides a transformation tool that can be accessed by visiting the ```/static/transform``` page and selecting the appropriate format.
+First select an available format, then select the file to be transformed. After downloading the transformed file, you can import it using the ```Import``` page.
 
 ### API
 An API key for each user can be generated in the respective ```Account``` page, and is required for API requests.
