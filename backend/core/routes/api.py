@@ -249,6 +249,89 @@ class OverlandGPSBatch(Resource):
         return {"message": "Overland GPS data added successfully"}, 201
 
 
+@api_gps_ns.route("/owntracks")
+class OwntracksGPS(Resource):
+    """
+    Endpoint to accept OwnTracks-style GPS data. Only retains fields
+    consistent with the existing GPSData model and ignores others.
+    """
+
+    @api_gps_ns.expect(api_key_parser)
+    @api_key_required
+    def post(self):
+        """
+        Submit OwnTracks-style GPS data (requires a valid API key).
+        """
+        # Parse request JSON
+        data = request.json or {}
+
+        user = g.current_user
+        trace = g.current_trace
+
+        # In your existing logic: if a trace object is present,
+        # you store GPS data under trace_id with no user_id; otherwise you store under user_id.
+        user_id = user.id
+        trace_id = None
+        if trace:
+            user_id = None
+            trace_id = trace.id
+
+        # The OwnTracks payload uses epoch timestamps in "tst"
+        # and lat/lon in "lat"/"lon", etc.
+        # We'll parse only the data your system tracks.
+
+        # 1) Timestamp
+        #    - primary is "tst" (epoch seconds)
+        #    - if needed, fallback to other fields (e.g., "isotst"), or default to now on parse error
+        timestamp = None
+        if "tst" in data:
+            try:
+                timestamp = datetime.fromtimestamp(int(data["tst"]), tz=datetime.now().astimezone().tzinfo)
+            except:
+                timestamp = datetime.now()
+        else:
+            # Optional fallback if "tst" is missing
+            timestamp = datetime.now()
+
+        # 2) Latitude / Longitude
+        latitude = data.get("lat")
+        longitude = data.get("lon")
+
+        # 3) Horizontal accuracy ("acc")
+        horizontal_accuracy = data.get("acc")
+
+        # 4) Altitude ("alt")
+        altitude = data.get("alt")
+
+        # 5) Vertical accuracy ("vac")
+        vertical_accuracy = data.get("vac")
+
+        # 6) Heading / speed / heading_accuracy / speed_accuracy are
+        #    not provided in this example payload, so they're set to None.
+        heading = None
+        heading_accuracy = None
+        speed = None
+        speed_accuracy = None
+
+        # Create and store the GPSData record
+        gps_record = GPSData(
+            user_id=user_id,
+            trace_id=trace_id,
+            timestamp=timestamp,
+            latitude=latitude,
+            longitude=longitude,
+            horizontal_accuracy=horizontal_accuracy,
+            altitude=altitude,
+            vertical_accuracy=vertical_accuracy,
+            heading=heading,
+            heading_accuracy=heading_accuracy,
+            speed=speed,
+            speed_accuracy=speed_accuracy,
+        )
+        db.session.add(gps_record)
+        db.session.commit()
+
+        return {"message": "OwnTracks GPS data added successfully"}, 201
 
 
 
