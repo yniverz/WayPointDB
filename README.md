@@ -13,16 +13,17 @@ WayPointDB is focused on fast and efficient data collection and retrieval, so th
 - Dockerized deployment
 
 <i>Map page</i>
-![Screenshot of the Map page](screenshot01.jpg)
+![Screenshot of the Map page](https://github.com/user-attachments/assets/ed178066-c75d-4471-b9c5-b675c6dd33a8)
 
 <i>Stats page</i>
-![Screenshot of the Stats page](screenshot02.jpg)
+![Screenshot of the Stats page](https://github.com/user-attachments/assets/c11e8beb-a8e8-4a07-bb2a-c95e5020b047)
 
 <i>Import page</i>
-![Screenshot of the Import page](screenshot03.jpg)
+![Screenshot of the Import page](https://github.com/user-attachments/assets/37782b04-b6fe-4f08-a516-d3303f25b22b)
 
 <i>Lifetime Heatmap</i>
-![Screenshot of the Lifetime Heatmap](screenshot04.jpg)
+![Screenshot of the Lifetime Heatmap](https://github.com/user-attachments/assets/4feba90f-c3ed-474f-979d-87a819b694b7)
+
 
 ## Prerequisites
 To run this project, you could use the following tools:
