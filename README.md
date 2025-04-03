@@ -94,6 +94,19 @@ Alternatively these steps can be automated by running ```./update.sh```. To prep
 ## Photon Server
 WayPointDB can use a [Photon server](https://github.com/komoot/photon) for reverse geocoding. It is recommended to use a self-hosted instance of the Photon server to avoid rate limiting, and to ensure the privacy of the data. Some hosting providers use an api key for authentication, which can be set in the ```docker-compose.yml``` file. WayPointDB will pass this as the ```X-Api-Key``` header in the requests to the Photon server.
 
+To Use Photon you need to set the following two to three environment variables for the `backend` in the ```docker-compose.yml``` file:
+```yaml
+services:
+  ...
+  backend:
+    ...
+    environment:
+      ...
+      - PHOTON_SERVER_HOST=photon.domain.tld(:port)   # e.g. photon.komoot.io
+      - PHOTON_SERVER_HTTPS=false                     # true if the server uses HTTPS
+      - PHOTON_SERVER_API_KEY=                        # optional, only if the server requires an api key
+```
+
 <hr>
 
 ### References
