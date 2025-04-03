@@ -40,6 +40,7 @@ cd WayPointDB
 docker-compose build
 docker-compose up -d
 ```
+**Note:** Using Portainer to deploy this repo might not work. in that case just use the above manual deployment.
 
 ## Configuration
 The project can be configured by modifying variables in the ```docker-compose.yml``` file. The following variables are commonly modified:
