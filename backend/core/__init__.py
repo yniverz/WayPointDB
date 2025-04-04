@@ -44,6 +44,7 @@ def create_web_app(config_class = Config):
     app.context_processor(inject_user)
     app.jinja_env.filters["month_name"] = month_name
     app.jinja_env.globals["get_block"] = get_block
+    app.jinja_env.globals["VERSION"] = config_class.VERSION
 
     # Optionally set up a custom Jinja loader:
     app.jinja_loader = ChoiceLoader([FileSystemLoader(os.path.join(os.path.dirname(__file__), "templates"))])
