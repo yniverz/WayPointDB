@@ -79,7 +79,7 @@
                 const lat = parseFloat(trkpt.getAttribute('lat'));
                 const lon = parseFloat(trkpt.getAttribute('lon'));
                 const timeElement = trkpt.getElementsByTagName('time')[0];
-                const time = timeElement ? timeElement.textContent : null;
+                const time = timeElement ? timeElement.textContent.replace(/\.\d{3}Z$/, 'Z') : null;
 
                 const hdopElement = trkpt.getElementsByTagName('hdop')[0];
                 const accuracy = hdopElement ? parseFloat(hdopElement.textContent) : null;

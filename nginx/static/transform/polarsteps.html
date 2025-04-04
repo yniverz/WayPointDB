@@ -99,13 +99,10 @@
       const newFormat = jsonData.locations.map(loc => {
         // Minimum required fields
         let timestamp = loc.time;
-        // If you want to convert the numeric timestamp to an ISO string, uncomment below:
-        /*
         if (!isNaN(timestamp)) {
           const dateObj = new Date(timestamp * 1000);
-          timestamp = dateObj.toISOString();
+          timestamp = dateObj.toISOString().replace(/\.\d{3}Z$/, 'Z');
         }
-        */
 
         // lat/lon are required
         const latitude = parseFloat(loc.lat) || 0;
