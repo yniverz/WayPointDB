@@ -24,6 +24,7 @@ services:
       - PHOTON_SERVER_API_KEY=
     volumes:
       - imports:/app/imports
+      - ./VERSION:/app/VERSION
 
   nginx:
     build: ./nginx
