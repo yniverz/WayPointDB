@@ -436,7 +436,7 @@ GPS Map
             <b>Timestamp:</b> ${coord.timestamp} <br>
             <b>Speed:</b> ${coord.speed ? (coord.speed * 3.6).toFixed(2) + " km/h" : "N/A"} <br>
             <b>Altitude:</b> ${coord.altitude ? coord.altitude.toFixed(2) + " m" : "N/A"} <br>
-            <b>Accuracy:</b> ${coord.accuracy.toFixed(2)} m <br>
+            <b>Accuracy:</b> ${coord.accuracy ? coord.accuracy.toFixed(2) + " m" : "N/A"} <br>
             <button onclick="deletePoint(${coord.id}, this)">Delete</button>
             <button onclick="setDateToPoint('${coord.timestamp}')">Set Date</button>
             <button onclick="goToSpeedMap('${coord.id}')">View on Speed Map</button>
