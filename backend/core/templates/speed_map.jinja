@@ -305,7 +305,7 @@ Speed Map
             <b>Timestamp:</b> ${point.timestamp} <br>
             <b>Speed:</b> ${point.speed ? (point.speed * 3.6).toFixed(2) + " km/h" : "N/A"} <br>
             <b>Altitude:</b> ${point.altitude ? point.altitude.toFixed(2) + " m" : "N/A"} <br>
-            <b>Accuracy:</b> ${point.accuracy.toFixed(2)} m <br>
+            <b>Accuracy:</b> ${point.accuracy ? point.accuracy.toFixed(2) + " m" : "N/A"} <br>
             <button onclick="viewOnRealMap('${point.id}')">View on Map</button>
         `);
 
