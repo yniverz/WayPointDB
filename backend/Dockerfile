@@ -5,13 +5,13 @@ FROM python:3.10
 WORKDIR /app
 
 # Copy project files
-COPY requirements.txt requirements.txt
+COPY backend/requirements.txt requirements.txt
 
 # Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the app
-COPY . .
+COPY backend/. .
 
 # Copy VERSION file from the parent directory
 COPY VERSION ./VERSION

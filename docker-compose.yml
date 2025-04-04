@@ -8,7 +8,9 @@ services:
       - pg_data:/var/lib/postgresql/data
 
   backend:
-    build: ./backend
+    build: 
+      context: .
+      dockerfile: backend/Dockerfile
     restart: always
     depends_on:
       - db
