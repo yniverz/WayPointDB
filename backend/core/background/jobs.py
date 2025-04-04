@@ -583,7 +583,8 @@ class ImportJob(Job):
             ts_str = entry.get("timestamp")
             try:
                 ts = datetime.fromisoformat(ts_str)  # Parse timestamp as ISO 8601
-            except:
+            except Exception as e:
+                print(f"Error parsing timestamp {ts_str}: {e}")
                 ts = datetime.now()  # Fallback to current timestamp
 
             lat = entry["latitude"]
