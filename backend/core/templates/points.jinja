@@ -146,7 +146,7 @@ Points Overview
                         <td><a href="{{ url_for('web.map') }}?point_id={{ point.id }}&start_date={{ date }}&end_date={{ date }}">{{ point.timestamp }}</a></td>
                         <td>{{ point.latitude|round(8) }}</td>
                         <td>{{ point.longitude|round(8) }}</td>
-                        {{ if point.speed is not none }}
+                        {% if point.speed is not none %}
                             <td>{{ (point.speed * 3.6)|round(2) }}</td>
                         {% else %}
                             <td>-</td>
