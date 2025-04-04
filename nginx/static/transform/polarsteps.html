@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Polarsteps JSON Transformer</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      background-color: #f4f4f9;
+    }
+    .container {
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+      text-align: center;
+    }
+    input[type="file"] {
+      margin: 10px 0;
+    }
+    button {
+      padding: 10px 20px;
+      margin-top: 10px;
+      border: none;
+      background-color: #007BFF;
+      color: white;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Polarsteps JSON Transformer</h1>
+    <p>Upload the Polarsteps export JSON file to convert it into the desired point format.</p>
+    <input type="file" id="jsonFile" accept=".json" />
+    <button onclick="processJSON()">Transform and Download</button>
+  </div>
+
+  <script>
+    function processJSON() {
+      const fileInput = document.getElementById('jsonFile');
+      const file = fileInput.files[0];
+
+      if (!file) {
+        alert('Please upload a JSON file first.');
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = function(event) {
+        try {
+          // Parse the file content as JSON
+          const data = JSON.parse(event.target.result);
+          // Transform to the desired output
+          const transformedData = transformData(data);
+          // Download the new JSON file
+          downloadJSON(transformedData, 'transformed.json');
+        } catch (error) {
+          alert('Invalid JSON file. Please upload a valid JSON.');
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    function transformData(jsonData) {
+      // We expect a top-level object with a key "locations" which is an array of objects:
+      // {
+      //   "locations": [
+      //     { "lat": 66.6379461, "lon": 15.3866948, "time": 1723454567.303 },
+      //     ...
+      //   ]
+      // }
+
+      if (!jsonData || !Array.isArray(jsonData.locations)) {
+        alert('JSON does not appear to be a valid Polarsteps export (missing "locations").');
+        return [];
+      }
+
+      // Loop over each location and produce the standard format:
+      // [
+      //   {
+      //     "timestamp": ...,
+      //     "latitude": ...,
+      //     "longitude": ...
+      //     // optional fields as needed
+      //   },
+      //   ...
+      // ]
+
+      const newFormat = jsonData.locations.map(loc => {
+        // Minimum required fields
+        let timestamp = loc.time;
+        // If you want to convert the numeric timestamp to an ISO string, uncomment below:
+        /*
+        if (!isNaN(timestamp)) {
+          const dateObj = new Date(timestamp * 1000);
+          timestamp = dateObj.toISOString();
+        }
+        */
+
+        // lat/lon are required
+        const latitude = parseFloat(loc.lat) || 0;
+        const longitude = parseFloat(loc.lon) || 0;
+
+        // Construct each record
+        const record = {
+          timestamp: timestamp,
+          latitude: latitude,
+          longitude: longitude
+        };
+
+        // If the Polarsteps data had any other fields (accuracy, altitude, etc.),
+        // you could optionally extract them here and add them to record.
+
+        return record;
+      });
+
+      return newFormat;
+    }
+
+    function downloadJSON(data, filename) {
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+  </script>
+</body>
+</html>
