@@ -10,16 +10,49 @@ from ..utils import api_key_required
 api_gps_ns = Namespace("gps", description="GPS Data operations")
 
 gps_model = api_gps_ns.model("GPSData", {
-    "timestamp": fields.String(required=True),
-    "latitude": fields.Float(required=True),
-    "longitude": fields.Float(required=True),
-    "horizontal_accuracy": fields.Float(),
-    "altitude": fields.Float(),
-    "vertical_accuracy": fields.Float(),
-    "heading": fields.Float(),
-    "heading_accuracy": fields.Float(),
-    "speed": fields.Float(),
-    "speed_accuracy": fields.Float(),
+    "timestamp": fields.String(
+        required=True,
+        description="Timestamp in Second since epoch",
+        example="1672531199"
+    ),
+    "latitude": fields.Float(
+        required=True,
+        description="Latitude of the GPS point",
+        example=52.605508
+    ),
+    "longitude": fields.Float(
+        required=True,
+        description="Longitude of the GPS point",
+        example=13.407278
+    ),
+    "horizontal_accuracy": fields.Float(
+        description="Horizontal accuracy in meters",
+        example=10.0
+    ),
+    "altitude": fields.Float(
+        description="Altitude in meters",
+        example=309.0
+    ),
+    "vertical_accuracy": fields.Float(
+        description="Vertical accuracy in meters",
+        example=2.0
+    ),
+    "heading": fields.Float(
+        description="Heading in degrees",
+        example=-1.0
+    ),
+    "heading_accuracy": fields.Float(
+        description="Heading accuracy in degrees",
+        example=-1.0
+    ),
+    "speed": fields.Float(
+        description="Speed in meters per second",
+        example=0.0
+    ),
+    "speed_accuracy": fields.Float(
+        description="Speed accuracy in meters per second",
+        example=0.36
+    ),
 })
 
 api_key_parser = RequestParser()
@@ -98,7 +131,7 @@ geometry_model = api_gps_ns.model("Geometry", {
         fields.Float,
         required=True,
         description="[longitude, latitude] of the GPS point",
-        example=[13.407278, 52.605508]
+        example=[13.407278, 52.605508] 
     ),
 })
 
