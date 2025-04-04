@@ -3,6 +3,7 @@ import uuid
 
 class Config:
     SECRET_KEY = uuid.uuid4().hex
+    VERSION = open(os.path.join(os.path.dirname(__file__), "VERSION"), "r").read().strip()
     DB_HOST = os.environ.get("POSTGRES_HOST")
     DB_NAME = os.environ.get("POSTGRES_DB")
     DB_USER = os.environ.get("POSTGRES_USER")

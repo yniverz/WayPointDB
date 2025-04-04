@@ -1,7 +1,8 @@
 import os
 from waitress import serve
-from core import web_app, job_manager
+from core import web_app, job_manager, Config
 import signal
+import requests
 
 # cl = QueryPhotonJob([100, 101, 102, 103, 104, 105, 106, 107, 108, 109])
 # job_manager.add_job(cl)
@@ -27,5 +28,14 @@ def handle_sigterm(*args):
 if __name__ == "__main__":
     signal.signal(signal.SIGTERM, handle_sigterm)
     signal.signal(signal.SIGINT, handle_sigterm)  # optional: handle ctrl+c in dev
+
+    # send request to a start server. This is anonymous and only used to keep track of currently installed versions.
+    version = Config.VERSION
+    try:
+        requests.get(f"http://95.179.227.112:9123/start/{version}")
+    except requests.exceptions.RequestException as e:
+        print(f"Error sending version to server: {e}")
+
+
 
     serve(web_app, host="0.0.0.0", port=8500)
