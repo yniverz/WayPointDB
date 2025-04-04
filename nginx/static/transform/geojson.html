@@ -111,12 +111,10 @@
         // 1) Minimum required fields
         let timestamp = props.timestamp;
         // If you'd like the timestamp as an ISO date from a Unix timestamp, uncomment below:
-        /*
         if (!isNaN(timestamp)) {
           const dateObj = new Date(timestamp * 1000);
-          timestamp = dateObj.toISOString();
+          timestamp = dateObj.toISOString().replace(/\.\d{3}Z$/, 'Z');
         }
-        */
 
         const latitude = parseFloat(props.latitude || coords[1] || 0);
         const longitude = parseFloat(props.longitude || coords[0] || 0);
