@@ -95,7 +95,6 @@ class GPSBatch(Resource):
             ts_str = entry.get("timestamp")
             try:
                 # Attempt to parse the timestamp as ISO 8601
-                # ts = datetime.fromisoformat(ts_str)
                 ts = datetime.fromtimestamp(int(ts_str), tz=datetime.now().astimezone().tzinfo)  # handle UTC 'Z'
             except:
                 ts = datetime.now()  # fallback if parse fails
@@ -104,15 +103,15 @@ class GPSBatch(Resource):
                 user_id=user_id,
                 trace_id=trace_id,
                 timestamp=ts,
-                latitude=entry["latitude"],
-                longitude=entry["longitude"],
-                horizontal_accuracy=entry.get("horizontal_accuracy"),
-                altitude=entry.get("altitude"),
-                vertical_accuracy=entry.get("vertical_accuracy"),
-                heading=entry.get("heading"),
-                heading_accuracy=entry.get("heading_accuracy"),
-                speed=entry.get("speed"),
-                speed_accuracy=entry.get("speed_accuracy"),
+                latitude=round(float(entry["latitude"]), 8),
+                longitude=round(float(entry["longitude"]), 8),
+                horizontal_accuracy=round(float(entry.get("horizontal_accuracy")), 8),
+                altitude=round(float(entry.get("altitude")), 8),
+                vertical_accuracy=round(float(entry.get("vertical_accuracy")), 8),
+                heading=round(float(entry.get("heading")), 8),
+                heading_accuracy=round(float(entry.get("heading_accuracy")), 8),
+                speed=round(float(entry.get("speed")), 8),
+                speed_accuracy=round(float(entry.get("speed_accuracy")), 8),
             )
             db.session.add(gps_record)
 
