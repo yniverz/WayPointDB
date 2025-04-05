@@ -755,6 +755,8 @@ class MapView(MethodView):
         if start_date and end_date:
             time_delta = (datetime.fromisoformat(end_date) - datetime.fromisoformat(start_date)).total_seconds()
 
+        user_trace_id = "trace_id = '{g.current_trace.id}'" if g.current_trace else "user_id = '{user.id}'"
+
         if ne_lat is None and ne_lng is None and sw_lat is None and sw_lng is None:
             query = f"""
                 WITH filtered_data AS (
@@ -763,7 +765,7 @@ class MapView(MethodView):
                         ROW_NUMBER() OVER (ORDER BY timestamp) AS row_num,
                         COUNT(*) OVER () AS total
                     FROM gps_data
-                    WHERE user_id = '{user.id}'
+                    WHERE {user_trace_id}
                     {filters}
                 )
                 SELECT id, user_id, timestamp, latitude, longitude, horizontal_accuracy,
@@ -779,7 +781,7 @@ class MapView(MethodView):
                 SELECT id, user_id, timestamp, latitude, longitude, horizontal_accuracy,
                     altitude, vertical_accuracy, heading, heading_accuracy, speed, speed_accuracy
                 FROM gps_data
-                WHERE user_id = '{user.id}'
+                WHERE {user_trace_id}
                 {filters}
                 ORDER BY timestamp;
             """
@@ -791,7 +793,7 @@ class MapView(MethodView):
                         ROW_NUMBER() OVER (ORDER BY timestamp) AS row_num,
                         COUNT(*) OVER () AS total
                     FROM gps_data
-                    WHERE user_id = '{user.id}'
+                    WHERE {user_trace_id}
                     AND latitude BETWEEN {sw_lat} AND {ne_lat}
                     AND longitude BETWEEN {sw_lng} AND {ne_lng}
                     {filters}
