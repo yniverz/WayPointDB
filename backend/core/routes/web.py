@@ -244,7 +244,7 @@ class YearlyStatsView(MethodView):
         
         total_points = GPSData.query.filter_by(**g.trace_query).filter(func.extract("year", GPSData.timestamp) == year).count()
 
-        stats = DailyStatistic.query.filter_by(**g.trace_query, year=year).all()
+        stats: list[DailyStatistic] = DailyStatistic.query.filter_by(**g.trace_query, year=year).all()
 
         # We'll group stats by month
         stats_by_month = defaultdict(lambda: {
@@ -253,6 +253,11 @@ class YearlyStatsView(MethodView):
             "countries": set(),
             "total_distance": 0.0
         })
+
+        stats.sort(key=lambda x: (x.year, x.month, x.day))
+
+        last_visit_cities = dict()
+        last_visit_countries = dict()
 
         for stat in stats:
             month = stat.month
@@ -264,8 +269,10 @@ class YearlyStatsView(MethodView):
             # Update visited cities / countries (they are stored in JSON columns)
             if stat.visited_cities:
                 stats_by_month[month]["cities"].update([tuple(city) for city in stat.visited_cities])
+                last_visit_cities.update([(tuple(city), f"{stat.day:02d}-{stat.month:02d}-{stat.year}") for city in stat.visited_cities])
             if stat.visited_countries:
                 stats_by_month[month]["countries"].update(stat.visited_countries)
+                last_visit_countries.update([(country, f"{stat.day:02d}-{stat.month:02d}-{stat.year}") for country in stat.visited_countries])
 
             # Track total distance in meters for each month
             stats_by_month[month]["total_distance"] += stat.total_distance_m
@@ -295,6 +302,8 @@ class YearlyStatsView(MethodView):
             stats_by_month=stats_by_month_processed,   # Dict of months → aggregated data
             total_cities=sorted(list(all_cities)),
             total_countries=sorted(list(all_countries)),
+            last_visit_cities=last_visit_cities,
+            last_visit_countries=last_visit_countries,
             total_distance=f"{total_distance / 1000.0:,.0f}",  # Convert to KM
             total_points=f"{total_points:,}",
             is_photon_connected=len(Config.PHOTON_SERVER_HOST) != 0,
