@@ -414,7 +414,7 @@ yearly_stats_model = api_gps_ns.model("YearlyStats", {
     "monthlyDistanceKm": fields.Nested(months_stats_model)
 })
 
-stats_model = api_gps_ns.model("Stats", {
+stats_model = api_gps_ns.model("AllStats", {
     "totalDistanceKm": fields.Float(description="Total distance in km", example=0.0),
     "totalPointsTracked": fields.Integer(description="Total points tracked", example=0),
     "totalReverseGeocodedPoints": fields.Integer(description="Total reverse geocoded points", example=0),
@@ -427,7 +427,7 @@ stats_model = api_gps_ns.model("Stats", {
     "MIN_CITY_VISIT_DURATION_FOR_STATS": fields.String(description="Minimum duration for city visit statistics", example="1 day")
 })
 
-@api_account_ns.route("/statss")
+@api_account_ns.route("/stats")
 class AccountStats(Resource):
     """Get user statistics."""
 
@@ -542,7 +542,7 @@ class AccountStats(Resource):
     
 
 
-monthly_stats_model = api_gps_ns.model("YearlyStats", {
+monthly_stats_model = api_gps_ns.model("MonthStats", {
     "month": fields.Integer(description="Month", example=10),
     "totalDistanceKm": fields.Float(description="Total distance in km", example=0.0),
     "totalCountriesVisited": fields.Integer(description="Total countries visited", example=0),
@@ -552,7 +552,7 @@ monthly_stats_model = api_gps_ns.model("YearlyStats", {
     "dailyDistanceKm": fields.List(fields.Float(description="Daily distance in km", example=0.0)),
 })
 
-year_stats_model = api_gps_ns.model("Stats", {
+year_stats_model = api_gps_ns.model("YearStats", {
     "totalDistanceKm": fields.Float(description="Total distance in km", example=0.0),
     "totalPointsTracked": fields.Integer(description="Total points tracked", example=0),
     "totalReverseGeocodedPoints": fields.Integer(description="Total reverse geocoded points", example=0),
