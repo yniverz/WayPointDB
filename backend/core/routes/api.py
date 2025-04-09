@@ -282,7 +282,7 @@ class OverlandGPSBatch(Resource):
             db.session.add(gps_record)
 
         db.session.commit()
-        return {"message": "Overland GPS data added successfully"}, 201
+        return {"result": "ok"}, 201
 
 
 @api_gps_ns.route("/owntracks")
