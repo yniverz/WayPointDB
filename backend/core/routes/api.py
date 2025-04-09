@@ -5,7 +5,7 @@ from flask_restx import Resource, fields, Namespace
 from flask_restx.reqparse import RequestParser
 from sqlalchemy import func
 
-from backend.core.config import Config
+from ..config import Config
 from ..extensions import db
 from ..models import DailyStatistic, GPSData, User
 from ..utils import api_key_required
