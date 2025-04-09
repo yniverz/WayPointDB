@@ -55,6 +55,10 @@ def api_key_required(f):
         g.current_user = user
         g.current_trace = trace
 
+        g.trace_query = {"user_id": g.current_user.id}
+        if g.current_trace:
+            g.trace_query = {"trace_id": g.current_trace.id}
+
         return f(*args, **kwargs)
     return decorated_function
 

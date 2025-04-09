@@ -1,9 +1,11 @@
+from collections import defaultdict
 from datetime import datetime
-from flask import redirect, request, g, session, url_for
+from flask import jsonify, redirect, request, g, session, url_for
 from flask_restx import Resource, fields, Namespace
 from flask_restx.reqparse import RequestParser
+from sqlalchemy import func
 from ..extensions import db
-from ..models import GPSData, User
+from ..models import DailyStatistic, GPSData, User
 from ..utils import api_key_required
 
 # Create a dedicated namespace for the GPS routes
@@ -381,4 +383,243 @@ class AccountLogin(Resource):
         user = g.current_user
         session["user_id"] = str(user.id)
         return redirect(url_for("web.home"))
-        # return {"message": "Logged in successfully"}, 200
+
+
+# {
+#   "totalDistanceKm": 0,
+#   "totalPointsTracked": 0,
+#   "totalReverseGeocodedPoints": 0,
+#   "totalCountriesVisited": 0,
+#   "totalCitiesVisited": 0,
+#   "yearlyStats": [
+#     {
+#       "year": 0,
+#       "totalDistanceKm": 0,
+#       "totalCountriesVisited": 0,
+#       "totalCitiesVisited": 0,
+#       "monthlyDistanceKm": {
+#         "january": 0,
+#         "february": 0,
+#         "march": 0,
+#         "april": 0,
+#         "may": 0,
+#         "june": 0,
+#         "july": 0,
+#         "august": 0,
+#         "september": 0,
+#         "october": 0,
+#         "november": 0,
+#         "december": 0
+#       }
+#     }
+#   ]
+# }
+
+monthly_stats_model = api_gps_ns.model("MonthlyStats", {
+    "january": fields.Float(description="Distance in January", example=0.0),
+    "february": fields.Float(description="Distance in February", example=0.0),
+    "march": fields.Float(description="Distance in March", example=0.0),
+    "april": fields.Float(description="Distance in April", example=0.0),
+    "may": fields.Float(description="Distance in May", example=0.0),
+    "june": fields.Float(description="Distance in June", example=0.0),
+    "july": fields.Float(description="Distance in July", example=0.0),
+    "august": fields.Float(description="Distance in August", example=0.0),
+    "september": fields.Float(description="Distance in September", example=0.0),
+    "october": fields.Float(description="Distance in October", example=0.0),
+    "november": fields.Float(description="Distance in November", example=0.0),
+    "december": fields.Float(description="Distance in December", example=0.0)
+})
+
+yearly_stats_model = api_gps_ns.model("YearlyStats", {
+    "year": fields.Integer(description="Year", example=2023),
+    "totalDistanceKm": fields.Float(description="Total distance in km", example=0.0),
+    "totalCountriesVisited": fields.Integer(description="Total countries visited", example=0),
+    "totalCitiesVisited": fields.Integer(description="Total cities visited", example=0),
+    "monthlyDistanceKm": fields.Nested(monthly_stats_model)
+})
+
+stats_model = api_gps_ns.model("Stats", {
+    "totalDistanceKm": fields.Float(description="Total distance in km", example=0.0),
+    "totalPointsTracked": fields.Integer(description="Total points tracked", example=0),
+    "totalReverseGeocodedPoints": fields.Integer(description="Total reverse geocoded points", example=0),
+    "totalCountriesVisited": fields.Integer(description="Total countries visited", example=0),
+    "totalCitiesVisited": fields.Integer(description="Total cities visited", example=0),
+    "yearlyStats": fields.List(fields.Nested(yearly_stats_model))
+})
+
+@api_account_ns.route("/stats")
+class AccountStats(Resource):
+    """Get user statistics."""
+
+    @api_account_ns.expect(api_key_parser)
+    @api_key_required
+    def get(self):
+        """Get user statistics (requires a valid API key)."""
+        
+        total_points = GPSData.query.filter_by(**g.trace_query).count()
+        total_geocoded = GPSData.query.filter_by(**g.trace_query).filter(GPSData.reverse_geocoded == True).count()
+        total_not_geocoded = GPSData.query.filter_by(**g.trace_query).filter(GPSData.reverse_geocoded == True).filter(GPSData.country == None).count()
+        stats: list[DailyStatistic] = DailyStatistic.query.filter_by(**g.trace_query).all()
+
+        # We'll group stats by year
+        stats_by_year = defaultdict(lambda: {
+            "monthly_distances": [0.0] * 12,  # 12 months
+            "cities": set(),
+            "countries": set(),
+            "total_distance": 0.0
+        })
+
+        stats.sort(key=lambda x: (x.year, x.month, x.day))
+
+        last_visit_cities = dict()
+        last_visit_countries = dict()
+
+        for stat in stats:
+            year = stat.year
+            month_idx = stat.month - 1  # January -> 0, etc.
+
+            # Accumulate distances (in meters). We'll convert to km later.
+            stats_by_year[year]["monthly_distances"][month_idx] += stat.total_distance_m
+
+            # Update visited cities / countries (they are stored in JSON columns)
+            if stat.visited_cities:
+                stats_by_year[year]["cities"].update([tuple(city) for city in stat.visited_cities])
+                last_visit_cities.update([(tuple(city), f"{stat.day:02d}-{stat.month:02d}-{stat.year}") for city in stat.visited_cities])
+            if stat.visited_countries:
+                stats_by_year[year]["countries"].update(stat.visited_countries)
+                last_visit_countries.update([(country, f"{stat.day:02d}-{stat.month:02d}-{stat.year}") for country in stat.visited_countries])
+
+            # Track total distance in meters for each year
+            stats_by_year[year]["total_distance"] += stat.total_distance_m
+            
+
+        # Collect overall unique sets across **all** years
+        all_cities = set()
+        all_countries = set()
+        total_distance = 0.0
+
+        # Convert sets to lists for JSON serialization; also convert meters -> km
+        stats_by_year_processed = {}
+        for year, data in sorted(stats_by_year.items(), reverse=True):
+            all_cities.update(data["cities"])
+            all_countries.update(data["countries"])
+            total_distance += data["total_distance"]
+
+            stats_by_year_processed[year] = {
+                "monthly_distances": [int(dist_m / 1000) for dist_m in data["monthly_distances"]],
+                "cities": list(data["cities"]),
+                "countries": list(data["countries"]),
+                "total_distance": int(data["total_distance"] / 1000.0),  # store in KM
+            }
+
+        yearly_stats = []
+        for year, data in sorted(stats_by_year.items(), reverse=True):
+            yearly_stats.append({
+                "year": year,
+                "totalDistanceKm": int(data["total_distance"] / 1000.0),
+                "totalCountriesVisited": len(data["countries"]),
+                "totalCitiesVisited": len(data["cities"]),
+                "monthlyDistanceKm": {
+                    month: int(dist_m / 1000) for month, dist_m in zip(
+                        ["january", "february", "march", "april", "may", "june",
+                         "july", "august", "september", "october", "november", "december"],
+                        data["monthly_distances"]
+                    )
+                }
+            })
+
+        stats = {
+            "totalDistanceKm": int(total_distance / 1000.0),
+            "totalPointsTracked": total_points,
+            "totalReverseGeocodedPoints": total_geocoded,
+            "totalCountriesVisited": len(all_countries),
+            "totalCitiesVisited": len(all_cities),
+            "yearlyStats": yearly_stats
+        }
+
+        return jsonify(stats)
+
+
+
+        # return render_template(
+        #     "stats.jinja",
+        #     stats_by_year=stats_by_year_processed,   # Dict of years → aggregated data
+        #     total_cities=sorted(list(all_cities)),
+        #     total_countries=sorted(list(all_countries)),
+        #     last_visit_cities=last_visit_cities,
+        #     last_visit_countries=last_visit_countries,
+        #     total_distance=f"{total_distance / 1000.0:,.0f}",  # Convert to KM
+        #     total_points=f"{total_points:,}",
+        #     is_photon_connected=len(Config.PHOTON_SERVER_HOST) != 0,
+        #     total_geocoded=f"{total_geocoded:,}",
+        #     total_not_geocoded=f"{total_not_geocoded:,}",
+        #     MIN_COUNTRY_VISIT_DURATION_FOR_STATS=self.formatTimeDelta(Config.MIN_COUNTRY_VISIT_DURATION_FOR_STATS),
+        #     MIN_CITY_VISIT_DURATION_FOR_STATS=self.formatTimeDelta(Config.MIN_CITY_VISIT_DURATION_FOR_STATS)
+        # )
+    
+    def formatTimeDelta(self, seconds: int):
+        
+        if seconds < 60:
+            return f"{seconds} second" + ("s" if seconds > 1 else "")
+        elif seconds < 60 * 60:
+            return f"{seconds // 60} minute" + ("s" if seconds // 60 > 1 else "")
+        elif seconds < 60 * 60 * 24:
+            return f"{seconds // (60 * 60)} hour" + ("s" if seconds // (60 * 60) > 1 else "")
+        else:
+            return f"{seconds // (60 * 60 * 24)} day" + ("s" if seconds // (60 * 60 * 24) > 1 else "")
+    
+
+    def get_yearly_stats(self, year: str):
+        total_points = GPSData.query.filter_by(**g.trace_query).filter(func.extract("year", GPSData.timestamp) == year).count()
+
+        stats = DailyStatistic.query.filter_by(**g.trace_query, year=year).all()
+
+        # We'll group stats by month
+        stats_by_month = defaultdict(lambda: {
+            "monthly_distances": [0.0] * 31,  # 31 days
+            "cities": set(),
+            "countries": set(),
+            "total_distance": 0.0
+        })
+
+        for stat in stats:
+            month = stat.month
+            day = stat.day
+
+            # Accumulate distances (in meters). We'll convert to km later.
+            stats_by_month[month]["monthly_distances"][day - 1] = stat.total_distance_m
+
+            # Update visited cities / countries (they are stored in JSON columns)
+            if stat.visited_cities:
+                stats_by_month[month]["cities"].update([tuple(city) for city in stat.visited_cities])
+            if stat.visited_countries:
+                stats_by_month[month]["countries"].update(stat.visited_countries)
+
+            # Track total distance in meters for each month
+            stats_by_month[month]["total_distance"] += stat.total_distance_m
+
+        # Collect overall unique sets across **all** months
+        all_cities = set()
+        all_countries = set()
+        total_distance = 0.0
+
+        # Convert sets to lists for JSON serialization; also convert meters -> km
+        stats_by_month_processed = {}
+        for month, data in sorted(stats_by_month.items()):
+            all_cities.update(data["cities"])
+            all_countries.update(data["countries"])
+            total_distance += data["total_distance"]
+
+            stats_by_month_processed[month] = {
+                "monthly_distances": [int(dist_m / 1000) for dist_m in data["monthly_distances"]],
+                "cities": list(data["cities"]),
+                "countries": list(data["countries"]),
+                "total_distance": int(data["total_distance"] / 1000.0),  # store in KM
+            }
+
+        return (stats_by_month_processed,   # Dict of months → aggregated data
+            sorted(list(all_cities)),
+            sorted(list(all_countries)),
+            total_distance,
+            total_points
+        )
