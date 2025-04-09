@@ -56,9 +56,11 @@ The project can be accessed by navigating to the IP address of the host machine 
 
 ### Data Collection
 There are currently two ways to collect GPS data using a mobile device:
-- Using the Overland app, which can be configured to send data to WayPointDB using the ```/api/v1/gps/overland?api_key=<KEY>``` API endpoint.
+- Using the [Overland](https://overland.p3k.app) app, which can be configured to send data to WayPointDB using the ```/api/v1/gps/overland?api_key=<KEY>``` API endpoint.
 - Using the OwnTracks app, which can be configured to send data to WayPointDB using the ```/api/v1/gps/owntracks?api_key=<KEY>``` API endpoint
 - **Apple AirTags** are also finally supported using the [WayPointDB AirTag Integration](https://github.com/yniverz/WayPointDB-AirTag-Integration)
+
+**Note:** I recommend using the Overland app, as it is easy to setup and does not require an account.
 
 #### Alternative Endpoints
 - ```/api/v1/gps/overland``` can also be reached using ```/api/v1/overland/batches```
