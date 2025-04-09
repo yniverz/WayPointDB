@@ -82,6 +82,11 @@ Users can be added, edited, and deleted in the ```Manage Users``` page. Only ```
 ### Additional Traces
 Users can add additional traces to their account in the ```Manage Traces``` page accessible from the ```Account``` page. These traces are like profiles for each account and can be selected in the menu bar. Traces can be shared or transfered to other users as well.
 
+### WayPointDB iOS App
+The [WayPointDB iOS App](https://github.com/yniverz/WayPointDB-iOS) is a native iOS app that can be used to view and manage WayPointDB data. It is a work in progress and is not yet fully functional.
+
+**Note:** This app does NOT collect any gps data. use one of the options above instead. The iOS app is not available on the App Store, but can be built from source using Xcode.
+
 ## Update
 To update the project, pull the latest changes from the repository and rebuild the Docker image
 ```bash
