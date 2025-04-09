@@ -427,7 +427,7 @@ stats_model = api_gps_ns.model("Stats", {
     "MIN_CITY_VISIT_DURATION_FOR_STATS": fields.String(description="Minimum duration for city visit statistics", example="1 day")
 })
 
-@api_account_ns.route("/stats")
+@api_account_ns.route("/statss")
 class AccountStats(Resource):
     """Get user statistics."""
 
