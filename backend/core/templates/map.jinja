@@ -144,7 +144,7 @@ GPS Map
     var heatmapData = [];       // will be filled upon fetch
 
     var accuracyFilter = true;
-
+    var connectFarPoints = true;
     var showSpeedPolyline = true;
 
     function initMap() {
@@ -275,6 +275,21 @@ GPS Map
         .finally(() => document.getElementById("loading-spinner").style.display = "none");
     }
 
+    function getCoordinateDistance(lat1, lng1, lat2, lng2) {
+        const R = 6371e3; // meters
+        const φ1 = lat1 * Math.PI / 180;
+        const φ2 = lat2 * Math.PI / 180;
+        const Δφ = (lat2 - lat1) * Math.PI / 180;
+        const Δλ = (lng2 - lng1) * Math.PI / 180;
+
+        const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+                  Math.cos(φ1) * Math.cos(φ2) *
+                  Math.sin(Δλ/2) * Math.sin(Δλ/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+        return R * c; // in meters
+    }
+
     function updateMap(gpsData) {
         console.log(0);
         polylineLayer.clearLayers();
@@ -307,6 +322,15 @@ GPS Map
         console.log(1);
         if (showSpeedPolyline) {
             for (let i = 0; i < coordinates.length - 1; i++) {
+                // Skip if the distance between points is too large
+                if (!connectFarPoints && i > 0) {
+                    const dist = getCoordinateDistance(
+                        coordinates[i].lat, coordinates[i].lng,
+                        coordinates[i - 1].lat, coordinates[i - 1].lng
+                    );
+                    if (dist > 500) continue; // Skip this segment
+                }
+
                 let color = getSpeedColor(coordinates[i].speed || 0);
                 L.polyline([coordinates[i], coordinates[i + 1]], {
                     color: color, 
@@ -314,6 +338,40 @@ GPS Map
                 }).addTo(polylineLayer);
             }
             console.log(2);
+        } else if (connectFarPoints) {
+            var cached_points = [];
+            for (let i = 0; i < coordinates.length - 1; i++) {
+                // Skip if the distance between points is too large
+                if (i > 0) {
+                    const dist = getCoordinateDistance(
+                        coordinates[i].lat, coordinates[i].lng,
+                        coordinates[i - 1].lat, coordinates[i - 1].lng
+                    );
+                    if (dist > 500) {
+                        // Draw the cached points as a polyline
+                        if (cached_points.length > 1) {
+                            L.polyline(cached_points.map(coord => [coord.lat, coord.lng]), { 
+                                color: "#369eff",
+                                fillColor: "#0b84ff",
+                                weight: 3
+                            }).addTo(polylineLayer);
+                        }
+                        cached_points = [];
+                        continue;
+                    }
+                }
+                
+                cached_points.push(coordinates[i]);
+            }
+
+            // Draw the last segment if there are any cached points
+            if (cached_points.length > 1) {
+                L.polyline(cached_points.map(coord => [coord.lat, coord.lng]), { 
+                    color: "#369eff",
+                    fillColor: "#0b84ff",
+                    weight: 3
+                }).addTo(polylineLayer);
+            }
         } else {
             var polyline = L.polyline(coordinates.map(coord => [coord.lat, coord.lng]), { 
                 color: "#369eff",
@@ -579,6 +637,11 @@ GPS Map
         fetchGPSData();
     }
 
+    function toggleConnectFarPoints(checkbox) {
+        connectFarPoints = checkbox.checked;
+        fetchGPSData();
+    }
+
     function toggleSpeedPolyline(checkbox) {
         showSpeedPolyline = checkbox.checked;
         fetchGPSData();
@@ -623,8 +686,19 @@ GPS Map
                             type="checkbox" 
                             id="toggleAccuracy" 
                             onchange="toggleAccuracy(this)" 
+                            checked
                         />
                         Filter Accuracy (< 20m)
+                    </label>
+                    <br>
+                    <label>
+                        <input 
+                            type="checkbox" 
+                            id="toggleAccuracy" 
+                            onchange="toggleConnectFarPoints(this)" 
+                            checked
+                        />
+                        Connect Far Points
                     </label>
                     <br>
                     <label>

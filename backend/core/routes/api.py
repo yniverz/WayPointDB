@@ -85,6 +85,7 @@ batch_gps_model = api_gps_ns.model("BatchGPSData", {
 @api_gps_ns.route("/batch")
 class GPSBatch(Resource):
     @api_gps_ns.expect(api_key_parser, batch_gps_model)
+    @api_gps_ns.response(201, "Success")
     @api_key_required
     def post(self):
         """Submit batch GPS data (requires a valid API key)."""
