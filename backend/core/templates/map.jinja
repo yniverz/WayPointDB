@@ -338,7 +338,7 @@ GPS Map
                 }).addTo(polylineLayer);
             }
             console.log(2);
-        } else if (connectFarPoints) {
+        } else if (!connectFarPoints) {
             var cached_points = [];
             for (let i = 0; i < coordinates.length - 1; i++) {
                 // Skip if the distance between points is too large
