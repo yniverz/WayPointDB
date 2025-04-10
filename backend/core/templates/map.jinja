@@ -252,9 +252,9 @@ GPS Map
 
         // Skip fetching if the map bounds haven't changed (and not forced)
         if (!forced && lastBounds && ( lastBounds.equals(bounds) || (!currentDataIsInterpolated && lastBounds.contains(bounds.getNorthEast()) && lastBounds.contains(bounds.getSouthWest())) )) {
-            {# if (lastGpsData.length > 0) {
+            if (lastGpsData.length > 0) {
                 updateMap(lastGpsData);
-            } #}
+            }
             return;
         }
 
