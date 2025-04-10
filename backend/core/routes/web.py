@@ -732,6 +732,9 @@ class MapView(MethodView):
         except ValueError:
             return jsonify({"error": "Invalid bounds"}), 400
         
+        fetch_interpolated = bool(data.get("fetch_interpolated", True))
+
+        
 
         user = g.current_user
         
@@ -767,7 +770,7 @@ class MapView(MethodView):
 
         user_trace_id = f"trace_id = '{g.current_trace.id}'" if g.current_trace else f"user_id = '{user.id}'"
 
-        if ne_lat is None and ne_lng is None and sw_lat is None and sw_lng is None:
+        if ne_lat is None and ne_lng is None and sw_lat is None and sw_lng is None and fetch_interpolated:
             query = f"""
                 WITH filtered_data AS (
                     SELECT id, user_id, timestamp, latitude, longitude, horizontal_accuracy,
@@ -786,7 +789,7 @@ class MapView(MethodView):
                 ORDER BY timestamp;
             """
         
-        elif time_delta != 0 and time_delta < 60 * 60 * 25:
+        elif (time_delta != 0 and time_delta < 60 * 60 * 25) or not fetch_interpolated:
             query = f"""
                 SELECT id, user_id, timestamp, latitude, longitude, horizontal_accuracy,
                     altitude, vertical_accuracy, heading, heading_accuracy, speed, speed_accuracy

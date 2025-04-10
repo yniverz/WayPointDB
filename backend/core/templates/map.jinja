@@ -143,6 +143,7 @@ GPS Map
     var heatmapLoaded = false;  // to ensure data is only loaded once
     var heatmapData = [];       // will be filled upon fetch
 
+    var fetchInterpolated = true;
     var accuracyFilter = true;
     var connectFarPoints = true;
     var farThreshold = 10000; // meters
@@ -183,7 +184,9 @@ GPS Map
             }
             updateMapPositionInURL();
             clearTimeout(fetchTimeout);
-            fetchTimeout = setTimeout(fetchGPSData, delay);
+            if (fetchInterpolated) {
+                fetchTimeout = setTimeout(fetchGPSData, delay);
+            }
         });
         map.on('zoomend', () => {
             if (preventFetch) {
@@ -191,7 +194,9 @@ GPS Map
             }
             updateMapPositionInURL();
             clearTimeout(fetchTimeout);
-            fetchTimeout = setTimeout(fetchGPSData, delay);
+            if (fetchInterpolated) {
+                fetchTimeout = setTimeout(fetchGPSData, delay);
+            }
         });
         map.on('movestart', () => {
             clearTimeout(fetchTimeout);
@@ -248,7 +253,8 @@ GPS Map
 
         var body = {
             start_date: startDate,
-            end_date: endDate
+            end_date: endDate,
+            fetch_interpolated: fetchInterpolated,
         };
 
         if (!full_date_range) {
@@ -260,6 +266,7 @@ GPS Map
         } else {
             activateFitBounds = true;
         }
+
 
         fetch("", {
             method: "POST",
@@ -631,6 +638,11 @@ GPS Map
         }
     }
 
+    function toggleFetchInterpolated(checkbox) {
+        fetchInterpolated = checkbox.checked;
+        fetchGPSData();
+    }
+
     function toggleAccuracy(checkbox) {
         accuracyFilter = checkbox.checked;
         fetchGPSData();
@@ -671,6 +683,16 @@ GPS Map
                 // legend
                 var legend = L.DomUtil.create('div', '', container);
                 legend.innerHTML = `
+                    <label>
+                        <input 
+                            type="checkbox" 
+                            id="fetchInterpolated" 
+                            onchange="toggleFetchInterpolated(this)" 
+                            checked
+                        />
+                        Interpolated Trace
+                    </label>
+                    <br>
                     <label>
                         <input 
                             type="checkbox" 
