@@ -861,7 +861,7 @@ class MapView(MethodView):
         return "OK", 200
     
     def compress(self, data):
-        content = gzip.compress(json.dumps(data).encode('utf8'), 5)
+        content = gzip.compress(json.dumps(data).encode('utf8'), 9)
         response = make_response(content)
         response.headers['Content-length'] = len(content)
         response.headers['Content-Encoding'] = 'gzip'
@@ -881,10 +881,9 @@ class HeatMapDataView(MethodView):
         return self.compress(heatmap_query)
     
     def compress(self, data):
-        content = gzip.compress(json.dumps(data).encode('utf8'), 5)
+        content = gzip.compress(json.dumps(data).encode('utf8'), 9)
         response = make_response(content)
         response.headers['Content-length'] = len(content)
-        response.headers['Content-Type'] = 'application/json; charset=utf-8'
         response.headers['Content-Encoding'] = 'gzip'
         return response
     
