@@ -849,7 +849,7 @@ class MapView(MethodView):
 
         # return jsonify(gps_data)
         response = self.compress(gps_data)
-        response.headers["Is-Interpolated"] = len(gps_data) >= max_points_count - 10
+        response.headers["Is-Interpolated"] = len(gps_data) >= max_points_count - 100
 
         return response
 
