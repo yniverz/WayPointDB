@@ -19,6 +19,15 @@ GPS Map
         position: relative;
     }
 
+    .loading-spinner-text {
+        position: absolute;
+        top: 45%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        display: none;
+        z-index: 1000;
+    }
+
     .loading-spinner {
         position: absolute;
         top: 50%;
@@ -117,6 +126,7 @@ GPS Map
     
     <div id="map">
         <div id="loading-spinner" class="loading-spinner"></div>
+        <div id="download-percentage" class="loading-spinner-text"></div>
     </div>
 </div>
 
@@ -247,6 +257,8 @@ GPS Map
         lastBounds = bounds;
 
         document.getElementById("loading-spinner").style.display = "block";
+        document.getElementById("download-percentage").style.display = "block";
+        document.getElementById("download-percentage").innerText = "0%";
 
         let startDate = document.getElementById("start-date").value;
         let endDate = document.getElementById("end-date").value;
@@ -273,14 +285,51 @@ GPS Map
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(body)
         })
-        .then(response => response.json())
-        {# .then(data => updateMap(data)) #}
+        .then(response => {
+            // Try to get the total bytes from header to track progress.
+            const contentLength = response.headers.get('Content-Length');
+            if (!contentLength) {
+                // Content-Length not provided; fallback to normal JSON parsing.
+                return response.json();
+            }
+            const total = parseInt(contentLength, 10);
+            let loaded = 0;
+            const reader = response.body.getReader();
+
+            // Create a new readable stream to track the download progress.
+            return new Response(new ReadableStream({
+                start(controller) {
+                    function push() {
+                        reader.read().then(({ done, value }) => {
+                            if (done) {
+                                controller.close();
+                                return;
+                            }
+                            loaded += value.byteLength;
+                            const percentage = Math.floor((loaded / total) * 100);
+                            // Update the percentage text element.
+                            document.getElementById("download-percentage").innerText = percentage + '%';
+                            controller.enqueue(value);
+                            push();
+                        }).catch(error => {
+                            console.error("Error reading data:", error);
+                            controller.error(error);
+                        });
+                    }
+                    push();
+                }
+            })).json();
+        })
         .then(data => {
             lastGpsData = data;
             updateMap(data);
         })
         .catch(error => console.error("Error fetching GPS data:", error))
-        .finally(() => document.getElementById("loading-spinner").style.display = "none");
+        .finally(() => {
+            document.getElementById("loading-spinner").style.display = "none";
+            document.getElementById("download-percentage").style.display = "none";
+            document.getElementById("download-percentage").innerText = "";
+        });
     }
 
     function getCoordinateDistance(lat1, lng1, lat2, lng2) {
@@ -678,12 +727,52 @@ GPS Map
     // Fetch the heatmap data (only once)
     function fetchHeatmapData() {
         document.getElementById("loading-spinner").style.display = "block";
+        document.getElementById("download-percentage").style.display = "block";
+        document.getElementById("download-percentage").innerText = "0%";
         return fetch("/map/heatmap_data.json")
-            .then(response => response.json())
+                .then(response => {
+                // Try to get the total bytes from header to track progress.
+                const contentLength = response.headers.get('Content-Length');
+                if (!contentLength) {
+                    // Content-Length not provided; fallback to normal JSON parsing.
+                    return response.json();
+                }
+                const total = parseInt(contentLength, 10);
+                let loaded = 0;
+                const reader = response.body.getReader();
+
+                // Create a new readable stream to track the download progress.
+                return new Response(new ReadableStream({
+                    start(controller) {
+                        function push() {
+                            reader.read().then(({ done, value }) => {
+                                if (done) {
+                                    controller.close();
+                                    return;
+                                }
+                                loaded += value.byteLength;
+                                const percentage = Math.floor((loaded / total) * 100);
+                                // Update the percentage text element.
+                                document.getElementById("download-percentage").innerText = percentage + '%';
+                                controller.enqueue(value);
+                                push();
+                            }).catch(error => {
+                                console.error("Error reading data:", error);
+                                controller.error(error);
+                            });
+                        }
+                        push();
+                    }
+                })).json();
+            })
             .then(data => {
                 heatmapData = data; // store globally
             })
-            .finally(() => document.getElementById("loading-spinner").style.display = "none");
+            .finally(() => {
+                document.getElementById("loading-spinner").style.display = "none";
+                document.getElementById("download-percentage").style.display = "none";
+                document.getElementById("download-percentage").innerText = "";
+            });
     }
 
     // ---------------------------------------------
