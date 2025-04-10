@@ -192,7 +192,7 @@
 
     <!-- Footer -->
     <div class="footer">
-        &copy; 2025 WayPointDB | {{ VERSION }} | Built with ❤️ and Flask |
+        &copy; 2025 WayPointDB | <span id="versionText">{{ VERSION }}</span> | Built with ❤️ and Flask |
         Icon created by <a href="https://www.flaticon.com/authors/freepik" title="visit icons" target="_blank">Freepik</a>
     </div>
 
@@ -236,6 +236,32 @@
                     toggleButton.textContent = "☀️"; // Change icon to sun
                 }
             });
+        });
+
+        document.addEventListener("DOMContentLoaded", function () {
+            // Fetch the version text from GitHub
+            fetch("https://raw.githubusercontent.com/yniverz/WayPointDB/refs/heads/main/VERSION")
+                .then(response => response.text())
+                .then(remoteVersion => {
+                    // Remove any whitespace/newlines
+                    remoteVersion = remoteVersion.trim();
+                    var versionElem = document.getElementById("versionText");
+                    var localVersion = versionElem.textContent.trim();
+                    // Compare the versions; if they differ, make the version a link
+                    if (remoteVersion !== localVersion) {
+                        var link = document.createElement("a");
+                        link.href = "https://github.com/yniverz/WayPointDB";
+                        link.target = "_blank";
+                        // Optionally, you could display the remote version instead by setting link.textContent = remoteVersion;
+                        // For now we keep the local version text.
+                        link.textContent = localVersion;
+                        versionElem.innerHTML = "";
+                        versionElem.appendChild(link);
+                    }
+                })
+                .catch(error => {
+                    console.error("Error fetching version:", error);
+                });
         });
     </script>
 
