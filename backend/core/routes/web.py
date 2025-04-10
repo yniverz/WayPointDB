@@ -1,5 +1,6 @@
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
+import gzip
 import math
 import os
 import re
@@ -9,7 +10,7 @@ import time
 import psycopg2
 import json
 from flask import (
-    Blueprint, Response, render_template, request, redirect, stream_with_context, url_for, 
+    Blueprint, Response, make_response, render_template, request, redirect, stream_with_context, url_for, 
     session, g, jsonify
 )
 from flask.views import MethodView
@@ -843,7 +844,8 @@ class MapView(MethodView):
 
         print(f"/gps_data: Time to data: {time2 - time1:.3f}s")
 
-        return jsonify(gps_data)
+        # return jsonify(gps_data)
+        return self.compress(gps_data)
 
     def delete(self):
         user = g.current_user
@@ -858,6 +860,13 @@ class MapView(MethodView):
         db.session.commit()
         return "OK", 200
     
+    def compress(self, data):
+        content = gzip.compress(json.dumps(data).encode('utf8'), 5)
+        response = make_response(content)
+        response.headers['Content-length'] = len(content)
+        response.headers['Content-Encoding'] = 'gzip'
+        return response
+    
 class HeatMapDataView(MethodView):
     decorators = [login_required]
 
@@ -868,7 +877,16 @@ class HeatMapDataView(MethodView):
             func.json_agg(func.json_build_array(GPSData.latitude, GPSData.longitude))
         ).filter_by(**g.trace_query).scalar()
 
-        return heatmap_query, 200, {"Content-Type": "application/json"}
+        # return heatmap_query, 200, {"Content-Type": "application/json"}
+        return self.compress(heatmap_query)
+    
+    def compress(self, data):
+        content = gzip.compress(json.dumps(data).encode('utf8'), 5)
+        response = make_response(content)
+        response.headers['Content-length'] = len(content)
+        response.headers['Content-Type'] = 'application/json; charset=utf-8'
+        response.headers['Content-Encoding'] = 'gzip'
+        return response
     
 class SpeedMapView(MethodView):
     decorators = [login_required]
