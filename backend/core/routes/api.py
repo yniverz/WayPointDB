@@ -219,6 +219,8 @@ class OverlandGPSBatch(Resource):
     """
 
     @api_gps_ns.expect(api_key_parser, overland_model)
+    @api_gps_ns.response(201, "Success", {"result": "ok"})
+    @api_gps_ns.response(401, "Unauthorized", {"error": "Invalid or missing API key"})
     @api_key_required
     def post(self):
         """
@@ -293,6 +295,8 @@ class OwntracksGPS(Resource):
     """
 
     @api_gps_ns.expect(api_key_parser)
+    @api_gps_ns.response(201, "Success", {"result": "ok"})
+    @api_gps_ns.response(401, "Unauthorized", {"error": "Invalid or missing API key"})
     @api_key_required
     def post(self):
         """
@@ -367,7 +371,7 @@ class OwntracksGPS(Resource):
         db.session.add(gps_record)
         db.session.commit()
 
-        return {"message": "OwnTracks GPS data added successfully"}, 201
+        return {"result": "ok"}, 201
 
 
 
@@ -431,7 +435,9 @@ stats_model = api_gps_ns.model("AllStats", {
 class AccountStats(Resource):
     """Get user statistics."""
 
-    @api_account_ns.expect(api_key_parser, stats_model)
+    @api_account_ns.expect(api_key_parser)
+    @api_account_ns.response(200, "Success", stats_model)
+    @api_account_ns.response(401, "Unauthorized", {"error": "Invalid or missing API key"})
     @api_key_required
     def get(self):
         """Get user statistics (requires a valid API key)."""
@@ -571,7 +577,9 @@ class AccountYearStats(Resource):
     Endpoint to get yearly statistics for a user.
     """
 
-    @api_account_ns.expect(api_key_parser, year_stats_model)
+    @api_account_ns.expect(api_key_parser)
+    @api_account_ns.response(200, "Success", year_stats_model)
+    @api_account_ns.response(401, "Unauthorized", {"error": "Invalid or missing API key"})
     @api_key_required
     def get(self, year):
         """
