@@ -149,6 +149,8 @@ GPS Map
 
     var last_point = {{ last_point }};
 
+    var currentDataIsInterpolated = false;
+
     // Heatmap-related variables
     var heatLayer = null;
     var heatmapLoaded = false;  // to ensure data is only loaded once
@@ -249,12 +251,14 @@ GPS Map
         var southWest = bounds.getSouthWest();
 
         // Skip fetching if the map bounds haven't changed (and not forced)
-        if (!forced && lastBounds && lastBounds.equals(bounds)) {
-            if (lastGpsData.length > 0) {
+        if (!forced && lastBounds && ( lastBounds.equals(bounds) || (!currentDataIsInterpolated && lastBounds.contains(bounds.getNorthEast()) && lastBounds.contains(bounds.getSouthWest())) )) {
+            {# if (lastGpsData.length > 0) {
                 updateMap(lastGpsData);
-            }
+            } #}
             return;
         }
+
+
         lastBounds = bounds;
 
         document.getElementById("loading-spinner").style.display = "block";
@@ -287,6 +291,7 @@ GPS Map
             body: JSON.stringify(body)
         })
         .then(response => {
+            currentDataIsInterpolated = response.headers.get('Is-Interpolated').toLowerCase() === 'true';
             // Try to get the total bytes from header to track progress.
             const contentLength = response.headers.get('Content-Original-Length');
             if (!contentLength) {

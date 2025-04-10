@@ -848,7 +848,10 @@ class MapView(MethodView):
         print(f"/gps_data: Time to data: {time2 - time1:.3f}s")
 
         # return jsonify(gps_data)
-        return self.compress(gps_data)
+        response = self.compress(gps_data)
+        response.headers["Is-Interpolated"] = len(gps_data) >= max_points_count
+
+        return response
 
     def delete(self):
         user = g.current_user
