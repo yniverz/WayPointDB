@@ -639,6 +639,11 @@ GPS Map
 
     // Manually trigger the fetch with the current date values
     function manualSearch() {
+        updateURLParams(
+            document.getElementById("start-date").value,
+            document.getElementById("end-date").value
+        );
+
         fetchGPSData(true, true);
     }
 
