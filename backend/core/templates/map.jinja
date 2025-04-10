@@ -25,6 +25,7 @@ GPS Map
         left: 50%;
         transform: translate(-50%, -50%);
         display: none;
+        color: #2c2c2c;
         z-index: 1000;
     }
 
@@ -287,7 +288,7 @@ GPS Map
         })
         .then(response => {
             // Try to get the total bytes from header to track progress.
-            const contentLength = response.headers.get('Content-Length');
+            const contentLength = response.headers.get('Content-Original-Length');
             if (!contentLength) {
                 // Content-Length not provided; fallback to normal JSON parsing.
                 return response.json();
@@ -732,7 +733,7 @@ GPS Map
         return fetch("/map/heatmap_data.json")
                 .then(response => {
                 // Try to get the total bytes from header to track progress.
-                const contentLength = response.headers.get('Content-Length');
+                const contentLength = response.headers.get('Content-Original-Length');
                 if (!contentLength) {
                     // Content-Length not provided; fallback to normal JSON parsing.
                     return response.json();
