@@ -68,6 +68,16 @@ api_key_parser.add_argument(
     location="args"
 )
 
+unauthorized_response_model = api_gps_ns.model("UnauthorizedResponse", {
+    "error": fields.String(
+        description="Error message",
+        example="Invalid or missing API key"
+    )
+})
+
+
+
+
 batch_gps_model = api_gps_ns.model("BatchGPSData", {
     "gps_data": fields.List(fields.Nested(gps_model), required=True, description="List of GPS data points"),
 })
@@ -212,6 +222,13 @@ overland_model = api_gps_ns.model("OverlandGPSRequest", {
     )
 })
 
+overland_success_response_model = api_gps_ns.model("OverlandSuccessResponse", {
+    "result": fields.String(
+        description="Result of the operation",
+        example="ok"
+    )
+})
+
 @api_gps_ns.route("/overland")
 class OverlandGPSBatch(Resource):
     """
@@ -219,8 +236,8 @@ class OverlandGPSBatch(Resource):
     """
 
     @api_gps_ns.expect(api_key_parser, overland_model)
-    @api_gps_ns.response(201, "Success", {"result": "ok"})
-    @api_gps_ns.response(401, "Unauthorized", {"error": "Invalid or missing API key"})
+    @api_gps_ns.response(201, "Success", overland_success_response_model)
+    @api_gps_ns.response(401, "Unauthorized", unauthorized_response_model)
     @api_key_required
     def post(self):
         """
@@ -295,8 +312,8 @@ class OwntracksGPS(Resource):
     """
 
     @api_gps_ns.expect(api_key_parser)
-    @api_gps_ns.response(201, "Success", {"result": "ok"})
-    @api_gps_ns.response(401, "Unauthorized", {"error": "Invalid or missing API key"})
+    @api_gps_ns.response(201, "Success", overland_success_response_model)
+    @api_gps_ns.response(401, "Unauthorized", unauthorized_response_model)
     @api_key_required
     def post(self):
         """
@@ -437,7 +454,7 @@ class AccountStats(Resource):
 
     @api_account_ns.expect(api_key_parser)
     @api_account_ns.response(200, "Success", stats_model)
-    @api_account_ns.response(401, "Unauthorized", {"error": "Invalid or missing API key"})
+    @api_account_ns.response(401, "Unauthorized", unauthorized_response_model)
     @api_key_required
     def get(self):
         """Get user statistics (requires a valid API key)."""
@@ -579,7 +596,7 @@ class AccountYearStats(Resource):
 
     @api_account_ns.expect(api_key_parser)
     @api_account_ns.response(200, "Success", year_stats_model)
-    @api_account_ns.response(401, "Unauthorized", {"error": "Invalid or missing API key"})
+    @api_account_ns.response(401, "Unauthorized", unauthorized_response_model)
     @api_key_required
     def get(self, year):
         """
