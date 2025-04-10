@@ -641,6 +641,7 @@ GPS Map
     var conditionalToggle = false;
 
     function toggleFetchInterpolated(checkbox) {
+        console.log("test1");
         fetchInterpolated = checkbox.checked;
 
         if (conditionalToggle) {
@@ -653,6 +654,7 @@ GPS Map
             // If speed polyline is checked, but interpolated is not, uncheck speed polyline
             conditionalToggle = true;
             showSpeedPolylineElement.checked = false;
+            showSpeedPolyline = false;
         }
 
         fetchGPSData(true);
@@ -669,6 +671,7 @@ GPS Map
     }
 
     function toggleSpeedPolyline(checkbox) {
+        console.log("test2");
         showSpeedPolyline = checkbox.checked;
 
         if (conditionalToggle) {
@@ -681,6 +684,7 @@ GPS Map
             // If speed polyline is checked, but interpolated is not, check interpolated
             conditionalToggle = true;
             fetchInterpolatedElement.checked = true;
+            fetchInterpolated = true;
         }
 
         fetchGPSData();
