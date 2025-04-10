@@ -864,6 +864,7 @@ class MapView(MethodView):
         content = gzip.compress(json.dumps(data).encode('utf8'), 9)
         response = make_response(content)
         response.headers['Content-length'] = len(content)
+        response.headers['Content-Type'] = 'application/json'
         response.headers['Content-Encoding'] = 'gzip'
         return response
     
@@ -877,13 +878,13 @@ class HeatMapDataView(MethodView):
             func.json_agg(func.json_build_array(GPSData.latitude, GPSData.longitude))
         ).filter_by(**g.trace_query).scalar()
 
-        # return heatmap_query, 200, {"Content-Type": "application/json"}
         return self.compress(heatmap_query)
     
     def compress(self, data):
         content = gzip.compress(json.dumps(data).encode('utf8'), 9)
         response = make_response(content)
         response.headers['Content-length'] = len(content)
+        response.headers['Content-Type'] = 'application/json'
         response.headers['Content-Encoding'] = 'gzip'
         return response
     
