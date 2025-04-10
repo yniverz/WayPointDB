@@ -145,6 +145,7 @@ GPS Map
 
     var accuracyFilter = true;
     var connectFarPoints = true;
+    var farThreshold = 10000; // meters
     var showSpeedPolyline = true;
 
     function initMap() {
@@ -328,7 +329,7 @@ GPS Map
                         coordinates[i].lat, coordinates[i].lng,
                         coordinates[i + 1].lat, coordinates[i + 1].lng
                     );
-                    if (dist > 500) continue; // Skip this segment
+                    if (dist > farThreshold) continue; // Skip this segment
                 }
 
                 let color = getSpeedColor(coordinates[i].speed || 0);
@@ -346,7 +347,7 @@ GPS Map
                     coordinates[i].lat, coordinates[i].lng,
                     coordinates[i + 1].lat, coordinates[i + 1].lng
                 );
-                if (dist > 500) {
+                if (dist > farThreshold) {
                     // Draw the cached points as a polyline
                     if (cached_points.length > 1) {
                         L.polyline(cached_points.map(coord => [coord.lat, coord.lng]), { 
