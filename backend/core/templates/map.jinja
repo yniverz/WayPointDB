@@ -638,21 +638,12 @@ GPS Map
         }
     }
 
-    var conditionalToggle = false;
-
     function toggleFetchInterpolated(checkbox) {
-        console.log("test1");
         fetchInterpolated = checkbox.checked;
-
-        if (conditionalToggle) {
-            conditionalToggle = false;
-            return;
-        }
 
         showSpeedPolylineElement = document.getElementById("toggleSpeedPolyline");
         if (showSpeedPolylineElement.checked && !fetchInterpolated) {
             // If speed polyline is checked, but interpolated is not, uncheck speed polyline
-            conditionalToggle = true;
             showSpeedPolylineElement.checked = false;
             showSpeedPolyline = false;
         }
@@ -674,15 +665,9 @@ GPS Map
         console.log("test2");
         showSpeedPolyline = checkbox.checked;
 
-        if (conditionalToggle) {
-            conditionalToggle = false;
-            return;
-        }
-
         fetchInterpolatedElement = document.getElementById("fetchInterpolated");
         if (!fetchInterpolatedElement.checked && showSpeedPolyline) {
             // If speed polyline is checked, but interpolated is not, check interpolated
-            conditionalToggle = true;
             fetchInterpolatedElement.checked = true;
             fetchInterpolated = true;
         }
