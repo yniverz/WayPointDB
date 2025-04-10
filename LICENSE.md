@@ -1,7 +1,7 @@
-# Non-Commercial Public Use License (NCPUL) v1.2
+# Non-Commercial Public Use License (NCPUL) v1.3
 
 **Preamble**  
-The intent of this license is to allow anyone to use, modify, and share the licensed software freely for **non-commercial purposes**, while **prohibiting any and all commercial or monetized use**. If you are unsure whether a particular use is allowed, please refer to the definitions below or contact the Licensor for guidance. Commercial use of this software may be possible only with a separate license obtained from the Licensor.
+The intent of this license is to allow anyone to use, modify, and share the licensed software freely for **non-commercial purposes**, while expressly permitting voluntary, non‑required support (e.g. tips or donations) provided that the Software remains freely accessible to all. Commercial or monetized use remains disallowed under this License unless a separate license is obtained from the Licensor.
 
 ---
 
@@ -12,10 +12,9 @@ The intent of this license is to allow anyone to use, modify, and share the lice
 3. **“Licensee” or “You”** means an individual or legal entity exercising rights under this License.  
 4. **“Commercial Use”** means any use, distribution, or provision of the Software (or any work based on the Software), in whole or in part, that is intended for or directed toward **commercial advantage, monetary compensation, or any form of revenue generation**. This includes, but is not limited to:  
    - Selling the Software, or licensing it to others for a fee.  
-   - Using the Software to provide services for which payment or donations are solicited.  
    - Using the Software as part of a product or system that is sold, licensed, or otherwise commercialized.  
    - Deployment or use of the Software in a business environment that supports profit-generating activities.  
-5. **“Non-Commercial Use”** means any use of the Software **that is not a Commercial Use**, including (without limitation) personal projects, educational or academic research, or charitable activities by a non-profit organization.  
+5. **“Non-Commercial Use”** means any use of the Software **that is not a Commercial Use**, including (without limitation) personal projects, educational or academic research, or charitable activities by a non-profit organization. This also expressly includes voluntary, non‑required support (e.g. tips or donations) provided that the Software remains freely accessible to all
 6. **“Derivative Work”** means any modification, adaptation, improvement, translation, or other work based on or derived from the Software.
 
 ---
@@ -36,7 +35,7 @@ All rights granted herein are conditional on the use being Non-Commercial. **Any
 
 If You distribute or share the Software, or any Derivative Work, with any other party (with or without modifications), You must:
 
-1. **Include This License.** Provide a copy of this NCPUL (v1.2) with the Software or Derivative Work, and ensure that any recipient understands that the work is provided under these Non-Commercial terms.  
+1. **Include This License.** Provide a copy of this NCPUL (v1.3) with the Software or Derivative Work, and ensure that any recipient understands that the work is provided under these Non-Commercial terms.  
 2. **Retain Notices.** Keep all copyright, author, and license notices intact. Do not remove or alter any text referring to this Non-Commercial Public Use License.  
 3. **Apply the Same Terms.** Any Derivative Work You distribute must be licensed under this same License (NCPUL) or terms no less restrictive. You may not relicense a Derivative Work under any license permitting commercial use.  
 4. **Attribution (Optional).** You may include an attribution requirement here if desired, for example: “Any public distribution of this Software or a Derivative Work must give credit to the original author(s) in a manner reasonable to the medium, without implying endorsement.”
@@ -48,7 +47,7 @@ If You distribute or share the Software, or any Derivative Work, with any other 
 You **cannot**:
 
 1. Use the Software or any Derivative Work in any manner primarily intended for or directed toward **commercial advantage, profit, or monetary compensation**.  
-2. Monetize the Software, in whole or in part, including any indirect revenue generation such as paywalls, in-app purchases, or ads.  
+2. Monetize the Software, in whole or in part, including any indirect revenue generation such as paywalls, in-app purchases, or ads (excluding voluntary support as described in 1.5) .
 3. Sell, license, or otherwise commercialize the Software as a product or service.  
 4. Provide the Software to a third party for the purpose of commercial exploitation.  
 5. Attempt to circumvent the Non-Commercial restriction through indirect means.
@@ -75,10 +74,4 @@ This License shall be governed by and construed in accordance with the laws of t
 
 ---
 
-## 8. Patent Grant (Optional)
-
-You may add a patent grant clause here if desired, for instance granting the Licensee a worldwide, non-exclusive, royalty-free patent license to make, use, and distribute the Software, **solely for Non-Commercial Use**, under any patent claims licensable by the Licensor.
-
----
-
-**End of Non-Commercial Public Use License (NCPUL) v1.2**
+**End of Non-Commercial Public Use License (NCPUL) v1.3**
