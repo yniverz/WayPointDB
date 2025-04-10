@@ -640,7 +640,14 @@ GPS Map
 
     function toggleFetchInterpolated(checkbox) {
         fetchInterpolated = checkbox.checked;
-        fetchGPSData();
+
+        showSpeedPolylineElement = document.getElementById("toggleSpeedPolyline");
+        if (showSpeedPolylineElement.checked && !fetchInterpolated) {
+            // If speed polyline is checked, but interpolated is not, uncheck speed polyline
+            showSpeedPolylineElement.checked = false;
+        }
+
+        fetchGPSData(true);
     }
 
     function toggleAccuracy(checkbox) {
@@ -655,6 +662,12 @@ GPS Map
 
     function toggleSpeedPolyline(checkbox) {
         showSpeedPolyline = checkbox.checked;
+
+        fetchInterpolatedElement = document.getElementById("fetchInterpolated");
+        if (!fetchInterpolatedElement.checked && showSpeedPolyline) {
+            fetchInterpolatedElement.checked = true;
+        }
+
         fetchGPSData();
     }
 
