@@ -1,3 +1,5 @@
+from io import BytesIO
+from PIL import Image, ImageDraw, ImageFilter
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 import gzip
@@ -10,7 +12,7 @@ import time
 import psycopg2
 import json
 from flask import (
-    Blueprint, Response, make_response, render_template, request, redirect, stream_with_context, url_for, 
+    Blueprint, Response, make_response, render_template, request, redirect, send_file, stream_with_context, url_for, 
     session, g, jsonify
 )
 from flask.views import MethodView
@@ -1222,11 +1224,207 @@ class SetTraceView(MethodView):
 
 
 
+full_bleed_background_img_store = {}
+full_bleed_background_date_store = {}
+
+class FullBleedBackground(MethodView):
+    decorators = [login_required]
+
+
+    def get(self):
+        global full_bleed_background_img_store, full_bleed_background_date_store
+
+        if g.current_user.id in full_bleed_background_img_store and full_bleed_background_date_store[g.current_user.id] > datetime.now() - timedelta(hours=12):
+            resp = make_response(self.serve_pil_image(full_bleed_background_img_store[g.current_user.id]))
+            resp.headers["Cached"] = "true"
+            return resp
+
+        # get last point
+        last_point: GPSData = GPSData.query.filter_by(user_id = g.current_user.id).order_by(GPSData.timestamp.desc()).first()
+        if not last_point:
+            return "No points found", 404
+        # get all points within 10000m of the last point
+        points = GPSData.query.filter_by(user_id = g.current_user.id).filter(
+            GPSData.latitude.between(last_point.latitude - 0.1, last_point.latitude + 0.1),
+            GPSData.longitude.between(last_point.longitude - 0.1, last_point.longitude + 0.1)
+        ).order_by(GPSData.timestamp.asc()).all()
+        if not points:
+            return "No points found", 404
+        # generate image
+        image = self.generateImage(points)
+
+        # store image in memory
+        full_bleed_background_img_store[g.current_user.id] = image
+        full_bleed_background_date_store[g.current_user.id] = datetime.now()
+        
+        return self.serve_pil_image(image)
+        
+
+
+    def serve_pil_image(self, pil_img: Image.Image):
+        img_io = BytesIO()
+        pil_img.save(img_io, 'PNG')
+        img_io.seek(0)
+        return send_file(img_io, mimetype='image/png')
+
+    # A small "color stop" helper, storing speed in km/h and an RGB color tuple.
+    class ColorStop:
+        def __init__(self, speed_kmh, color):
+            self.SpeedKmh = speed_kmh
+            self.Color = color  # (R, G, B)
+
+    def generateImage(self, points):
+        # ************************ Configuration Variables ************************
+
+        # We'll no longer hard-code the center lat/lng; computed from the last point.
+        global centerLat, centerLng
+
+        # Define the "zoom" as a radius (in meters) representing half of the horizontal width.
+        radiusMeters = 5000.0
+
+        # Image dimensions.
+        imageWidth = 1600*2
+        imageHeight = 900*2
+
+        # Configurable line thickness (pixels in Pillow).
+        lineThickness = 1
+
+        # Max distance (meters) between consecutive points to draw a line.
+        maxPointDistance = 100.0
+
+        # color stops for speed-based interpolation (in km/h).
+        colorStops = [
+            self.ColorStop(0,   (0,   0, 255)),  # Blue
+            self.ColorStop(30,  (0, 255,   0)),  # Green
+            self.ColorStop(60,  (255, 255,  0)), # Yellow
+            self.ColorStop(90,  (255,   0,  0)), # Red
+        ]
+
+        # 2) Compute center as last point in dataset.
+        centerLat = points[-1].latitude
+        centerLng = points[-1].longitude
+
+        # 3) Meters-per-degree for lat/lng. 
+        #    This is approximate and depends on latitude.
+        metersPerDegLat = 111320.0
+        metersPerDegLng = 111320.0 * math.cos(math.radians(centerLat))
+
+        # 4) Compute scale (pixels per meter).
+        scale = imageWidth / (2.0 * radiusMeters)
+
+        # 5) Create a Pillow image (RGBA or RGB).
+        image = Image.new('RGBA', (imageWidth, imageHeight), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(image)
+
+        # 6) Draw each consecutive line segment between GPS points.
+        for i in range(1, len(points)):
+            pA = points[i - 1]
+            pB = points[i]
+
+            # Skip if distance too large
+            dist = self.haversine(pA.latitude, pA.longitude, pB.latitude, pB.longitude)
+            if dist > maxPointDistance:
+                continue
+
+            # Convert lat/lng to pixel
+            x1, y1 = self.map_to_pixel(pA.latitude, pA.longitude,
+                                centerLat, centerLng,
+                                metersPerDegLat, metersPerDegLng,
+                                scale, imageWidth, imageHeight)
+            x2, y2 = self.map_to_pixel(pB.latitude, pB.longitude,
+                                centerLat, centerLng,
+                                metersPerDegLat, metersPerDegLng,
+                                scale, imageWidth, imageHeight)
+
+            # Average speed for color
+            avgSpeed = (pA.speed + pB.speed) / 2.0
+            segmentColor = self.get_color_from_speed(avgSpeed, colorStops)
+
+            # Draw line
+            draw.line([(x1, y1), (x2, y2)], fill=segmentColor, width=lineThickness)
+
+        # antialiasing
+        image = image.filter(ImageFilter.GaussianBlur(radius=1))
+
+        # halve resolution
+        image = image.resize((imageWidth // 2, imageHeight // 2), Image.LANCZOS)
+
+        return image
+
+    def map_to_pixel(self, lat, lng,
+                    centerLat, centerLng,
+                    metersPerDegLat, metersPerDegLng,
+                    scale, imageWidth, imageHeight):
+        """
+        Convert (lat,lng) to (x,y) in image coords, given:
+        centerLat, centerLng as the "map center" in lat/lng
+        metersPerDegLat, metersPerDegLng approximations
+        scale (pixels per meter)
+        imageWidth, imageHeight
+        """
+        dLat = lat - centerLat
+        dLng = lng - centerLng
+
+        # Convert degrees to meters
+        dx = dLng * metersPerDegLng
+        dy = dLat * metersPerDegLat
+
+        # Then convert meters to pixels
+        x = (imageWidth / 2.0) + dx * scale
+        # invert y so north is up
+        y = (imageHeight / 2.0) - dy * scale
+
+        return (x, y)
+
+
+    def haversine(self, lat1, lon1, lat2, lon2):
+        """
+        Calculate distance in meters between two lat/lon points using the Haversine formula.
+        """
+        R = 6371000.0  # Earth radius in meters
+        dLat = math.radians(lat2 - lat1)
+        dLon = math.radians(lon2 - lon1)
+        a = (math.sin(dLat / 2) ** 2
+            + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2))
+            * math.sin(dLon / 2) ** 2)
+        c = 2.0 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+        return R * c
+
+
+    def get_color_from_speed(self, speed_mps, colorStops: list[ColorStop]):
+        """
+        Interpolate a color based on speed (m/s). colorStops are in km/h.
+        Returns an (R,G,B) tuple for Pillow.
+        """
+        speed_kmh = speed_mps * 3.6
+        # If speed is below or equal to first stop:
+        if speed_kmh <= colorStops[0].SpeedKmh:
+            return colorStops[0].Color
+
+        for i in range(1, len(colorStops)):
+            prevStop = colorStops[i - 1]
+            nextStop = colorStops[i]
+            if speed_kmh <= nextStop.SpeedKmh:
+                # Interpolate between prevStop and nextStop
+                ratio = ((speed_kmh - prevStop.SpeedKmh)
+                        / (nextStop.SpeedKmh - prevStop.SpeedKmh))
+                r = int(round(prevStop.Color[0] + (nextStop.Color[0] - prevStop.Color[0]) * ratio))
+                g = int(round(prevStop.Color[1] + (nextStop.Color[1] - prevStop.Color[1]) * ratio))
+                b = int(round(prevStop.Color[2] + (nextStop.Color[2] - prevStop.Color[2]) * ratio))
+                return (r, g, b)
+
+        # If above the highest speed, return the last stop's color
+        return colorStops[-1].Color
+
+
+
+
 # Register the class-based views with the Blueprint
 web_bp.add_url_rule("/", view_func=HomeView.as_view("home"))
 web_bp.add_url_rule("/login", view_func=LoginView.as_view("login"), methods=["GET", "POST"])
 web_bp.add_url_rule("/logout", view_func=LogoutView.as_view("logout"))
 web_bp.add_url_rule("/set_trace_id", view_func=SetTraceView.as_view("set_trace_id"), methods=["POST"])
+web_bp.add_url_rule("/full_bleed_background.png", view_func=FullBleedBackground.as_view("full_bleed_background"))
 web_bp.add_url_rule("/map", view_func=MapView.as_view("map"), methods=["GET", "POST", "DELETE"])
 web_bp.add_url_rule("/map/heatmap_data.json", view_func=HeatMapDataView.as_view("heatmap_data"))
 web_bp.add_url_rule("/map/speed", view_func=SpeedMapView.as_view("speed_map"), methods=["GET", "POST"])

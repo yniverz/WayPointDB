@@ -41,7 +41,8 @@
         }
 
         .dark-mode .content-container {
-            background: #1e1e1e;
+            {# background: #1e1e1e; #}
+            background: rgba(47, 47, 47, 0.9);
             color: #e0e0e0;
         }
 
@@ -63,7 +64,8 @@
             margin-top: 80px;
             margin-bottom: 20px;
             padding: 20px;
-            background: white;
+            {# background: white; #}
+            background: rgba(255, 255, 255, 0.93);
             border-radius: 12px;
             box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
         }
@@ -129,6 +131,14 @@
         th, td {
             padding: 8px;
             border-bottom: 3px solid #ddd;
+        }
+
+        .full-bleed-bg {
+            background-position: center;
+            background-repeat: no-repeat;
+            background-size: cover;
+            /* If you do not want the dark-mode background to override the image,
+            you might have to either handle it differently or remove it from .dark-mode. */
         }
     </style>
     {% block head %}{% endblock %}
@@ -265,5 +275,27 @@
         });
     </script>
 
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            // If you only want the background for light mode (for example),
+            // you could skip setting it when dark-mode is active.
+            // Otherwise, remove the condition:
+            const body = document.body;
+            const imageUrl = "/full_bleed_background.png";
+
+            // Create an in-memory image to trigger the load
+            const bgImage = new Image();
+            bgImage.src = imageUrl;
+
+            // When the image is fully loaded, set as background
+            bgImage.onload = function() {
+                // Add the CSS class that sets background properties
+                body.classList.add("full-bleed-bg");
+
+                // Dynamically set the background image via inline style
+                body.style.backgroundImage = `url(${imageUrl})`;
+            };
+        });
+    </script>
 </body>
 </html>

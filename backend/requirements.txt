@@ -10,3 +10,4 @@ argon2_cffi
 geopy
 requests
 regex
+pillow
