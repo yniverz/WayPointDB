@@ -791,7 +791,7 @@ class MapView(MethodView):
                 ORDER BY timestamp;
             """
         
-        elif (time_delta != 0 and time_delta < 60 * 60 * 25) or not fetch_interpolated:
+        elif not fetch_interpolated: # or (time_delta != 0 and time_delta < 60 * 60 * 25):
             query = f"""
                 SELECT id, user_id, timestamp, latitude, longitude, horizontal_accuracy,
                     altitude, vertical_accuracy, heading, heading_accuracy, speed, speed_accuracy
