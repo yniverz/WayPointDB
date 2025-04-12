@@ -630,6 +630,7 @@ class ImportJob(Job):
             db.session.commit()
         
         self.import_obj.done_importing = True
+        db.session.commit()
 
         self.done = True
 
