@@ -1236,7 +1236,8 @@ class FullBleedBackground(MethodView):
 
         if g.current_user.id in full_bleed_background_img_store and full_bleed_background_date_store[g.current_user.id] > datetime.now() - timedelta(hours=12):
             resp = make_response(self.serve_pil_image(full_bleed_background_img_store[g.current_user.id]))
-            resp.headers["Cached"] = "true"
+            resp.headers["Cache-Control"] = "public, max-age=43200"  # 12 hours
+            resp.headers["Expires"] = (datetime.now() + timedelta(hours=12)).strftime("%a, %d %b %Y %H:%M:%S GMT")
             return resp
 
         # get last point
