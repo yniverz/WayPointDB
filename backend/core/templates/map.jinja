@@ -137,6 +137,7 @@ GPS Map
     var heatLayer = null;
     var heatmapData = [];
     var heatmapLoaded = false;       // track if heatmap data is already fetched
+    var heatmapActive = false;
 
     var lastGpsData = [];
     var last_point = {{ last_point }};
@@ -399,6 +400,8 @@ GPS Map
             polylineLayer = L.layerGroup().addTo(map);
             markerLayer   = L.layerGroup().addTo(map);
             radiusLayer   = L.layerGroup().addTo(map);
+
+            if (heatmapActive && heatLayer) map.addLayer(heatLayer);
 
             // 6) Re-bind event handlers so we can fetch again on move/zoom
             map.on('moveend', () => {
@@ -739,6 +742,7 @@ GPS Map
     // Heatmap
     // -----------------------
     function toggleHeatmap(checkbox) {
+        heatmapActive = checkbox.checked;
         if (checkbox.checked) {
             if (!heatmapLoaded) {
                 fetchHeatmapData().then(() => {
