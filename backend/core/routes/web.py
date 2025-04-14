@@ -885,7 +885,12 @@ class HeatMapDataView(MethodView):
         user = g.current_user
 
         heatmap_query = GPSData.query.with_entities(
-            func.json_agg(func.json_build_array(GPSData.latitude, GPSData.longitude))
+            func.json_agg(
+                func.json_build_array(
+                    func.round(GPSData.latitude, 4),
+                    func.round(GPSData.longitude, 4)
+                )
+            )
         ).filter_by(**g.trace_query).scalar()
 
         return self.compress(heatmap_query)
