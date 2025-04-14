@@ -17,7 +17,7 @@ from flask import (
 )
 from flask.views import MethodView
 import requests
-from sqlalchemy import Numeric, cast, func
+from sqlalchemy import Integer, Numeric, cast, func
 
 from ..background.jobs import JOB_TYPES, ImportJob
 from ..background import job_manager
@@ -884,24 +884,26 @@ class HeatMapDataView(MethodView):
     def get(self):
         user = g.current_user
 
-        heatmap_query = GPSData.query.with_entities(
-            func.json_agg(
-                func.json_build_array(
-                    func.round(cast(GPSData.latitude, Numeric), 4),
-                    func.round(cast(GPSData.longitude, Numeric), 4)
-                )
+        data = GPSData.query.with_entities(
+            func.string_agg(
+                func.concat(
+                    cast(GPSData.latitude * 10000, Integer), 
+                    ',', 
+                    cast(GPSData.longitude * 10000, Integer)
+                ),
+                '\n'
             )
         ).filter_by(**g.trace_query).scalar()
 
-        return self.compress(heatmap_query)
+        return self.compress(data)
     
     def compress(self, data):
-        data = json.dumps(data).encode('utf8')
+        data = (data or '').encode('utf-8')
         content = gzip.compress(data, 9)
         response = make_response(content)
         response.headers['Content-length'] = len(content)
         response.headers['Content-Original-Length'] = len(data)
-        response.headers['Content-Type'] = 'application/json'
+        response.headers['Content-Type'] = 'text/plain'
         response.headers['Content-Encoding'] = 'gzip'
         return response
     
@@ -1432,7 +1434,7 @@ web_bp.add_url_rule("/logout", view_func=LogoutView.as_view("logout"))
 web_bp.add_url_rule("/set_trace_id", view_func=SetTraceView.as_view("set_trace_id"), methods=["POST"])
 web_bp.add_url_rule("/full_bleed_background.png", view_func=FullBleedBackground.as_view("full_bleed_background"))
 web_bp.add_url_rule("/map", view_func=MapView.as_view("map"), methods=["GET", "POST", "DELETE"])
-web_bp.add_url_rule("/map/heatmap_data.json", view_func=HeatMapDataView.as_view("heatmap_data"))
+web_bp.add_url_rule("/map/heatmap_data.csv", view_func=HeatMapDataView.as_view("heatmap_data"))
 web_bp.add_url_rule("/map/speed", view_func=SpeedMapView.as_view("speed_map"), methods=["GET", "POST"])
 web_bp.add_url_rule("/points", view_func=PointsView.as_view("points"), methods=["GET", "POST"])
 web_bp.add_url_rule("/stats", view_func=StatsView.as_view("stats"))

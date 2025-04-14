@@ -762,11 +762,11 @@ GPS Map
         document.getElementById("download-percentage").style.display = "block";
         document.getElementById("download-percentage").innerText = "0%";
 
-        return fetch("/map/heatmap_data.json")
+        return fetch("/map/heatmap_data.csv")
             .then(response => {
                 const contentLength = response.headers.get('Content-Original-Length');
                 if (!contentLength) {
-                    return response.json();
+                    return response.text();
                 }
                 const total = parseInt(contentLength, 10);
                 let loaded  = 0;
@@ -792,10 +792,18 @@ GPS Map
                         }
                         push();
                     }
-                })).json();
+                })).text();
             })
             .then(data => {
-                heatmapData = data;
+                // convert int,int\n to [[lat/10000,lng/10000],...]
+                heatmapData = data.split('\n').map(line => {
+                    const [lat, lng] = line.split(',').map(Number);
+                    return [lat / 10000, lng / 10000];
+                }).filter(coord => coord.length === 2);
+                // remove last empty element if it exists
+                if (heatmapData[heatmapData.length - 1].length === 0) {
+                    heatmapData.pop();
+                }
             })
             .finally(() => {
                 document.getElementById("loading-spinner").style.display = "none";
