@@ -17,7 +17,7 @@ from flask import (
 )
 from flask.views import MethodView
 import requests
-from sqlalchemy import func
+from sqlalchemy import Numeric, cast, func
 
 from ..background.jobs import JOB_TYPES, ImportJob
 from ..background import job_manager
@@ -887,8 +887,8 @@ class HeatMapDataView(MethodView):
         heatmap_query = GPSData.query.with_entities(
             func.json_agg(
                 func.json_build_array(
-                    func.round(GPSData.latitude, 4),
-                    func.round(GPSData.longitude, 4)
+                    func.round(cast(GPSData.latitude, Numeric), 4),
+                    func.round(cast(GPSData.longitude, Numeric), 4)
                 )
             )
         ).filter_by(**g.trace_query).scalar()
