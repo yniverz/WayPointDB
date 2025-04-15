@@ -90,14 +90,7 @@ The [WayPointDB iOS App](https://github.com/yniverz/WayPointDB-iOS) is a native 
 **Note:** This app does NOT collect any gps data. use one of the options above instead. The iOS app is not available on the App Store, but can be built from source using Xcode.
 
 ## Update
-To update the project, pull the latest changes from the repository and rebuild the Docker image
-```bash
-docker-compose down
-git pull
-docker-compose build
-docker-compose up -d
-```
-Alternatively these steps can be automated by running `./update.sh`. If you for some reason want the latest unreleased verion of the project, you can use the `--unreleased` flag.
+To get the latest release and automatically rebuild the image you can run `./update.sh`. If you for some reason want the latest unreleased verion of the project, as found in the main branch, you can use the `--unreleased` flag.
 
 
 ## Photon Server
