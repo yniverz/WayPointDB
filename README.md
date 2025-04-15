@@ -97,7 +97,7 @@ git pull
 docker-compose build
 docker-compose up -d
 ```
-Alternatively these steps can be automated by running ```./update.sh```. To prepare the script for execution, run ```chmod +x update.sh``` first.
+Alternatively these steps can be automated by running `./update.sh`. If you for some reason want the latest unreleased verion of the project, you can use the `--unreleased` flag.
 
 
 ## Photon Server
