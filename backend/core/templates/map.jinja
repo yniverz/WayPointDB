@@ -12,6 +12,10 @@ GPS Map
 <script src="/static/js/leaflet.fullscreen.js"></script>
 <script src="/static/js/leaflet-heat.js"></script>
 
+<!-- Leaflet.Draw CSS & JS -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/0.4.2/leaflet.draw.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/0.4.2/leaflet.draw.js"></script>
+
 <style>
     #map {
         height: 600px;
@@ -62,7 +66,6 @@ GPS Map
         min-width: 100px;
     }
 
-    /* Specifically override styling for our << and >> buttons */
     .arrow-button {
         flex: 0 0 auto !important;
         width: auto !important;
@@ -105,6 +108,7 @@ GPS Map
 
 {% block content %}
 <div class="container mt-4">
+    <!-- Date range controls -->
     <div class="date-selector">
         <button onclick="setDateRange('all')">All</button>
         <button onclick="setDateRange('last_month')">Last Month</button>
@@ -120,6 +124,14 @@ GPS Map
         <button onclick="manualSearch()">Search</button>
     </div>
     
+    <!-- Accuracy-based delete controls, hidden by default unless Edit Mode is active -->
+    <div id="edit-actions" style="margin-bottom: 10px; text-align: center; display: none;">
+        <label>Delete if Accuracy &gt;
+            <input type="number" id="accuracyThreshold" style="width: 60px;" value="20" />
+        </label>
+        <button onclick="filterAndDeleteByAccuracy()">Delete in Selection</button>
+    </div>
+
     <div id="map">
         <div id="loading-spinner" class="loading-spinner"></div>
         <div id="download-percentage" class="loading-spinner-text"></div>
@@ -149,7 +161,7 @@ GPS Map
 
     const delay = 500;
     const max_points_for_markers = 300;
-    const max_points_for_colored_path = 1000; // not used in this snippet, but kept for reference
+    const max_points_for_colored_path = 1000;
 
     // Toggles
     var fetchInterpolated = true;
@@ -157,6 +169,12 @@ GPS Map
     var connectFarPoints = true;
     var farThreshold = 1000; // meters
     var showSpeedPolyline = true;
+    var editMode = false; // for rectangle selection
+
+    // For rectangle selection / edit mode
+    var drawnItems;       // A featureGroup to hold the drawn rectangle
+    var drawControl;      // The Leaflet draw control
+    var selectedBounds = null; // We'll store the bounding box here
 
     // ---------------
     // Map Init
@@ -192,7 +210,38 @@ GPS Map
         markerLayer   = L.layerGroup().addTo(map);
         radiusLayer   = L.layerGroup().addTo(map);
 
-        // When map finishes moving/zooming, update URL & possibly fetch data
+        // 2) Create a layer group to store drawn shapes
+        drawnItems = new L.FeatureGroup();
+        map.addLayer(drawnItems);
+
+        // 3) Create the draw control (only rectangle)
+        drawControl = new L.Control.Draw({
+            draw: {
+                marker: false,
+                polygon: false,
+                polyline: false,
+                circle: false,
+                circlemarker: false,
+                rectangle: true
+            },
+            edit: {
+                featureGroup: drawnItems
+            }
+        });
+        // We'll add/remove this control dynamically when Edit Mode is toggled.
+
+        // 4) On rectangle created, keep it and store its bounds
+        map.on('draw:created', function (e) {
+            var layer = e.layer;
+            drawnItems.clearLayers(); // remove old rectangle, if any
+            drawnItems.addLayer(layer);
+
+            // Save the bounding box
+            selectedBounds = layer.getBounds();
+            console.log("Rectangle bounds: ", selectedBounds);
+        });
+
+        // Map move/zoom => fetch data
         map.on('moveend', () => {
             if (preventFetch) {
                 preventFetch = false;
@@ -256,7 +305,7 @@ GPS Map
         var northEast = bounds.getNorthEast();
         var southWest = bounds.getSouthWest();
 
-        // If the map hasn't changed significantly, skip
+        // If the map hasn't changed significantly, skip re-fetch
         if (!forced && lastBounds && (
               lastBounds.equals(bounds) ||
               (!currentDataIsInterpolated && lastBounds.contains(northEast) && lastBounds.contains(southWest))
@@ -301,7 +350,7 @@ GPS Map
             // Is-Interpolated header
             currentDataIsInterpolated = response.headers.get('Is-Interpolated').toLowerCase() === 'true';
 
-            // Track progress
+            // Track progress from custom header if provided
             const contentLength = response.headers.get('Content-Original-Length');
             if (!contentLength) {
                 return response.json();
@@ -333,7 +382,7 @@ GPS Map
             })).json();
         })
         .then(data => {
-            // check if the contents of the lists are the same
+            // If the data truly changed, update
             if (data.length !== lastGpsData.length ||
                 data.some((item, index) => item.id !== lastGpsData[index]?.id)) {
                 lastGpsData = data;
@@ -360,8 +409,7 @@ GPS Map
             return;
         }
 
-
-        // 7) Draw the new polylines/markers
+        // Convert raw data to a simpler "coordinates" array
         var coordinates = gpsData.map(record => ({
             id:        record.id,
             lat:       record.lat,
@@ -372,10 +420,10 @@ GPS Map
             timestamp: record.t
         }));
 
+        // Optionally filter out poor-accuracy points
         if (accuracyFilter) {
             coordinates = coordinates.filter(coord => coord.accuracy < 20);
         }
-
 
         if (!softReload) {
             // 1) Save current center & zoom
@@ -384,26 +432,52 @@ GPS Map
 
             // 2) Remove the old map instance but keep the spinners
             map.remove();
-            document.getElementById("map").innerHTML = '<div id="loading-spinner" class="loading-spinner"></div><div id="download-percentage" class="loading-spinner-text"></div>';
+            document.getElementById("map").innerHTML =
+                '<div id="loading-spinner" class="loading-spinner"></div>' +
+                '<div id="download-percentage" class="loading-spinner-text"></div>';
 
-            // 3) Create a new Leaflet map with the same center/zoom
+            // 3) Recreate the Leaflet map at same position
             map = L.map('map').setView([oldCenter.lat, oldCenter.lng], oldZoom);
 
-            // 4) Add tile layer & controls again
+            // 4) Re-add tile layer & controls
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 attribution: '&copy; OpenStreetMap contributors',
                 maxZoom: 19,
             }).addTo(map);
             L.control.fullscreen().addTo(map);
 
-            // 5) Recreate the layer groups
+            // 5) Recreate layer groups
             polylineLayer = L.layerGroup().addTo(map);
             markerLayer   = L.layerGroup().addTo(map);
             radiusLayer   = L.layerGroup().addTo(map);
 
-            if (heatmapActive && heatLayer) map.addLayer(heatLayer);
+            // Recreate the draw layer & re-bind events
+            if (!drawnItems) {
+                drawnItems = new L.FeatureGroup();
+            }
+            map.addLayer(drawnItems);
 
-            // 6) Re-bind event handlers so we can fetch again on move/zoom
+            // If Edit Mode is currently on, add the draw control again
+            var editModeCheckbox = document.getElementById("editModeCheckbox");
+            if (editModeCheckbox && editModeCheckbox.checked) {
+                map.addControl(drawControl);
+            }
+
+            // Re-listen for new rectangle draws
+            map.on('draw:created', function (e) {
+                var layer = e.layer;
+                drawnItems.clearLayers();
+                drawnItems.addLayer(layer);
+                selectedBounds = layer.getBounds();
+                console.log("Rectangle bounds: ", selectedBounds);
+            });
+
+            // If heatmap is on, re-add it
+            if (heatmapActive && heatLayer) {
+                map.addLayer(heatLayer);
+            }
+
+            // 6) Re-bind map movement events
             map.on('moveend', () => {
                 if (preventFetch) {
                     preventFetch = false;
@@ -429,10 +503,10 @@ GPS Map
                 clearTimeout(fetchTimeout);
             });
 
-
+            // Rebuild the calendar control
             createCalendarControl();
 
-            // Speed-based polylines?
+            // Draw polylines (optionally with speed-based colors)
             if (showSpeedPolyline) {
                 for (let i = 0; i < coordinates.length - 1; i++) {
                     if (!connectFarPoints) {
@@ -444,50 +518,55 @@ GPS Map
                     }
                     let color = getSpeedColor(coordinates[i].speed || 0);
                     L.polyline([coordinates[i], coordinates[i+1]], {
-                        color: color, 
+                        color: color,
                         weight: 4
                     }).addTo(polylineLayer);
                 }
             }
             else if (!connectFarPoints) {
-                // only connect close points
-                var cached_points = [];
-                for (let i = 0; i < coordinates.length - 1; i++) {
+                // Only connect "close" points in small segments
+                var segment = [];
+                for (let i = 0; i < coordinates.length; i++) {
+                    if (i === coordinates.length - 1) {
+                        // finalize last segment
+                        if (segment.length > 1) {
+                            L.polyline(segment.map(c => [c.lat, c.lng]), {
+                                color: "#369eff",
+                                weight: 3
+                            }).addTo(polylineLayer);
+                        }
+                        break;
+                    }
                     const dist = getCoordinateDistance(
                         coordinates[i].lat, coordinates[i].lng,
                         coordinates[i+1].lat, coordinates[i+1].lng
                     );
                     if (dist > farThreshold) {
-                        if (cached_points.length > 1) {
-                            L.polyline(cached_points.map(coord => [coord.lat, coord.lng]), {
+                        if (segment.length > 1) {
+                            L.polyline(segment.map(c => [c.lat, c.lng]), {
                                 color: "#369eff",
                                 weight: 3
                             }).addTo(polylineLayer);
                         }
-                        cached_points = [];
-                        continue;
+                        segment = [];
+                    } else {
+                        segment.push(coordinates[i]);
                     }
-                    cached_points.push(coordinates[i]);
-                }
-                if (cached_points.length > 1) {
-                    L.polyline(cached_points.map(coord => [coord.lat, coord.lng]), {
-                        color: "#369eff",
-                        weight: 3
-                    }).addTo(polylineLayer);
                 }
             }
             else {
-                // single big polyline
-                L.polyline(coordinates.map(coord => [coord.lat, coord.lng]), {
+                // Single big polyline for all points
+                L.polyline(coordinates.map(c => [c.lat, c.lng]), {
                     color: "#369eff",
                     weight: 3
                 }).addTo(polylineLayer);
             }
         }
 
+        // Render markers
         doMarkers(coordinates);
 
-        // Fit bounds if needed
+        // Optionally fit bounds to the entire dataset
         if (activateFitBounds) {
             activateFitBounds = false;
             preventFetch = true;
@@ -496,15 +575,15 @@ GPS Map
         }
     }
 
-
     function doMarkers(coordinates) {
         // Clear old markers
         markerLayer.clearLayers();
         radiusLayer.clearLayers();
 
-        // Markers
         const center = map.getCenter();
         const mapBounds = map.getBounds();
+
+        // Sort so that points near the center appear first
         var newCoords = coordinates.sort((a, b) => {
             if (!mapBounds.contains([a.lat, a.lng])) return 1;
             const distA = (a.lat - center.lat)**2 + (a.lng - center.lng)**2;
@@ -514,7 +593,7 @@ GPS Map
 
         let selected_point = coordinates.find(coord => coord.id === last_point.id);
 
-        // Only place markers if zoom is high or data set small
+        // Only show many markers if zoom is high, or if data set is small
         if (map.getZoom() > 15 || newCoords.length <= 50) {
             // Accuracy circle
             newCoords.forEach(coord => {
@@ -530,14 +609,17 @@ GPS Map
 
             // Dot markers
             newCoords.forEach(coord => {
-                if (selected_point && coord.lat === selected_point.lat && coord.lng === selected_point.lng) {
-                    return;
+                if (selected_point &&
+                    coord.lat === selected_point.lat &&
+                    coord.lng === selected_point.lng
+                ) {
+                    return; // highlight separately
                 }
                 createMarker(coord, markerLayer);
             });
         }
 
-        // Highlight selected (if it exists)
+        // Highlight a “selected” point if one exists
         if (selected_point) {
             createMarker(selected_point, markerLayer, true);
         }
@@ -570,11 +652,11 @@ GPS Map
         return { r, g, b };
     }
     const colorStops = [
-        { speed: 0,   color: '#00ff00' },  // green
-        { speed: 15,  color: '#00ffff' },  // cyan
-        { speed: 30,  color: '#ff00ff' },  // magenta
-        { speed: 50,  color: '#ffff00' },  // yellow
-        { speed: 100, color: '#ff3300' }   // red
+        { speed: 0,   color: '#00ff00' },
+        { speed: 15,  color: '#00ffff' },
+        { speed: 30,  color: '#ff00ff' },
+        { speed: 50,  color: '#ffff00' },
+        { speed: 100, color: '#ff3300' }
     ].map(stop => ({ ...stop, rgb: hexToRGB(stop.color) }));
 
     function getSpeedColor(speed) {
@@ -612,23 +694,36 @@ GPS Map
             <b>Speed:</b> ${coord.speed ? (coord.speed * 3.6).toFixed(2) + " km/h" : "N/A"} <br>
             <b>Altitude:</b> ${coord.altitude ? coord.altitude.toFixed(2) + " m" : "N/A"} <br>
             <b>Accuracy:</b> ${coord.accuracy ? coord.accuracy.toFixed(2) + " m" : "N/A"} <br>
-            <button onclick="deletePoint(${coord.id}, this)">Delete</button>
+            <button onclick="deletePoints([${coord.id}], this)">Delete</button>
             <button onclick="setDateToPoint('${coord.timestamp}')">Set Date</button>
             <button onclick="goToSpeedMap('${coord.id}')">View on Speed Map</button>
         `);
     }
 
-    function deletePoint(pointId, button) {
-        fetch(`/map?id=${pointId}`, { method: 'DELETE' })
-            .then(response => {
-                if (response.ok) {
-                    map.closePopup();
-                    fetchGPSData(true);
-                } else {
-                    alert("Failed to delete point");
-                }
-            })
-            .catch(error => console.error("Error deleting point:", error));
+    // -----------------------
+    // Single Delete using the same /map JSON-based approach
+    // -----------------------
+    function deletePoints(pointIds, button) {
+        fetch("/map", {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ids: pointIds })
+        })
+        .then(response => {
+            if (!response.ok) {
+                return response.text().then(text => { throw new Error(text); });
+            }
+            return response.text();
+        })
+        .then(msg => {
+            console.log("Delete success:", msg);
+            map.closePopup();
+            fetchGPSData(true);
+        })
+        .catch(error => {
+            console.error("Error deleting point:", error);
+            alert("Failed to delete point: " + error.message);
+        });
     }
 
     function goToSpeedMap(pointId) {
@@ -642,21 +737,17 @@ GPS Map
         let startDateInput = document.getElementById("start-date");
         let endDateInput   = document.getElementById("end-date");
         
-        // Helper to parse "YYYY-MM-DD" as a UTC date
         function parseAsUTC(dateStr) {
             const [y, m, d] = dateStr.split('-').map(Number);
-            // month is zero-based in JS Date, so subtract 1
             return new Date(Date.UTC(y, m - 1, d));
         }
 
         let startDate = parseAsUTC(startDateInput.value);
         let endDate   = parseAsUTC(endDateInput.value);
 
-        // Shift each by 'days' in UTC
         startDate.setUTCDate(startDate.getUTCDate() + days);
         endDate.setUTCDate(endDate.getUTCDate() + days);
 
-        // Convert back to YYYY-MM-DD
         let newStart = startDate.toISOString().substring(0, 10);
         let newEnd   = endDate.toISOString().substring(0, 10);
 
@@ -795,13 +886,13 @@ GPS Map
                 })).text();
             })
             .then(data => {
-                // convert int,int\n to [[lat/10000,lng/10000],...]
                 heatmapData = data.split('\n').map(line => {
                     const [lat, lng] = line.split(',').map(Number);
                     return [lat / 10000, lng / 10000];
                 }).filter(coord => coord.length === 2);
-                // remove last empty element if it exists
-                if (heatmapData[heatmapData.length - 1].length === 0) {
+
+                // If the last line was blank, remove it
+                if (heatmapData.length && isNaN(heatmapData[heatmapData.length - 1][0])) {
                     heatmapData.pop();
                 }
             })
@@ -819,7 +910,7 @@ GPS Map
         fetchInterpolated = checkbox.checked;
         let showSpeedPolylineElement = document.getElementById("toggleSpeedPolyline");
         if (showSpeedPolylineElement.checked && !fetchInterpolated) {
-            // if speed polyline is on, but interpolated is turned off, disable speed
+            // If "speed colors" is on but interpolation is off, disable speed
             showSpeedPolylineElement.checked = false;
             showSpeedPolyline = false;
         }
@@ -838,13 +929,64 @@ GPS Map
 
     function toggleSpeedPolyline(checkbox) {
         showSpeedPolyline = checkbox.checked;
-
         let fetchInterpolatedElement = document.getElementById("fetchInterpolated");
         if (!fetchInterpolatedElement.checked && showSpeedPolyline) {
             fetchInterpolatedElement.checked = true;
             fetchInterpolated = true;
         }
         fetchGPSData(false, false, true);
+    }
+
+    // -----------------------
+    // Edit Mode Toggle
+    // -----------------------
+    function toggleEditMode(checkbox) {
+        editMode = checkbox.checked;
+        // Show/hide the rectangle-drawing control
+        if (checkbox.checked) {
+            map.addControl(drawControl);
+            // Also show the accuracy-based delete UI
+            document.getElementById("edit-actions").style.display = "block";
+        } else {
+            map.removeControl(drawControl);
+            drawnItems.clearLayers();
+            selectedBounds = null;
+            // Hide the accuracy-based delete UI
+            document.getElementById("edit-actions").style.display = "none";
+        }
+    }
+
+    // -----------------------
+    // Filter & Delete by Accuracy (Bulk)
+    // -----------------------
+    function filterAndDeleteByAccuracy() {
+        if (!selectedBounds) {
+            alert("No rectangle is drawn yet!");
+            return;
+        }
+
+        // Gather accuracy threshold from the UI
+        const accThr = parseFloat(document.getElementById('accuracyThreshold').value) || 999999;
+
+        // Among lastGpsData, find points within the rectangle and with accuracy above threshold
+        const toDelete = lastGpsData.filter(pt => {
+            const withinRect = selectedBounds.contains([pt.lat, pt.lng]);
+            if (!withinRect) return false;
+            return (pt.ha > accThr);
+        });
+
+        if (!toDelete.length) {
+            alert("No points match the accuracy condition in the selected area.");
+            return;
+        }
+
+        if (!confirm("Delete " + toDelete.length + " points in this rectangle?")) {
+            return;
+        }
+
+        // Send { "ids": [...] } to the unified DELETE /map endpoint
+        const ids = toDelete.map(pt => pt.id);
+        deletePoints(ids);
     }
 
     // -----------------------
@@ -863,7 +1005,7 @@ GPS Map
                             type="checkbox" 
                             id="fetchInterpolated" 
                             onchange="toggleFetchInterpolated(this)" 
-                            ` + (fetchInterpolated ? 'checked' : '') + `
+                            ${fetchInterpolated ? 'checked' : ''}
                         />
                         Interpolated Trace
                     </label>
@@ -873,7 +1015,7 @@ GPS Map
                             type="checkbox" 
                             id="toggleHeatmap" 
                             onchange="toggleHeatmap(this)" 
-                            ` + (heatmapLoaded ? 'checked' : '') + `
+                            ${heatmapActive ? 'checked' : ''}
                         />
                         Enable Heatmap
                     </label>
@@ -883,16 +1025,16 @@ GPS Map
                             type="checkbox" 
                             id="toggleAccuracy" 
                             onchange="toggleAccuracy(this)" 
-                            ` + (accuracyFilter ? 'checked' : '') + `
+                            ${accuracyFilter ? 'checked' : ''}
                         />
-                        Filter Accuracy (< 20m)
+                        Filter Accuracy (&lt; 20m)
                     </label>
                     <br>
                     <label>
                         <input 
                             type="checkbox" 
                             onchange="toggleConnectFarPoints(this)" 
-                            ` + (connectFarPoints ? 'checked' : '') + `
+                            ${connectFarPoints ? 'checked' : ''}
                         />
                         Connect Far Points
                     </label>
@@ -902,9 +1044,20 @@ GPS Map
                             type="checkbox" 
                             id="toggleSpeedPolyline" 
                             onchange="toggleSpeedPolyline(this)" 
-                            ` + (showSpeedPolyline ? 'checked' : '') + `
+                            ${showSpeedPolyline ? 'checked' : ''}
                         />
                         Speed Colors
+                    </label>
+                    <br>
+                    <!-- Renamed to "Edit Mode" -->
+                    <label>
+                        <input 
+                            type="checkbox" 
+                            id="editModeCheckbox"
+                            onchange="toggleEditMode(this)"
+                            ${editMode ? 'checked' : ''}
+                        />
+                        Edit Mode
                     </label>
                 `;
 
@@ -975,7 +1128,7 @@ GPS Map
         map.addControl(new CalendarControl());
     }
 
-    // Init
+    // Init everything
     document.addEventListener("DOMContentLoaded", initMap);
 </script>
 {% endblock %}

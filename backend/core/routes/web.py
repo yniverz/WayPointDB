@@ -856,17 +856,26 @@ class MapView(MethodView):
         return response
 
     def delete(self):
-        user = g.current_user
+
+        data = request.get_json(silent=True)
+        if not data or "ids" not in data:
+            return "Missing 'id' query param or 'ids' array in JSON body", 400
+
+        ids = data["ids"]
+        if not isinstance(ids, list) or not ids:
+            return "'ids' must be a non-empty array of IDs", 400
+
+        # Bulk-delete all matching points belonging to the user
+        # (and matching any extra filters in g.trace_query)
+        points = GPSData.query.filter_by(**g.trace_query).filter(GPSData.id.in_(ids)).all()
+        if not points:
+            return "No points found for the given IDs", 404
         
-        point_id = request.args.get("id")
-        if not point_id:
-            return "Missing point_id", 400
-        point = GPSData.query.filter_by(id=point_id, **g.trace_query).first()
-        if not point:
-            return "Point not found", 404
-        db.session.delete(point)
+        for point in points:
+            db.session.delete(point)
         db.session.commit()
-        return "OK", 200
+
+        return jsonify({"deleted_ids": ids}), 200
     
     def compress(self, data):
         data = json.dumps(data).encode('utf8')
