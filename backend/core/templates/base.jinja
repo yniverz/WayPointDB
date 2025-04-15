@@ -140,6 +140,33 @@
             /* If you do not want the dark-mode background to override the image,
             you might have to either handle it differently or remove it from .dark-mode. */
         }
+
+        .version-toast {
+            position: fixed;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #323232;
+            color: white;
+            padding: 1em 2em;
+            border-radius: 0 0 8px 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+            font-family: sans-serif;
+            font-size: 0.95em;
+            z-index: 9999;
+            display: flex;
+            gap: 0.5em;
+            align-items: center;
+        }
+
+        .version-toast a {
+            color: #ffd700;
+            text-decoration: underline;
+        }
+
+        .hidden {
+            display: none;
+        }
     </style>
     {% block head %}{% endblock %}
 </head>
@@ -206,6 +233,10 @@
         Icon created by <a href="https://www.flaticon.com/authors/freepik" title="visit icons" target="_blank">Freepik</a>
     </div>
 
+    <div id="version-toast" class="version-toast hidden">
+        A new version is available! <a href="https://github.com/yniverz/WayPointDB/releases/latest" target="_blank">Click here to update.</a>
+    </div>
+
     <!-- Bootstrap JS -->
     <script src="/static/js/bootstrap.bundle.min.js"></script>
 
@@ -249,33 +280,58 @@
         });
 
         document.addEventListener("DOMContentLoaded", function () {
-            // Fetch the version text from GitHub
-            fetch("https://raw.githubusercontent.com/yniverz/WayPointDB/refs/heads/main/VERSION")
-                .then(response => response.text())
-                .then(remoteVersion => {
-                    // Remove any whitespace/newlines
-                    remoteVersion = remoteVersion.trim();
-                    var versionElem = document.getElementById("versionText");
-                    var localVersion = versionElem.textContent.trim();
-                    // Compare the versions; if they differ, make the version a link
-                    if (remoteVersion !== localVersion) {
-                        var link = document.createElement("a");
-                        link.href = "https://github.com/yniverz/WayPointDB";
+            fetch("https://api.github.com/repos/yniverz/WayPointDB/releases/latest")
+                .then(response => {
+                    if (!response.ok) throw new Error("GitHub API error");
+                    return response.json();
+                })
+                .then(data => {
+                    const remoteVersion = data.tag_name.trim(); // e.g., "v1.2.3"
+                    const versionElem = document.getElementById("versionText");
+                    const localVersion = versionElem.textContent.trim(); // e.g., "v1.0.0"
+
+                    if (isVersionNewer(remoteVersion, localVersion)) {
+                        // Convert version text to a link
+                        const link = document.createElement("a");
+                        link.href = "https://github.com/yniverz/WayPointDB/releases/latest";
                         link.target = "_blank";
-                        // Optionally, you could display the remote version instead by setting link.textContent = remoteVersion;
-                        // For now we keep the local version text.
                         link.textContent = localVersion;
                         versionElem.innerHTML = "";
                         versionElem.appendChild(link);
+
+                        // Show the toast
+                        const toast = document.getElementById("version-toast");
+                        toast.classList.remove("hidden");
+
+                        // Hide the toast after 5 seconds
+                        setTimeout(() => {
+                            toast.classList.add("hidden");
+                        }, 5000);
+                    } else if (localVersion !== remoteVersion) {
+                        // If the versions are different but not newer, just update the text
+                        versionElem.textContent += " (unreleased)";
                     }
                 })
                 .catch(error => {
-                    console.error("Error fetching version:", error);
+                    console.error("Error fetching latest release:", error);
                 });
-        });
-    </script>
 
-    <script>
+            function isVersionNewer(remote, local) {
+                const parse = (v) => v.replace(/^v/, '').split('.').map(Number);
+
+                const [rMajor, rMinor, rPatch] = parse(remote);
+                const [lMajor, lMinor, lPatch] = parse(local);
+
+                if (rMajor > lMajor) return true;
+                if (rMajor < lMajor) return false;
+
+                if (rMinor > lMinor) return true;
+                if (rMinor < lMinor) return false;
+
+                return rPatch > lPatch;
+            }
+        });
+        
         document.addEventListener("DOMContentLoaded", function () {
             // If you only want the background for light mode (for example),
             // you could skip setting it when dark-mode is active.
