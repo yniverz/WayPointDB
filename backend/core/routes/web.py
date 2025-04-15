@@ -1354,7 +1354,10 @@ class FullBleedBackground(MethodView):
                                 scale, imageWidth, imageHeight)
 
             # Average speed for color
-            avgSpeed = (pA.speed + pB.speed) / 2.0
+            if pA.speed is not None and pB.speed is not None:
+                avgSpeed = (pA.speed + pB.speed) / 2.0
+            else:
+                avgSpeed = dist / (pB.timestamp - pA.timestamp).total_seconds()
             segmentColor = self.get_color_from_speed(avgSpeed, colorStops)
 
             # Draw line
