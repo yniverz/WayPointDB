@@ -962,7 +962,7 @@ class SpeedMapView(MethodView):
         if not point:
             return "Point not found", 404
         
-        margin = 100
+        margin = 500
         if "margin" in request.args:
             margin = min(int(request.args.get("margin")), 1000)
 
