@@ -765,10 +765,6 @@ class MapView(MethodView):
 
         # filters += " AND horizontal_accuracy < 20"
 
-        # calculate time delta
-        time_delta = 0
-        if start_date and end_date:
-            time_delta = (datetime.fromisoformat(end_date) - datetime.fromisoformat(start_date)).total_seconds()
 
         user_trace_id = f"trace_id = '{g.current_trace.id}'" if g.current_trace else f"user_id = '{user.id}'"
 
@@ -832,7 +828,7 @@ class MapView(MethodView):
             gps_data.append({
                 "id": row[0],
                 "uid": row[1],
-                "t": row[2].isoformat() if row[2] else None,
+                "t": row[2].astimezone(timezone.utc).isoformat() if row[2] else None,
                 "lat": row[3],
                 "lng": row[4],
                 "ha": row[5],

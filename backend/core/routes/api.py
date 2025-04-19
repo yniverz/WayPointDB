@@ -278,7 +278,7 @@ class OverlandGPSBatch(Resource):
             # Parse timestamp, default to now if parsing fails
             ts_str = properties.get("timestamp")
             try:
-                ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))  # handle UTC 'Z'
+                ts = datetime.fromisoformat(ts_str) # e.g. "2025-04-19T20:12:44Z"
             except Exception:
                 ts = datetime.now()
 
