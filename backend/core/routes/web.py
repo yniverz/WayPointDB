@@ -650,6 +650,10 @@ class MapView(MethodView):
         url = "https://" if Config.PHOTON_SERVER_HTTPS else "http://"
         url += f"{Config.PHOTON_SERVER_HOST}/api/?q={query}&limit=1"
         res = requests.get(url, headers={"X-Api-Key": Config.PHOTON_SERVER_API_KEY})
+
+        if res.status_code != 200:
+            raise Exception(f"Error fetching geocode: {res.status_code} - {res.text}")
+
         return res.json()
 
     def get(self):
