@@ -141,10 +141,23 @@ function updateSelectedPoint(id){
 
     // map marker
     markerLayer.clearLayers();
+
+
+    // convert timestamp iso to local date
+    let date = new Date(pt.timestamp);
+    let formattedDate = date.toLocaleString('en-US', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+    });
+
     L.circleMarker([pt.lat,pt.lng],
         {radius:6,fillColor:'#0b84ff',color:'#c7c7cb',weight:3,fillOpacity:1})
       .addTo(markerLayer)
-      .bindPopup(`<b>Timestamp:</b> ${pt.timestamp}<br>
+      .bindPopup(`<b>Timestamp:</b> ${formattedDate}<br>
                   <b>Speed:</b> ${pt.speed?(pt.speed*3.6).toFixed(2)+' km/h':'N/A'}<br>
                   <b>Altitude:</b> ${pt.altitude?pt.altitude.toFixed(2)+' m':'N/A'}<br>
                   <b>Accuracy:</b> ${pt.accuracy?pt.accuracy.toFixed(2)+' m':'N/A'}<br>

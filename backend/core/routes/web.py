@@ -973,7 +973,7 @@ class SpeedMapView(MethodView):
             gps_data.append({
                 "id": row.id,
                 "uid": row.user_id,
-                "t": row.timestamp.isoformat() if row.timestamp else None,
+                "t": row.timestamp.astimezone(timezone.utc).isoformat() if row.timestamp else None,
                 "lat": row.latitude,
                 "lng": row.longitude,
                 "ha": row.horizontal_accuracy,
