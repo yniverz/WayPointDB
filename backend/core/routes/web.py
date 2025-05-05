@@ -17,7 +17,7 @@ from flask import (
 )
 from flask.views import MethodView
 import requests
-from sqlalchemy import Integer, Numeric, cast, func
+from sqlalchemy import Integer, Numeric, cast, distinct, func
 
 from ..background.jobs import JOB_TYPES, ImportJob
 from ..background import job_manager
@@ -895,10 +895,12 @@ class HeatMapDataView(MethodView):
 
         data = GPSData.query.with_entities(
             func.string_agg(
-                func.concat(
-                    cast(GPSData.latitude * 10000, Integer), 
-                    ',', 
-                    cast(GPSData.longitude * 10000, Integer)
+                distinct(
+                    func.concat(
+                        cast(GPSData.latitude * 10000, Integer), 
+                        ',', 
+                        cast(GPSData.longitude * 10000, Integer)
+                    )
                 ),
                 '\n'
             )
