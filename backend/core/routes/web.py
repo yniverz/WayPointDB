@@ -1,6 +1,6 @@
 from io import BytesIO
 from PIL import Image, ImageDraw, ImageFilter
-from collections import defaultdict
+from collections import defaultdict, namedtuple
 from datetime import datetime, timedelta, timezone
 import gzip
 import math
@@ -17,7 +17,7 @@ from flask import (
 )
 from flask.views import MethodView
 import requests
-from sqlalchemy import Integer, Numeric, cast, func
+from sqlalchemy import Integer, Numeric, cast, func, text
 
 from ..background.jobs import JOB_TYPES, ImportJob
 from ..background import job_manager
@@ -1445,6 +1445,8 @@ class MapTileView(MethodView):
 
     decorators = [login_required]
 
+    Point = namedtuple("Point", "lat lon speed ts")
+
     # ------------ Slippy‑map helpers ----------------------------------------
     TILE_SIZE = 256  # px
     EARTH_R = 6378137.0  # Web‑Mercator, metres
@@ -1535,9 +1537,9 @@ class MapTileView(MethodView):
         ).fetchall()
 
         if not rows:
-            abort(404, "No points in that tile.")
+            raise Exception("No points found in this tile")
 
-        pts = [Point(r.latitude, r.longitude, r.speed, r.timestamp) for r in rows]
+        pts = [self.Point(r.latitude, r.longitude, r.speed, r.timestamp) for r in rows]
 
         # 3.  Render tile -----------------------------------------------------
         img = self.render_tile(pts, z, x, y)
@@ -1621,8 +1623,7 @@ web_bp.add_url_rule("/login", view_func=LoginView.as_view("login"), methods=["GE
 web_bp.add_url_rule("/logout", view_func=LogoutView.as_view("logout"))
 web_bp.add_url_rule("/set_trace_id", view_func=SetTraceView.as_view("set_trace_id"), methods=["POST"])
 web_bp.add_url_rule("/full_bleed_background.png", view_func=FullBleedBackground.as_view("full_bleed_background"))
-web_bp.add_url_rule("/tiles/<int:z>/<int:x>/<int:y>.png", view_func=MapTileView.as_view("map_tile"),
-)
+web_bp.add_url_rule("/tiles/<int:z>/<int:x>/<int:y>.png", view_func=MapTileView.as_view("map_tile"))
 web_bp.add_url_rule("/map", view_func=MapView.as_view("map"), methods=["GET", "POST", "DELETE"])
 web_bp.add_url_rule("/map/heatmap_data.csv", view_func=HeatMapDataView.as_view("heatmap_data"))
 web_bp.add_url_rule("/map/speed", view_func=SpeedMapView.as_view("speed_map"), methods=["GET", "POST"])
