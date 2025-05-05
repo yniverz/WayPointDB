@@ -1437,6 +1437,182 @@ class FullBleedBackground(MethodView):
         return colorStops[-1].Color
 
 
+class MapTileView(MethodView):
+    """
+    Serve one 256×256 Slippy‑Map tile as PNG, coloured by speed.
+      /tiles/<z>/<x>/<y>.png
+    """
+
+    decorators = [login_required]
+
+    # ------------ Slippy‑map helpers ----------------------------------------
+    TILE_SIZE = 256  # px
+    EARTH_R = 6378137.0  # Web‑Mercator, metres
+
+    @staticmethod
+    def tile_bounds(z: int, x: int, y: int):
+        """
+        Return (west, south, east, north) in WGS‑84 degrees for that tile.
+        """
+        n = 2 ** z
+        lon_w = x / n * 360.0 - 180.0
+        lon_e = (x + 1) / n * 360.0 - 180.0
+
+        def merc2lat(merc_y):
+            return math.degrees(math.atan(math.sinh(merc_y)))
+
+        lat_n = merc2lat(math.pi * (1 - 2 * y / n))
+        lat_s = merc2lat(math.pi * (1 - 2 * (y + 1) / n))
+        return lon_w, lat_s, lon_e, lat_n  # (W, S, E, N)
+
+    @staticmethod
+    def latlon_to_pixel(lat_deg, lon_deg, z):
+        """
+        Convert lat/lon to world pixel coordinates (origin top‑left of whole map).
+        """
+        n = 2 ** z * MapTileView.TILE_SIZE
+        x_pix = (lon_deg + 180.0) / 360.0 * n
+        siny = math.sin(math.radians(lat_deg))
+        y_pix = (
+            (0.5 - math.log((1 + siny) / (1 - siny)) / (4 * math.pi)) * n
+        )
+        return x_pix, y_pix
+
+    # ------------ Colour interpolation identical to your FullBleedBackground -
+    class ColorStop:
+        def __init__(self, speed_kmh, rgb):
+            self.s = speed_kmh
+            self.c = rgb
+
+    COLOR_STOPS = [
+        ColorStop(0, (0, 0, 255)),      # blue
+        ColorStop(30, (0, 255, 0)),     # green
+        ColorStop(60, (255, 255, 0)),   # yellow
+        ColorStop(90, (255, 0, 0)),     # red
+    ]
+
+    @classmethod
+    def colour_for_speed(cls, m_per_s):
+        kmh = m_per_s * 3.6
+        stops = cls.COLOR_STOPS
+        if kmh <= stops[0].s:
+            return stops[0].c
+        for prev, nxt in zip(stops[:-1], stops[1:]):
+            if kmh <= nxt.s:
+                r = (kmh - prev.s) / (nxt.s - prev.s)
+                return tuple(
+                    round(prev.c[i] + (nxt.c[i] - prev.c[i]) * r) for i in range(3)
+                )
+        return stops[-1].c
+
+    # ------------ Main GET ---------------------------------------------------
+    def get(self, z: int, x: int, y: int):
+        user_id = g.current_user.id
+
+        # 1.  Tile bounds in degrees -----------------------------------------
+        lon_w, lat_s, lon_e, lat_n = self.tile_bounds(z, x, y)
+
+        # 2.  Fetch points only inside that box ------------------------------
+        sql = text(
+            """
+            SELECT latitude, longitude, speed, "timestamp"
+            FROM gps_data
+            WHERE user_id = :uid
+              AND latitude  BETWEEN :lat_s  AND :lat_n
+              AND longitude BETWEEN :lon_w AND :lon_e
+            ORDER BY "timestamp" ASC
+            """
+        )
+        rows = db.session.execute(
+            sql,
+            dict(
+                uid=user_id,
+                lat_s=lat_s,
+                lat_n=lat_n,
+                lon_w=lon_w,
+                lon_e=lon_e,
+            ),
+        ).fetchall()
+
+        if not rows:
+            abort(404, "No points in that tile.")
+
+        pts = [Point(r.latitude, r.longitude, r.speed, r.timestamp) for r in rows]
+
+        # 3.  Render tile -----------------------------------------------------
+        img = self.render_tile(pts, z, x, y)
+
+        # 4.  Return PNG ------------------------------------------------------
+        buf = BytesIO()
+        img.save(buf, format="PNG")
+        buf.seek(0)
+        return send_file(buf, mimetype="image/png")
+
+    # ------------ Rendering --------------------------------------------------
+    def render_tile(self, pts, z, tx, ty):
+        """
+        Draw poly‑lines for pts that (at least partly) live inside this tile.
+        """
+        img = Image.new("RGBA", (self.TILE_SIZE, self.TILE_SIZE), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(img)
+
+        # world pixel origin of this tile
+        tile_origin_x = tx * self.TILE_SIZE
+        tile_origin_y = ty * self.TILE_SIZE
+
+        # draw each consecutive segment if both endpoints in the tile
+        for a, b in zip(pts[:-1], pts[1:]):
+            xa, ya = self.latlon_to_pixel(a.lat, a.lon, z)
+            xb, yb = self.latlon_to_pixel(b.lat, b.lon, z)
+
+            # clip quick – if both points outside by >1 tile, skip
+            margin = self.TILE_SIZE
+            if (
+                max(xa, xb) < tile_origin_x - margin
+                or min(xa, xb) > tile_origin_x + self.TILE_SIZE + margin
+                or max(ya, yb) < tile_origin_y - margin
+                or min(ya, yb) > tile_origin_y + self.TILE_SIZE + margin
+            ):
+                continue
+
+            # translate to tile‑local pixels
+            xa -= tile_origin_x
+            ya -= tile_origin_y
+            xb -= tile_origin_x
+            yb -= tile_origin_y
+
+            # colour by speed
+            if a.speed is not None and b.speed is not None:
+                v = (a.speed + b.speed) / 2.0
+            else:
+                # distance / time fallback
+                dt = (b.ts - a.ts).total_seconds() or 1
+                v = (
+                    self.haversine(a.lat, a.lon, b.lat, b.lon) / dt
+                )
+            colour = self.colour_for_speed(v)
+
+            draw.line([(xa, ya), (xb, yb)], fill=colour, width=2)
+
+        # tiny blur for antialiasing
+        img = img.filter(ImageFilter.GaussianBlur(radius=0.6))
+        return img
+
+    # ------------ Haversine (copy from your original) ------------------------
+    @staticmethod
+    def haversine(lat1, lon1, lat2, lon2):
+        R = 6371000.0
+        dlat = math.radians(lat2 - lat1)
+        dlon = math.radians(lon2 - lon1)
+        a = (
+            math.sin(dlat / 2) ** 2
+            + math.cos(math.radians(lat1))
+            * math.cos(math.radians(lat2))
+            * math.sin(dlon / 2) ** 2
+        )
+        return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+
 
 
 # Register the class-based views with the Blueprint
@@ -1445,6 +1621,8 @@ web_bp.add_url_rule("/login", view_func=LoginView.as_view("login"), methods=["GE
 web_bp.add_url_rule("/logout", view_func=LogoutView.as_view("logout"))
 web_bp.add_url_rule("/set_trace_id", view_func=SetTraceView.as_view("set_trace_id"), methods=["POST"])
 web_bp.add_url_rule("/full_bleed_background.png", view_func=FullBleedBackground.as_view("full_bleed_background"))
+web_bp.add_url_rule("/tiles/<int:z>/<int:x>/<int:y>.png", view_func=MapTileView.as_view("map_tile"),
+)
 web_bp.add_url_rule("/map", view_func=MapView.as_view("map"), methods=["GET", "POST", "DELETE"])
 web_bp.add_url_rule("/map/heatmap_data.csv", view_func=HeatMapDataView.as_view("heatmap_data"))
 web_bp.add_url_rule("/map/speed", view_func=SpeedMapView.as_view("speed_map"), methods=["GET", "POST"])
