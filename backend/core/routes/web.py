@@ -1537,7 +1537,12 @@ class MapTileView(MethodView):
         ).fetchall()
 
         if not rows:
-            raise Exception("No points found in this tile")
+            # return empty tile
+            img = Image.new("RGBA", (self.TILE_SIZE, self.TILE_SIZE), (0, 0, 0, 0))
+            buf = BytesIO()
+            img.save(buf, format="PNG")
+            buf.seek(0)
+            return send_file(buf, mimetype="image/png")
 
         pts = [self.Point(r.latitude, r.longitude, r.speed, r.timestamp) for r in rows]
 
