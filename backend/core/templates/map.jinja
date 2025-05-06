@@ -148,6 +148,7 @@ GPS Map
     var heatmapData = [];
     var heatmapLoaded = false;       // track if heatmap data is already fetched
     var heatmapActive = false;
+    var totalmapActive = false;
 
     var lastGpsData = [];
     var last_point = {{ last_point }};
@@ -200,8 +201,9 @@ GPS Map
             maxZoom: 19,
         }).addTo(map);
 
-        L.tileLayer('/tiles/{z}/{x}/{y}.png', { maxZoom: 20 }).addTo(map);
-
+        // if (!totalmapActive) {
+        //     L.tileLayer('/tiles/{z}/{x}/{y}.png', { maxZoom: 20 }).addTo(map);
+        // }
         // Fullscreen control
         L.control.fullscreen().addTo(map);
 
@@ -445,7 +447,9 @@ GPS Map
                 maxZoom: 19,
             }).addTo(map);
 
-            L.tileLayer('/tiles/{z}/{x}/{y}.png', { maxZoom: 20 }).addTo(map);
+            if (totalmapActive) {
+                L.tileLayer('/tiles/{z}/{x}/{y}.png', { maxZoom: 20 }).addTo(map);
+            }
 
             L.control.fullscreen().addTo(map);
 
@@ -843,6 +847,12 @@ GPS Map
         }
     }
 
+    function toggleTotalMap(checkbox) {
+        totalmapActive = checkbox.checked;
+
+        updateMap(lastGpsData);
+    }
+
     // -----------------------
     // Heatmap
     // -----------------------
@@ -1022,6 +1032,16 @@ GPS Map
                             ${fetchInterpolated ? 'checked' : ''}
                         />
                         Interpolated Trace
+                    </label>
+                    <br>
+                    <label>
+                        <input 
+                            type="checkbox" 
+                            id="toggleTotalMap" 
+                            onchange="toggleTotalMap(this)" 
+                            ${totalmapActive ? 'checked' : ''}
+                        />
+                        Enable Total Map
                     </label>
                     <br>
                     <label>
