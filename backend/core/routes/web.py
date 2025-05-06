@@ -1436,6 +1436,10 @@ class FullBleedBackground(MethodView):
         # If above the highest speed, return the last stop's color
         return colorStops[-1].Color
 
+
+
+map_tile_data_store = {}
+
 class MapTileView(MethodView):
     """Serve /tiles/<z>/<x>/<y>.png as a 256 × 256 PNG."""
 
@@ -1502,6 +1506,13 @@ class MapTileView(MethodView):
     # -----------------------------------------------------------------------
     def get(self, z: int, x: int, y: int):
         user_id = g.current_user.id
+
+        # Check if the tile is already cached
+        if (z, x, y) in map_tile_data_store:
+            img = map_tile_data_store[(z, x, y)]
+            buf = BytesIO(); img.save(buf, "PNG"); buf.seek(0)
+            return send_file(buf, mimetype="image/png")
+
         w, s, e, n = self.tile_bounds(z, x, y)
 
         sql = text(
@@ -1524,6 +1535,10 @@ class MapTileView(MethodView):
         img = self.render_tile(pts, z, x, y)
 
         buf = BytesIO(); img.save(buf, "PNG"); buf.seek(0)
+
+        # Cache the tile
+        map_tile_data_store[(z, x, y)] = img
+
         return send_file(buf, mimetype="image/png")
 
     # -----------------------------------------------------------------------

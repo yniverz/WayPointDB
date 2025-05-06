@@ -444,6 +444,9 @@ GPS Map
                 attribution: '&copy; OpenStreetMap contributors',
                 maxZoom: 19,
             }).addTo(map);
+
+            L.tileLayer('/tiles/{z}/{x}/{y}.png', { maxZoom: 20 }).addTo(map);
+
             L.control.fullscreen().addTo(map);
 
             // 5) Recreate layer groups
