@@ -1441,14 +1441,14 @@ class FullBleedBackground(MethodView):
 map_tile_data_store = {}
 
 class MapTileView(MethodView):
-    """Serve /tiles/<z>/<x>/<y>.png as a 256 × 256 PNG."""
+    """Serve /tiles/<z>/<x>/<y>.png as a 256x256 PNG."""
 
     decorators = [login_required]
 
     # -----------------------------------------------------------------------
     #  Tunables
     # -----------------------------------------------------------------------
-    TILE_SIZE = 256           # px
+    TILE_SIZE = 256*4           # px
     MAX_POINT_DISTANCE = 100  # NEW ▸ metres – beyond this no line, only dots
 
     Point = namedtuple("Point", "lat lon speed ts")
