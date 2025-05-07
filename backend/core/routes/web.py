@@ -1448,7 +1448,7 @@ class MapTileView(MethodView):
     # -----------------------------------------------------------------------
     #  Tunables
     # -----------------------------------------------------------------------
-    TILE_SIZE = 256*4           # px
+    TILE_SIZE = 256           # px
     MAX_POINT_DISTANCE = 100  # NEW ▸ metres – beyond this no line, only dots
 
     Point = namedtuple("Point", "lat lon speed ts")
