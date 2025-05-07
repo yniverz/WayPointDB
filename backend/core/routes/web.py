@@ -1468,6 +1468,19 @@ class MapTileView(MethodView):
 
         lat_n = merc2lat(math.pi * (1 - 2 * y / n))
         lat_s = merc2lat(math.pi * (1 - 2 * (y + 1) / n))
+
+        # extend bounds to 1 times tile width in each direction
+        lon_w -= (lon_e - lon_w) / 2
+        lon_e += (lon_e - lon_w) / 2
+        lat_s -= (lat_n - lat_s) / 2
+        lat_n += (lat_n - lat_s) / 2
+
+        # clamp to valid lat/lon
+        lat_s = max(lat_s, -85.05112878)
+        lat_n = min(lat_n, 85.05112878)
+        lon_w = max(lon_w, -180)
+        lon_e = min(lon_e, 180)
+
         return lon_w, lat_s, lon_e, lat_n
 
     @staticmethod
