@@ -317,8 +317,7 @@ class PointsView(MethodView):
     decorators = [login_required]  # Ensure the user is logged in
 
     def get(self):
-        user = g.current_user
-
+        
         # Retrieve query parameters
         the_date_str = request.args.get("date")
         import_id = request.args.get("import")
@@ -402,7 +401,6 @@ class PointsView(MethodView):
         )
 
     def post(self):
-        user = g.current_user
 
         action = request.form.get("action", None)
 
@@ -418,9 +416,9 @@ class PointsView(MethodView):
 
                 if selected_ids:
                     # Delete all points matching these IDs for this user
-                    GPSData.query.filter(
-                        GPSData.user_id == user.id,
-                        GPSData.id.in_(selected_ids)
+                    GPSData.query\
+                        .filter_by(**g.trace_query)\
+                        .filter(GPSData.id.in_(selected_ids)
                     ).delete(synchronize_session=False)
                     db.session.commit()
 
