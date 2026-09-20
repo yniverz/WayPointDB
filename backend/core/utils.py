@@ -27,16 +27,19 @@ def login_required(f):
 
         g.current_trace = get_current_trace()
 
-        g.trace_query = {"user_id": g.current_user.id}
-        if g.current_trace:
-            g.trace_query = {"trace_id": g.current_trace.id}
-
-
-
         g.available_traces = []
         for trace in AdditionalTrace.query.all():
             if str(g.current_user.id) in trace.share_with_list or trace.owner_id == g.current_user.id:
                 g.available_traces.append(trace)
+
+        # Access to a trace may have been revoked after it was stored in the session.
+        if g.current_trace and g.current_trace.id not in [t.id for t in g.available_traces]:
+            g.current_trace = None
+            session.pop("trace_id", None)
+
+        g.trace_query = {"user_id": g.current_user.id}
+        if g.current_trace:
+            g.trace_query = {"trace_id": g.current_trace.id}
 
         return f(*args, **kwargs)
     return decorated_function

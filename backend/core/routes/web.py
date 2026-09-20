@@ -1,6 +1,6 @@
 from io import BytesIO
 from PIL import Image, ImageDraw, ImageFilter
-from collections import defaultdict, namedtuple
+from collections import OrderedDict, defaultdict, namedtuple
 from datetime import datetime, timedelta, timezone
 import gzip
 import math
@@ -1223,7 +1223,6 @@ class SetTraceView(MethodView):
 
     def post(self):
         trace_id = request.form.get("trace_id")
-        print(trace_id, request.form)
         if not trace_id:
             session.pop("trace_id", None)
             return "OK", 205
@@ -1231,6 +1230,9 @@ class SetTraceView(MethodView):
         trace = AdditionalTrace.query.filter_by(id=trace_id).first()
         if not trace:
             return "Trace not found", 404
+
+        if trace.owner_id != g.current_user.id and str(g.current_user.id) not in trace.share_with_list:
+            return "Access denied", 403
 
         session["trace_id"] = trace_id
 
@@ -1436,7 +1438,10 @@ class FullBleedBackground(MethodView):
 
 
 
-map_tile_data_store = {}
+# Tiles contain private location data, so entries are keyed by the owning
+# user/trace and never shared between them.
+map_tile_data_store = OrderedDict()
+MAP_TILE_CACHE_MAX_ENTRIES = 2048
 
 class MapTileView(MethodView):
     """Serve /tiles/<z>/<x>/<y>.png as a 256x256 PNG."""
@@ -1516,41 +1521,50 @@ class MapTileView(MethodView):
 
     # -----------------------------------------------------------------------
     def get(self, z: int, x: int, y: int):
-        user_id = g.current_user.id
+        if "trace_id" in g.trace_query:
+            owner_column, owner_id = "trace_id", g.trace_query["trace_id"]
+        else:
+            owner_column, owner_id = "user_id", g.trace_query["user_id"]
+
+        cache_key = (owner_column, str(owner_id), z, x, y)
 
         # Check if the tile is already cached
-        if (z, x, y) in map_tile_data_store:
-            img = map_tile_data_store[(z, x, y)]
-            buf = BytesIO(); img.save(buf, "PNG"); buf.seek(0)
-            return send_file(buf, mimetype="image/png")
+        if cache_key in map_tile_data_store:
+            map_tile_data_store.move_to_end(cache_key)
+            return self.send_png(map_tile_data_store[cache_key])
 
         w, s, e, n = self.tile_bounds(z, x, y)
 
         sql = text(
-            """SELECT latitude, longitude, speed, "timestamp"
+            f"""SELECT latitude, longitude, speed, "timestamp"
                FROM gps_data
-               WHERE user_id=:uid
+               WHERE {owner_column}=:oid
                  AND latitude BETWEEN :s AND :n
                  AND longitude BETWEEN :w AND :e
                ORDER BY "timestamp" """
         )
-        rows = db.session.execute(sql, dict(uid=user_id, s=s, n=n, w=w, e=e)).fetchall()
+        rows = db.session.execute(sql, dict(oid=owner_id, s=s, n=n, w=w, e=e)).fetchall()
         if not rows:
             img = Image.new("RGBA", (self.TILE_SIZE, self.TILE_SIZE), (0, 0, 0, 0))
-            buf = BytesIO()
-            img.save(buf, format="PNG")
-            buf.seek(0)
-            return send_file(buf, mimetype="image/png")
+            return self.send_png(img)
 
         pts = [self.Point(r.latitude, r.longitude, r.speed, r.timestamp) for r in rows]
         img = self.render_tile(pts, z, x, y)
 
-        buf = BytesIO(); img.save(buf, "PNG"); buf.seek(0)
-
         # Cache the tile
-        map_tile_data_store[(z, x, y)] = img
+        map_tile_data_store[cache_key] = img
+        map_tile_data_store.move_to_end(cache_key)
+        while len(map_tile_data_store) > MAP_TILE_CACHE_MAX_ENTRIES:
+            map_tile_data_store.popitem(last=False)
 
-        return send_file(buf, mimetype="image/png")
+        return self.send_png(img)
+
+    @staticmethod
+    def send_png(img: Image.Image):
+        buf = BytesIO(); img.save(buf, "PNG"); buf.seek(0)
+        response = send_file(buf, mimetype="image/png")
+        response.headers["Cache-Control"] = "private, no-store"
+        return response
 
     # -----------------------------------------------------------------------
     #  Rendering – now honours MAX_POINT_DISTANCE
