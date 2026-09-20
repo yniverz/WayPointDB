@@ -62,14 +62,18 @@
                             <input type="hidden" name="action" value="share_trace">
                             <input type="hidden" name="trace_id" value="{{ trace.id }}">
 
-                            <select name="user_id" required>
-                                <option value="">-- Select user --</option>
-                                {% for u_id, email in users %}
-                                    {% if u_id != current_user_id %}
-                                        <option value="{{ u_id }}">{{ email }}</option>
-                                    {% endif %}
-                                {% endfor %}
-                            </select>
+                            {% if can_list_users %}
+                                <select name="user_id" required>
+                                    <option value="">-- Select user --</option>
+                                    {% for u_id, email in users %}
+                                        {% if u_id != current_user_id %}
+                                            <option value="{{ u_id }}">{{ email }}</option>
+                                        {% endif %}
+                                    {% endfor %}
+                                </select>
+                            {% else %}
+                                <input type="email" name="user_email" placeholder="user@example.com" required>
+                            {% endif %}
 
                             <button type="submit">Share</button>
                         </form>
@@ -102,14 +106,18 @@
                             <input type="hidden" name="action" value="transfer_trace">
                             <input type="hidden" name="trace_id" value="{{ trace.id }}">
 
-                            <select name="user_id" required>
-                                <option value="">-- Select user --</option>
-                                {% for u_id, email in users %}
-                                    {% if u_id != current_user_id %}
-                                        <option value="{{ u_id }}">{{ email }}</option>
-                                    {% endif %}
-                                {% endfor %}
-                            </select>
+                            {% if can_list_users %}
+                                <select name="user_id" required>
+                                    <option value="">-- Select user --</option>
+                                    {% for u_id, email in users %}
+                                        {% if u_id != current_user_id %}
+                                            <option value="{{ u_id }}">{{ email }}</option>
+                                        {% endif %}
+                                    {% endfor %}
+                                </select>
+                            {% else %}
+                                <input type="email" name="user_email" placeholder="user@example.com" required>
+                            {% endif %}
 
                             <button type="submit">Transfer</button>
                         </form>

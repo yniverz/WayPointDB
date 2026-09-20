@@ -6,11 +6,14 @@ import gzip
 import math
 import os
 import re
+import secrets
+import threading
 import traceback
 import uuid
 import time
 import psycopg2
 import json
+from urllib.parse import urljoin, urlparse
 from flask import (
     Blueprint, Response, make_response, render_template, request, redirect, send_file, stream_with_context, url_for, 
     session, g, jsonify
@@ -18,6 +21,7 @@ from flask import (
 from flask.views import MethodView
 import requests
 from sqlalchemy import Integer, Numeric, cast, func, text
+from werkzeug.security import check_password_hash, generate_password_hash
 
 from ..background.jobs import JOB_TYPES, ImportJob
 from ..background import job_manager
@@ -27,6 +31,60 @@ from ..config import Config
 from werkzeug.utils import secure_filename
 
 web_bp = Blueprint("web", __name__)
+
+
+# Failed-login tracking. Keyed by email so it is unaffected by the proxy collapsing
+# every client onto a single source address. Waitress serves from one process, so a
+# plain dict guarded by a lock is sufficient.
+LOGIN_MAX_ATTEMPTS = 5
+LOGIN_LOCKOUT_SECONDS = 15 * 60
+_login_failures: dict[str, tuple[int, float]] = {}
+_login_failures_lock = threading.Lock()
+
+# Compared against when the email is unknown so that response time does not reveal
+# whether an account exists.
+_DUMMY_PASSWORD_HASH = generate_password_hash(secrets.token_hex(32))
+
+
+def _login_lock_remaining(key: str) -> float:
+    """Seconds left before `key` may attempt a login again, or 0 if it may attempt now."""
+    now = time.monotonic()
+    with _login_failures_lock:
+        count, last_failure = _login_failures.get(key, (0, 0.0))
+        if count < LOGIN_MAX_ATTEMPTS:
+            return 0.0
+        remaining = LOGIN_LOCKOUT_SECONDS - (now - last_failure)
+        if remaining <= 0:
+            _login_failures.pop(key, None)
+            return 0.0
+        return remaining
+
+
+def _record_login_failure(key: str) -> None:
+    now = time.monotonic()
+    with _login_failures_lock:
+        # Drop expired entries so attacker-supplied emails cannot grow this unbounded.
+        for stale_key, (_, last_failure) in list(_login_failures.items()):
+            if now - last_failure > LOGIN_LOCKOUT_SECONDS:
+                del _login_failures[stale_key]
+
+        count, _ = _login_failures.get(key, (0, 0.0))
+        _login_failures[key] = (count + 1, now)
+
+
+def _clear_login_failures(key: str) -> None:
+    with _login_failures_lock:
+        _login_failures.pop(key, None)
+
+
+def is_safe_redirect_target(target: str) -> bool:
+    """Only allow redirects that stay on this host."""
+    if not target:
+        return False
+    host_url = urlparse(request.host_url)
+    test_url = urlparse(urljoin(request.host_url, target))
+    return test_url.scheme in ("http", "https") and host_url.netloc == test_url.netloc
+
 
 class HomeView(MethodView):
     decorators = [login_required]
@@ -41,19 +99,35 @@ class LoginView(MethodView):
         return render_template("login.jinja")
 
     def post(self):
-        email = request.form.get("email")
-        password = request.form.get("password")
+        email = request.form.get("email") or ""
+        password = request.form.get("password") or ""
+        throttle_key = email.strip().lower()
+
+        remaining = _login_lock_remaining(throttle_key)
+        if remaining > 0:
+            response = make_response("Too many failed login attempts. Try again later.", 429)
+            response.headers["Retry-After"] = str(int(remaining) + 1)
+            return response
 
         user = User.query.filter_by(email=email).first()
-        if user and user.check_password(password):
-            session["user_id"] = user.id
+        if user is None:
+            check_password_hash(_DUMMY_PASSWORD_HASH, password)
+            password_ok = False
+        else:
+            password_ok = user.check_password(password)
 
-            dest = request.args.get('next')
-            if dest:
-                return redirect(dest)
-            
-            return redirect(url_for("web.home"))
-        return "Invalid credentials", 401
+        if not password_ok:
+            _record_login_failure(throttle_key)
+            return "Invalid credentials", 401
+
+        _clear_login_failures(throttle_key)
+        session["user_id"] = user.id
+
+        dest = request.args.get('next')
+        if is_safe_redirect_target(dest):
+            return redirect(dest)
+
+        return redirect(url_for("web.home"))
 
 class LogoutView(MethodView):
     def get(self):
@@ -66,10 +140,15 @@ class JobsView(MethodView):
     def get(self):
         """Example protected dashboard."""
 
+        is_admin = bool(g.current_user.is_admin)
 
         raw_jobs = job_manager.get_jobs()
         jobs = []
         for job in raw_jobs:
+            # Non-admins only see their own jobs; the full list leaks other users' emails and activity.
+            if not is_admin and (job[0] is None or job[0].id != g.current_user.id):
+                continue
+
             start_time = job[4] or time.time()
             progress = job[3] * 100
             safe_progress = max(0.01, progress)
@@ -1066,24 +1145,73 @@ class ManageTracesView(MethodView):
 
         available_traces = AdditionalTrace.query.filter_by(owner_id=user.id).all()
 
-        users = [(str(u.id), u.email) for u in User.query.all()]
+        if user.is_admin:
+            users = [(str(u.id), u.email) for u in User.query.all()]
+        else:
+            # Non-admins only see accounts their own traces are already shared with,
+            # so the full user directory is not exposed to everyone.
+            shared_uuids = []
+            for trace in available_traces:
+                for shared_id in trace.share_with_list:
+                    try:
+                        shared_uuids.append(uuid.UUID(str(shared_id)))
+                    except (ValueError, TypeError):
+                        continue
+            users = (
+                [(str(u.id), u.email) for u in User.query.filter(User.id.in_(shared_uuids)).all()]
+                if shared_uuids else []
+            )
 
-        return render_template("manage_traces.jinja", available_traces=available_traces, users=users, current_user_id=str(user.id))
-    
+        return render_template(
+            "manage_traces.jinja",
+            available_traces=available_traces,
+            users=users,
+            current_user_id=str(user.id),
+            can_list_users=bool(user.is_admin),
+        )
+
+    @staticmethod
+    def get_owned_trace(trace_id, owner: User):
+        """Return the trace only if it exists and is owned by `owner`, else None."""
+        try:
+            trace_uuid = uuid.UUID(str(trace_id))
+        except (ValueError, AttributeError, TypeError):
+            return None
+        return AdditionalTrace.query.filter_by(id=trace_uuid, owner_id=owner.id).first()
+
+    @staticmethod
+    def get_target_user(user_id):
+        try:
+            user_uuid = uuid.UUID(str(user_id))
+        except (ValueError, AttributeError, TypeError):
+            return None
+        return User.query.filter_by(id=user_uuid).first()
+
+    @staticmethod
+    def resolve_target_user():
+        """Resolve the other party from either a user id (admin picker) or an email address."""
+        user_id = request.form.get("user_id")
+        if user_id:
+            return ManageTracesView.get_target_user(user_id)
+
+        email = (request.form.get("user_email") or "").strip()
+        if email:
+            return User.query.filter_by(email=email).first()
+
+        return None
+
     def post(self):
         user = g.current_user
-        
-        action = request.form.get("action")
 
-        print(request.form, action)
+        action = request.form.get("action")
 
         if action == "remove_trace":
             trace_id = request.form.get("trace_id")
 
             if not trace_id:
                 return "Missing trace_id", 400
-            
-            trace = AdditionalTrace.query.filter_by(id=trace_id).first()
+
+            trace = self.get_owned_trace(trace_id, user)
             if not trace:
                 return "Trace not found", 404
             db.session.delete(trace)
@@ -1100,26 +1228,25 @@ class ManageTracesView(MethodView):
             db.session.add(new_trace)
             db.session.commit()
 
-            print(AdditionalTrace.query.all())
-
         elif action == "share_trace":
-            user_id = request.form.get("user_id")
             trace_id = request.form.get("trace_id")
 
-            print(user_id, trace_id)
+            if not trace_id:
+                return "Missing trace_id", 400
 
-            if not user_id or not trace_id:
-                return "Missing user_id or trace_id", 400
-            
-            if user_id == str(user.id):
-                return "Cannot share with yourself", 400
-            
-            trace = AdditionalTrace.query.filter_by(id=trace_id).first()
+            trace = self.get_owned_trace(trace_id, user)
             if not trace:
                 return "Trace not found", 404
-            
-            if user_id not in trace.share_with_list:
-                trace.share_with_list.append(user_id)
+
+            target = self.resolve_target_user()
+            if not target:
+                return "User not found", 404
+
+            if target.id == user.id:
+                return "Cannot share with yourself", 400
+
+            if str(target.id) not in trace.share_with_list:
+                trace.share_with_list.append(str(target.id))
                 db.session.commit()
 
         elif action == "unshare_trace":
@@ -1128,50 +1255,60 @@ class ManageTracesView(MethodView):
 
             if not user_id or not trace_id:
                 return "Missing user_id or trace_id", 400
-            
-            trace = AdditionalTrace.query.filter_by(id=trace_id).first()
+
+            trace = self.get_owned_trace(trace_id, user)
             if not trace:
                 return "Trace not found", 404
-            
+
             if user_id in trace.share_with_list:
                 trace.share_with_list.remove(user_id)
                 db.session.commit()
 
-        elif "transfer_trace" in action:
-            user_id = request.form.get("user_id")
+        elif action == "transfer_trace":
             trace_id = request.form.get("trace_id")
 
-            if not user_id or not trace_id:
-                return "Missing user_id or trace_id", 400
-            
-            trace = AdditionalTrace.query.filter_by(id=trace_id).first()
+            if not trace_id:
+                return "Missing trace_id", 400
+
+            trace = self.get_owned_trace(trace_id, user)
             if not trace:
                 return "Trace not found", 404
-            
-            if user_id != user.id:
-                trace.owner_id = user_id
+
+            target = self.resolve_target_user()
+            if not target:
+                return "User not found", 404
+
+            if target.id != user.id:
+                trace.owner_id = target.id
                 db.session.commit()
+
+        else:
+            return "Unknown action", 400
 
         return redirect(url_for("web.manage_traces"))
 
 class AccountView(MethodView):
     decorators = [login_required]
 
+    MIN_CUSTOM_API_KEY_LENGTH = 32
+
+    @staticmethod
+    def get_accessible_trace(trace_id, user: User):
+        """Return the trace only if `user` owns it or it is shared with them, else None."""
+        try:
+            trace_uuid = uuid.UUID(str(trace_id))
+        except (ValueError, AttributeError, TypeError):
+            return None
+
+        trace: AdditionalTrace = AdditionalTrace.query.filter_by(id=trace_uuid).first()
+        if not trace:
+            return None
+        if trace.owner_id != user.id and str(user.id) not in trace.share_with_list:
+            return None
+        return trace
+
     def get(self):
         user: User = g.current_user
-
-        if "custom_api_key" in request.args:
-            custom_api_key = request.args.get("custom_api_key")
-            if custom_api_key:
-                key_exists = custom_api_key in [x[0] for x in sum([u.api_keys for u in User.query.all()], [])]
-                if not key_exists:
-                    user.api_keys.append((custom_api_key, None))
-                    db.session.commit()
-                    return "OK", 200
-                else:
-                    return "Key already exists", 400
-            else:
-                return "Missing custom_api_key", 400
 
         api_keys = user.api_keys
         traces = AdditionalTrace.query.filter_by(owner_id=user.id).all()
@@ -1180,21 +1317,43 @@ class AccountView(MethodView):
         for key, trace_id in api_keys:
             name = "Main Trace"
             if trace_id:
-                trace = AdditionalTrace.query.filter_by(id=trace_id).first()
-                if trace:
-                    name = trace.name
+                trace = self.get_accessible_trace(trace_id, user)
+                name = trace.name if trace else "Unavailable Trace"
 
             api_key_list.append((key, trace_id, name))
 
         return render_template("account.jinja", api_keys=api_key_list, available_traces=traces)
 
+    def add_custom_api_key(self, user: User):
+        """Register a user-supplied API key. Keys must be long enough that they cannot be guessed."""
+        custom_api_key = request.form.get("custom_api_key", "")
+
+        if len(custom_api_key) < self.MIN_CUSTOM_API_KEY_LENGTH:
+            return f"Custom API key must be at least {self.MIN_CUSTOM_API_KEY_LENGTH} characters", 400
+
+        # API keys must be globally unique so lookups resolve to exactly one user.
+        # The response is deliberately generic so this cannot be used to probe other users' keys.
+        candidate = custom_api_key.encode("utf-8")
+        for other in User.query.all():
+            for existing_key, _ in other.api_keys:
+                if secrets.compare_digest(str(existing_key).encode("utf-8"), candidate):
+                    return "Could not add API key", 400
+
+        user.api_keys.append((custom_api_key, None))
+        db.session.commit()
+        return "OK", 200
+
     def post(self):
         user: User = g.current_user
 
+        if "custom_api_key" in request.form:
+            return self.add_custom_api_key(user)
+
         if "generate_key" in request.form:
-            trace_id = request.form.get("trace_id")
-            if len(trace_id) == 0 or not AdditionalTrace.query.filter_by(id=trace_id).first():
-                trace_id = None
+            trace_id = request.form.get("trace_id") or None
+            if trace_id:
+                trace = self.get_accessible_trace(trace_id, user)
+                trace_id = str(trace.id) if trace else None
 
             user.api_keys.append((uuid.uuid4().hex, trace_id))
             db.session.commit()
@@ -1251,10 +1410,7 @@ class FullBleedBackground(MethodView):
         global full_bleed_background_img_store, full_bleed_background_date_store
 
         if g.current_user.id in full_bleed_background_img_store and full_bleed_background_date_store[g.current_user.id] > datetime.now() - timedelta(hours=12):
-            resp = make_response(self.serve_pil_image(full_bleed_background_img_store[g.current_user.id]))
-            resp.headers["Cache-Control"] = "public, max-age=43200"  # 12 hours
-            resp.headers["Expires"] = (datetime.now() + timedelta(hours=12)).strftime("%a, %d %b %Y %H:%M:%S GMT")
-            return resp
+            return self.serve_pil_image(full_bleed_background_img_store[g.current_user.id])
 
         # get last point
         last_point: GPSData = GPSData.query.filter_by(user_id = g.current_user.id).order_by(GPSData.timestamp.desc()).first()
@@ -1282,7 +1438,10 @@ class FullBleedBackground(MethodView):
         img_io = BytesIO()
         pil_img.save(img_io, 'PNG')
         img_io.seek(0)
-        return send_file(img_io, mimetype='image/png')
+        response = send_file(img_io, mimetype='image/png')
+        # Rendered from the user's own location history, so it must never enter a shared cache.
+        response.headers["Cache-Control"] = "private, max-age=43200"
+        return response
 
     # A small "color stop" helper, storing speed in km/h and an RGB color tuple.
     class ColorStop:

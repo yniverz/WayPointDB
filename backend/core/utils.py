@@ -54,7 +54,11 @@ def api_key_required(f):
 
         if not user:
             return {"error": "Invalid or missing API key"}, 401
-        
+
+        # A key may be bound to a trace the owner has since lost access to (or never had).
+        if trace and trace.owner_id != user.id and str(user.id) not in trace.share_with_list:
+            return {"error": "API key is bound to an inaccessible trace"}, 403
+
         g.current_user = user
         g.current_trace = trace
 
