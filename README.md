@@ -44,8 +44,8 @@ docker-compose up -d
 
 ## Configuration
 The project can be configured by modifying variables in the ```docker-compose.yml``` file. The following variables are commonly modified:
-- <strong>backend: environment: ```PHOTON_SERVER_*```</strong>
-The host, HTTPS status, and an optional API key of the Photon server
+- <strong>```.env```: ```PHOTON_SERVER_*```</strong>
+The host, HTTPS status, and an optional API key of the Photon server (see [Photon Server](#photon-server))
 - <strong>nginx: ports: ```80:80```</strong>
 The first port is the port at which WayPointDB is accessible, and can be customized to an available port on the host machine.
 
@@ -94,20 +94,18 @@ To get the latest release and automatically rebuild the image you can run `./upd
 
 
 ## Photon Server
-WayPointDB can use a [Photon server](https://github.com/komoot/photon) for reverse geocoding. It is recommended to use a self-hosted instance of the Photon server to avoid rate limiting, and to ensure the privacy of the data. Some hosting providers use an api key for authentication, which can be set in the ```docker-compose.yml``` file. WayPointDB will pass this as the ```X-Api-Key``` header in the requests to the Photon server.
+WayPointDB can use a [Photon server](https://github.com/komoot/photon) for reverse geocoding. It is recommended to use a self-hosted instance of the Photon server to avoid rate limiting, and to ensure the privacy of the data. Some hosting providers use an api key for authentication, which can be set in the ```.env``` file. WayPointDB will pass this as the ```X-Api-Key``` header in the requests to the Photon server.
 
-To Use Photon you need to set the following two to three environment variables for the `backend` in the ```docker-compose.yml``` file:
-```yaml
-services:
-  ...
-  backend:
-    ...
-    environment:
-      ...
-      - PHOTON_SERVER_HOST=photon.domain.tld(:port)   # e.g. photon.komoot.io
-      - PHOTON_SERVER_HTTPS=false                     # true if the server uses HTTPS
-      - PHOTON_SERVER_API_KEY=                        # optional, only if the server requires an api key
+To use Photon, set the following environment variables in the ```.env``` file in the project root (it is loaded into the `backend` container and is not tracked by git, so your settings survive updates):
+```bash
+# e.g. photon.komoot.io, optionally with :port
+PHOTON_SERVER_HOST=photon.domain.tld
+# false if the server uses plain HTTP (default: true)
+PHOTON_SERVER_HTTPS=true
+# optional, only if the server requires an api key
+PHOTON_SERVER_API_KEY='your-api-key'
 ```
+Wrap the API key in single quotes if it contains special characters such as `\`, `$`, `#` or spaces. After changing ```.env```, recreate the backend container with ```docker-compose up -d --force-recreate backend```.
 
 <hr>
 

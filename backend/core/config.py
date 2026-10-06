@@ -15,5 +15,5 @@ class Config:
     SQLALCHEMY_DATABASE_URI = f"postgresql://{DB_USER}:{DB_PASS}@{DB_HOST}/{DB_NAME}"
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     PHOTON_SERVER_HOST = os.getenv("PHOTON_SERVER_HOST", "")
-    PHOTON_SERVER_HTTPS = os.getenv("PHOTON_SERVER_HTTPS", True)
+    PHOTON_SERVER_HTTPS = os.getenv("PHOTON_SERVER_HTTPS", "true").strip().lower() in ("1", "true", "yes")
     PHOTON_SERVER_API_KEY = os.getenv("PHOTON_SERVER_API_KEY", "")

@@ -21,9 +21,6 @@ services:
       - BACKGROUND_MAX_THREADS=5
       - MIN_COUNTRY_VISIT_DURATION_FOR_STATS=300
       - MIN_CITY_VISIT_DURATION_FOR_STATS=3600
-      - PHOTON_SERVER_HOST=
-      - PHOTON_SERVER_HTTPS=true
-      - PHOTON_SERVER_API_KEY=
     volumes:
       - imports:/app/imports
       - ./VERSION:/app/VERSION
