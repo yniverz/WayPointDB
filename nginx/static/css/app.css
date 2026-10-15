@@ -7,71 +7,78 @@
     font-display: swap;
 }
 
+/*
+ * Neutrals are true grays leaning slightly warm, not the blue-gray "slate" common in
+ * generated UIs. The accent is the raspberry red of the map pin in the logo.
+ */
 :root,
 [data-bs-theme="light"] {
-    --bg: #f3f4f7;
+    --bg: #f4f3f1;
     --surface: #ffffff;
-    --surface-2: #f6f7f9;
-    --surface-hover: #eef0f4;
-    --border: #e1e4ea;
-    --border-strong: #cdd2da;
-    --text: #1a1e24;
-    --text-muted: #5d6877;
-    --accent: #3a5fd9;
-    --accent-hover: #2f50c2;
+    --surface-2: #f7f6f4;
+    --surface-hover: #efedea;
+    --border: #e3e0dc;
+    --border-strong: #cfcbc6;
+    --text: #1c1a18;
+    --text-muted: #67625d;
+    --accent: #c8285e;
+    --accent-hover: #ad1f4f;
     --accent-contrast: #ffffff;
-    --accent-soft: rgba(58, 95, 217, 0.1);
-    --danger: #c93636;
-    --danger-soft: rgba(201, 54, 54, 0.1);
-    --success: #1d7f54;
-    --success-soft: rgba(29, 127, 84, 0.12);
-    --warning: #9a6512;
+    --accent-soft: rgba(200, 40, 94, 0.1);
+    --danger: #c2391b;
+    --danger-soft: rgba(194, 57, 27, 0.1);
+    --success: #2b7a4b;
+    --success-soft: rgba(43, 122, 75, 0.12);
+    --warning: #94620f;
     --warning-soft: rgba(196, 135, 30, 0.14);
-    --shadow: 0 1px 2px rgba(16, 24, 40, 0.05), 0 1px 3px rgba(16, 24, 40, 0.06);
-    --shadow-lg: 0 8px 28px rgba(16, 24, 40, 0.14);
-    --backdrop-opacity: 0.55;
+    --shadow: 0 1px 2px rgba(28, 26, 24, 0.05), 0 1px 3px rgba(28, 26, 24, 0.06);
+    --shadow-lg: 0 8px 28px rgba(28, 26, 24, 0.14);
+    --backdrop-opacity: 0.6;
+    /* How much of the surface color panels lay over the backdrop. */
+    --surface-veil: 80%;
 
     --bs-body-bg: var(--bg);
     --bs-body-color: var(--text);
     --bs-border-color: var(--border);
     --bs-secondary-color: var(--text-muted);
-    --bs-link-color-rgb: 58, 95, 217;
-    --bs-link-hover-color-rgb: 47, 80, 194;
+    --bs-link-color-rgb: 200, 40, 94;
+    --bs-link-hover-color-rgb: 173, 31, 79;
     --bs-primary: var(--accent);
-    --bs-primary-rgb: 58, 95, 217;
+    --bs-primary-rgb: 200, 40, 94;
 }
 
 [data-bs-theme="dark"] {
-    --bg: #0e1115;
-    --surface: #161a20;
-    --surface-2: #1b2028;
-    --surface-hover: #222833;
-    --border: #282f3a;
-    --border-strong: #353e4b;
-    --text: #e5e8ed;
-    --text-muted: #98a2b0;
-    --accent: #7c98ff;
-    --accent-hover: #93abff;
-    --accent-contrast: #0b1020;
-    --accent-soft: rgba(124, 152, 255, 0.14);
-    --danger: #f07070;
-    --danger-soft: rgba(240, 112, 112, 0.14);
-    --success: #4cc792;
-    --success-soft: rgba(76, 199, 146, 0.14);
+    --bg: #131211;
+    --surface: #1b1a19;
+    --surface-2: #222120;
+    --surface-hover: #2a2827;
+    --border: #2f2d2b;
+    --border-strong: #3d3a37;
+    --text: #ebe8e5;
+    --text-muted: #a29d97;
+    --accent: #f0709a;
+    --accent-hover: #f58cae;
+    --accent-contrast: #1c0b12;
+    --accent-soft: rgba(240, 112, 154, 0.14);
+    --danger: #f08566;
+    --danger-soft: rgba(240, 133, 102, 0.14);
+    --success: #5cc48a;
+    --success-soft: rgba(92, 196, 138, 0.14);
     --warning: #e3ad52;
     --warning-soft: rgba(227, 173, 82, 0.14);
     --shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
     --shadow-lg: 0 10px 32px rgba(0, 0, 0, 0.45);
-    --backdrop-opacity: 0.6;
+    --backdrop-opacity: 0.7;
+    --surface-veil: 78%;
 
     --bs-body-bg: var(--bg);
     --bs-body-color: var(--text);
     --bs-border-color: var(--border);
     --bs-secondary-color: var(--text-muted);
-    --bs-link-color-rgb: 124, 152, 255;
-    --bs-link-hover-color-rgb: 147, 171, 255;
+    --bs-link-color-rgb: 240, 112, 154;
+    --bs-link-hover-color-rgb: 245, 140, 174;
     --bs-primary: var(--accent);
-    --bs-primary-rgb: 124, 152, 255;
+    --bs-primary-rgb: 240, 112, 154;
 }
 
 :root {
@@ -157,10 +164,6 @@ pre { padding: 12px 14px; margin: 0; overflow: auto; }
 
 .backdrop.loaded { opacity: var(--backdrop-opacity); }
 
-@media (min-width: 992px) {
-    .backdrop { left: var(--sidebar-width); }
-}
-
 /* ---------- App layout ---------- */
 
 .app {
@@ -173,7 +176,7 @@ pre { padding: 12px 14px; margin: 0; overflow: auto; }
     width: var(--sidebar-width);
     display: flex;
     flex-direction: column;
-    background: var(--surface);
+    background: color-mix(in srgb, var(--surface) var(--surface-veil), transparent);
     border-right: 1px solid var(--border);
     z-index: 1040;
     overflow-y: auto;
@@ -340,13 +343,14 @@ pre { padding: 12px 14px; margin: 0; overflow: auto; }
         gap: 10px;
         height: var(--topbar-height);
         padding: 0 12px;
-        background: var(--surface);
+        background: color-mix(in srgb, var(--surface) var(--surface-veil), transparent);
         border-bottom: 1px solid var(--border);
     }
 
     .topbar .sidebar-brand { padding: 0; }
 
     .sidebar {
+        background: color-mix(in srgb, var(--surface) 96%, transparent);
         transform: translateX(-100%);
         transition: transform 0.2s ease;
         box-shadow: var(--shadow-lg);
@@ -400,10 +404,8 @@ pre { padding: 12px 14px; margin: 0; overflow: auto; }
 /* ---------- Panels ---------- */
 
 .panel {
-    /* Slightly translucent with a blur, so the backdrop shows through without hurting legibility. */
-    background: color-mix(in srgb, var(--surface) 88%, transparent);
-    -webkit-backdrop-filter: blur(10px);
-    backdrop-filter: blur(10px);
+    /* Translucent, so the backdrop stays visible behind the content, dimmed. */
+    background: color-mix(in srgb, var(--surface) var(--surface-veil), transparent);
     border: 1px solid var(--border);
     border-radius: var(--radius);
     box-shadow: var(--shadow);
@@ -666,7 +668,7 @@ table.data th {
     letter-spacing: 0.04em;
     color: var(--text-muted);
     padding: 10px 16px;
-    background: var(--surface-2);
+    background: color-mix(in srgb, var(--surface-2) 60%, transparent);
     border-bottom: 1px solid var(--border);
     white-space: nowrap;
 }

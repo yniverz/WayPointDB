@@ -24,9 +24,7 @@
 <body class="{% block body_class %}{% endblock %}">
 
 {% if current_user is not none %}
-    {% if self.body_class() | trim != "layout-full" %}
-        <div class="backdrop" data-src="{{ url_for('web.full_bleed_background') }}" aria-hidden="true"></div>
-    {% endif %}
+    <div class="backdrop" data-src="{{ url_for('web.full_bleed_background') }}" aria-hidden="true"></div>
 
     <div class="app">
         <header class="topbar">
@@ -98,6 +96,8 @@
         </main>
     </div>
 {% else %}
+    {# Shows the backdrop of the last user who logged in on this browser, if they allowed it. #}
+    <div class="backdrop" data-cached aria-hidden="true"></div>
     {% block standalone %}{% endblock %}
 {% endif %}
 

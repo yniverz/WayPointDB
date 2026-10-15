@@ -141,7 +141,7 @@
         markerLayer.clearLayers();
         const speed = point.speed == null || point.speed < 0 ? "–" : (point.speed * 3.6).toFixed(1) + " km/h";
         const day = new Date(point.timestamp).toISOString().slice(0, 10);
-        L.circleMarker([point.lat, point.lng], { radius: 7, fillColor: "#e5484d", color: "#fff", weight: 2, fillOpacity: 1, renderer })
+        L.circleMarker([point.lat, point.lng], { radius: 7, fillColor: "#d6336c", color: "#fff", weight: 2, fillOpacity: 1, renderer })
             .bindPopup(`<div class="point-popup"><dl>
                 <dt>Time</dt><dd>${WP.formatDateTime(point.timestamp)}</dd>
                 <dt>Speed</dt><dd>${speed}</dd>
@@ -158,7 +158,7 @@
 
         if (chart) {
             chart.xAxis[0].removePlotLine("selected");
-            chart.xAxis[0].addPlotLine({ id: "selected", color: "#e5484d", width: 2, value: Date.parse(point.timestamp), zIndex: 5 });
+            chart.xAxis[0].addPlotLine({ id: "selected", color: "#d6336c", width: 2, value: Date.parse(point.timestamp), zIndex: 5 });
         }
 
         // Near the ends of the loaded window, load the window around the new point.

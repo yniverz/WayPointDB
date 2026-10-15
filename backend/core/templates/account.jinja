@@ -76,6 +76,22 @@
 <section class="panel">
     <div class="panel-header">
         <div>
+            <h2>This browser</h2>
+            <p>Settings stored only in this browser.</p>
+        </div>
+    </div>
+    <div class="panel-body">
+        <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" role="switch" id="backdropOnLogin">
+            <label class="form-check-label" for="backdropOnLogin">Show my background on the login page</label>
+        </div>
+        <p class="small muted">The background shows your tracks around your latest position. Turn this off on shared computers, so the next person does not see them after you log out.</p>
+    </div>
+</section>
+
+<section class="panel">
+    <div class="panel-header">
+        <div>
             <h2>Sign-in details</h2>
             <p>Leave a field empty to keep it unchanged.</p>
         </div>
@@ -98,6 +114,10 @@
 
 {% block scripts %}
 <script>
+    const backdropSwitch = document.getElementById("backdropOnLogin");
+    backdropSwitch.checked = WP.backdropOnLogin();
+    backdropSwitch.addEventListener("change", () => WP.setBackdropOnLogin(backdropSwitch.checked));
+
     document.querySelectorAll("[data-copy]").forEach(button => {
         button.addEventListener("click", () => {
             navigator.clipboard.writeText(button.dataset.copy)

@@ -144,15 +144,86 @@
 
     // ---------- Backdrop ----------
 
-    function loadBackdrop() {
-        const backdrop = document.querySelector(".backdrop[data-src]");
-        if (!backdrop) return;
+    // A copy of the last logged-in user's backdrop is kept in this browser for the login page.
+    const BACKDROP_KEY = "loginBackdrop";
+    const BACKDROP_TIME_KEY = "loginBackdropSaved";
+    const BACKDROP_OPT_OUT_KEY = "loginBackdropOff";
+    const BACKDROP_REFRESH_MS = 6 * 60 * 60 * 1000;
+    // Local storage holds about 5 MB per site; larger images are not kept.
+    const BACKDROP_MAX_LENGTH = 3 * 1024 * 1024;
+
+    function storage(action) {
+        try {
+            return action(localStorage);
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function backdropOnLogin() {
+        return storage(s => s.getItem(BACKDROP_OPT_OUT_KEY)) !== "1";
+    }
+
+    function forgetBackdrop() {
+        storage(s => {
+            s.removeItem(BACKDROP_KEY);
+            s.removeItem(BACKDROP_TIME_KEY);
+        });
+    }
+
+    function setBackdropOnLogin(on) {
+        storage(s => on ? s.removeItem(BACKDROP_OPT_OUT_KEY) : s.setItem(BACKDROP_OPT_OUT_KEY, "1"));
+        if (on) {
+            storage(s => s.removeItem(BACKDROP_TIME_KEY));
+            rememberBackdrop(document.querySelector(".backdrop[data-src]")?.dataset.src);
+        } else {
+            forgetBackdrop();
+        }
+    }
+
+    function rememberBackdrop(src) {
+        if (!src || !backdropOnLogin()) return;
+        const saved = Number(storage(s => s.getItem(BACKDROP_TIME_KEY)) || 0);
+        if (Date.now() - saved < BACKDROP_REFRESH_MS) return;
+
+        fetch(src)
+            .then(response => response.status === 200 ? response.blob() : Promise.reject())
+            .then(blob => new Promise(resolve => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.readAsDataURL(blob);
+            }))
+            .then(dataUrl => {
+                if (dataUrl.length > BACKDROP_MAX_LENGTH) return;
+                storage(s => {
+                    s.setItem(BACKDROP_KEY, dataUrl);
+                    s.setItem(BACKDROP_TIME_KEY, String(Date.now()));
+                });
+            })
+            .catch(() => {});
+    }
+
+    function showBackdrop(backdrop, src) {
         const image = new Image();
         image.onload = () => {
-            backdrop.style.backgroundImage = `url(${backdrop.dataset.src})`;
+            backdrop.style.backgroundImage = `url("${src}")`;
             backdrop.classList.add("loaded");
         };
-        image.src = backdrop.dataset.src;
+        image.src = src;
+    }
+
+    function loadBackdrop() {
+        const backdrop = document.querySelector(".backdrop");
+        if (!backdrop) return;
+
+        if (backdrop.hasAttribute("data-cached")) {
+            const cached = backdropOnLogin() ? storage(s => s.getItem(BACKDROP_KEY)) : null;
+            if (cached) showBackdrop(backdrop, cached);
+            return;
+        }
+
+        showBackdrop(backdrop, backdrop.dataset.src);
+        rememberBackdrop(backdrop.dataset.src);
     }
 
     // ---------- Wiring ----------
@@ -186,5 +257,5 @@
         checkVersion();
     });
 
-    window.WP = { notify, postForm, setTraceId, formatDuration, formatDateTime };
+    window.WP = { notify, postForm, setTraceId, formatDuration, formatDateTime, backdropOnLogin, setBackdropOnLogin };
 })();
