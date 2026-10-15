@@ -24,8 +24,8 @@ from sqlalchemy import Integer, Numeric, cast, func, text
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from ..background.jobs import JOB_TYPES, ImportJob
-from ..background import job_manager
-from ..models import DailyStatistic, Import, User, GPSData, db, AdditionalTrace
+from ..background import apply_schedule_start, job_manager
+from ..models import DailyStatistic, Import, ScheduledJob, User, GPSData, db, AdditionalTrace
 from ..utils import login_required
 from ..config import Config
 from werkzeug.utils import secure_filename
@@ -134,8 +134,47 @@ class LogoutView(MethodView):
         session.clear()
         return redirect(url_for("web.login"))
 
+# Jobs that can be scheduled from the jobs page: (job name, label, optional (parameter, label, default)).
+SCHEDULABLE_JOBS = [
+    ("photon_fill", "Geocode new points", None),
+    ("photon_full", "Geocode all points", None),
+    ("full_stats", "Generate Statistics", None),
+    ("speed_data", "Generate Speed Data", None),
+    ("delete_duplicates", "Delete Duplicates", None),
+    ("filter_accuracy", "Filter Large Accuracy", ("maximum_accuracy", "Max. accuracy (m)", 500)),
+    ("filter_speed", "Filter Large Speed", ("maximum_speed_kmh", "Max. speed (km/h)", 1000)),
+    ("filter_clusters", "Reduce Clusters", ("maximum_distance", "Min. distance (m)", 14)),
+]
+
+
 class JobsView(MethodView):
     decorators = [login_required]
+
+    def get_schedules(self, user: User):
+        """The schedulable jobs available on this server, with the user's saved settings."""
+        saved = {s.job_name: s for s in ScheduledJob.query.filter_by(user_id=user.id).all()}
+
+        schedules = []
+        for job_name, label, param in SCHEDULABLE_JOBS:
+            if job_name not in JOB_TYPES:
+                continue
+
+            schedule = saved.get(job_name)
+            param_value = None
+            if param:
+                param_value = (schedule.params or {}).get(param[0], param[2]) if schedule else param[2]
+
+            schedules.append({
+                "job_name": job_name,
+                "label": label,
+                "enabled": bool(schedule and schedule.enabled),
+                "hour": schedule.hour if schedule else 0,
+                "last_run_date": schedule.last_run_date if schedule else None,
+                "param": param,
+                "param_value": param_value,
+            })
+
+        return schedules
 
     def get(self):
         """Example protected dashboard."""
@@ -178,12 +217,21 @@ class JobsView(MethodView):
         if request.args.get("update"):
             return jsonify(jobs)
 
-        return render_template("jobs.jinja", jobs=jobs, photon_active=len(Config.PHOTON_SERVER_HOST) != 0)
+        return render_template(
+            "jobs.jinja",
+            jobs=jobs,
+            photon_active=len(Config.PHOTON_SERVER_HOST) != 0,
+            schedules=self.get_schedules(g.current_user),
+            server_time=datetime.now().astimezone().strftime("%H:%M %Z"),
+        )
     
     def post(self):
 
         if "newJob" in request.form:
             return self.do_new_job(request.form)
+
+        if "saveSchedules" in request.form:
+            return self.do_save_schedules(request.form)
 
         if "cancelJob" in request.form:
             return self.do_cancel_job(request.form)
@@ -205,6 +253,9 @@ class JobsView(MethodView):
         
         job = JOB_TYPES[job_name]
 
+        if job_manager.has_job(g.current_user, job):
+            return "This job is already queued or running", 409
+
         for param in job.PARAMETERS:
             if param == "user":
                 continue
@@ -217,6 +268,46 @@ class JobsView(MethodView):
         job_instance = job(user=g.current_user, **{param: job.PARAMETERS[param](params[param]) for param in needed_params})
         
         job_manager.add_job(job_instance)
+
+        return redirect(url_for("web.jobs"))
+
+    def do_save_schedules(self, params: dict):
+        user = g.current_user
+        now = datetime.now()
+        saved = {s.job_name: s for s in ScheduledJob.query.filter_by(user_id=user.id).all()}
+
+        for job_name, _, param in SCHEDULABLE_JOBS:
+            if job_name not in JOB_TYPES:
+                continue
+
+            try:
+                hour = int(params.get(f"hour_{job_name}", 0))
+            except ValueError:
+                return f"Invalid hour for {job_name}", 400
+            if not 0 <= hour <= 23:
+                return f"Invalid hour for {job_name}", 400
+
+            job_params = {}
+            if param:
+                try:
+                    value = float(params.get(f"param_{job_name}", param[2]))
+                except ValueError:
+                    return f"Invalid value for {job_name}", 400
+                if not math.isfinite(value) or value < 0:
+                    return f"Invalid value for {job_name}", 400
+                job_params[param[0]] = value
+
+            schedule = saved.get(job_name)
+            if schedule is None:
+                schedule = ScheduledJob(user_id=user.id, job_name=job_name)
+                db.session.add(schedule)
+
+            schedule.enabled = params.get(f"enabled_{job_name}") == "on"
+            schedule.hour = hour
+            schedule.params = job_params
+            apply_schedule_start(schedule, now)
+
+        db.session.commit()
 
         return redirect(url_for("web.jobs"))
 

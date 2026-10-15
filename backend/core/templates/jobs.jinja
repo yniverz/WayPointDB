@@ -54,6 +54,49 @@
 
 
     <br>
+    <h2>Scheduled Jobs</h2>
+    <p>Enabled jobs run once a day at the selected hour (server time, currently {{ server_time }}).</p>
+    <form method="POST">
+        <input type="hidden" name="saveSchedules" value="1">
+        <table border="1" cellpadding="5" cellspacing="0">
+            <thead>
+                <tr>
+                    <th>Enabled</th>
+                    <th>Job</th>
+                    <th>Hour</th>
+                    <th>Parameter</th>
+                    <th>Last Run</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for schedule in schedules %}
+                    <tr>
+                        <td><input type="checkbox" name="enabled_{{ schedule.job_name }}" {% if schedule.enabled %}checked{% endif %}></td>
+                        <td>{{ schedule.label }}</td>
+                        <td>
+                            <select name="hour_{{ schedule.job_name }}">
+                                {% for hour in range(24) %}
+                                    <option value="{{ hour }}" {% if hour == schedule.hour %}selected{% endif %}>{{ "%02d:00" % hour }}</option>
+                                {% endfor %}
+                            </select>
+                        </td>
+                        <td>
+                            {% if schedule.param %}
+                                <label>{{ schedule.param[1] }}
+                                    <input type="number" name="param_{{ schedule.job_name }}" value="{{ schedule.param_value }}" min="0" step="any" style="width: 6em;">
+                                </label>
+                            {% endif %}
+                        </td>
+                        <td>{{ schedule.last_run_date or "Never" }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <br>
+        <button type="submit">Save Schedule</button>
+    </form>
+
+    <br>
     <h2>Jobs</h2>
     <table border="1" cellpadding="5" cellspacing="0">
         <thead>

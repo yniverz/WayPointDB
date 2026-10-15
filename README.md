@@ -89,6 +89,14 @@ The [WayPointDB iOS App](https://github.com/yniverz/WayPointDB-iOS) is a native 
 
 **Note:** This app does NOT collect any gps data. use one of the options above instead. The iOS app is not available on the App Store, but can be built from source using Xcode.
 
+## Scheduled Jobs
+Each user can schedule jobs (e.g. geocoding new points or generating statistics) on the ```Jobs``` page. Every enabled job runs once a day at the selected hour. New users start with geocoding of new points and statistics generation scheduled at 00:00.
+
+The hour refers to the server time, which is UTC unless you set a timezone in the ```.env``` file:
+```bash
+TZ=Europe/Berlin
+```
+
 ## Update
 To get the latest release and automatically rebuild the image you can run `./update.sh`. If you for some reason want the latest unreleased verion of the project, as found in the main branch, you can use the `--unreleased` flag.
 

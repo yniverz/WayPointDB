@@ -1,12 +1,32 @@
+from datetime import datetime
 import threading
 import time
 import traceback
 
 from flask import Flask
 
-from ..models import User
+from ..extensions import db
+from ..models import ScheduledJob, User
 from ..config import Config
-from .jobs import ConcurrencyLimitType, GenerateFullStatisticsJob, Job, PhotonFillJob
+from .jobs import JOB_TYPES, ConcurrencyLimitType, Job
+
+
+SCHEDULE_CHECK_INTERVAL_SECONDS = 30
+
+# Schedules every user starts with, matching the previous built-in nightly run.
+DEFAULT_SCHEDULES = [
+    ("full_stats", 0),
+    ("photon_fill", 0),
+]
+
+
+def apply_schedule_start(schedule: ScheduledJob, now: datetime):
+    """
+    Skip today's run if the scheduled hour has already passed, so enabling a
+    schedule or moving it to an earlier hour does not start the job immediately.
+    """
+    if schedule.enabled and schedule.hour < now.hour and schedule.last_run_date != now.date():
+        schedule.last_run_date = now.date()
 
 
 
@@ -54,7 +74,7 @@ class JobManager:
         print(f"Job {job.__class__.__name__} finished in {time.time() - job.start_time:.3f} seconds.")
 
     def run(self):
-        last_day = time.localtime().tm_mday
+        last_schedule_check = 0
         self.running = True
         while True:
             if self.stop_requested:
@@ -112,9 +132,9 @@ class JobManager:
                 self.running_jobs = [job for job in self.running_jobs if not job.done]
 
 
-                if time.localtime().tm_mday != last_day:
-                    self.check_for_daily_jobs()
-                    last_day = time.localtime().tm_mday
+                if time.time() - last_schedule_check >= SCHEDULE_CHECK_INTERVAL_SECONDS:
+                    last_schedule_check = time.time()
+                    self.check_scheduled_jobs()
 
             except Exception:
                 print(traceback.format_exc())
@@ -123,17 +143,61 @@ class JobManager:
 
         self.running = False
 
-    def check_for_daily_jobs(self):
+    def has_job(self, user: User, job_type: type) -> bool:
+        """Whether a job of this type is already queued or running for the user."""
+        return any(
+            type(job) is job_type and job.user is not None and job.user.id == user.id
+            for job in self.queued_jobs + self.running_jobs
+        )
+
+    def create_default_schedules(self, now: datetime):
+        """Give users that have no schedules yet the default ones."""
+        users_with_schedules = db.session.query(ScheduledJob.user_id)
+        for user in User.query.filter(~User.id.in_(users_with_schedules)).all():
+            for job_name, hour in DEFAULT_SCHEDULES:
+                schedule = ScheduledJob(user_id=user.id, job_name=job_name, enabled=True, hour=hour, params={})
+                apply_schedule_start(schedule, now)
+                db.session.add(schedule)
+
+    def check_scheduled_jobs(self):
+        """
+        Queue every enabled schedule whose hour has been reached today and that
+        has not run yet today. A run missed while the server was down is caught
+        up later the same day.
+        """
+        now = datetime.now()
+        today = now.date()
+
         with self.web_app.app_context():
-            for user in User.query.all():
-                if len(self.config.PHOTON_SERVER_HOST) > 0:
-                    if PhotonFillJob.__name__ not in [job.__class__.__name__ for job in self.queued_jobs + self.running_jobs]:
-                        self.add_job(PhotonFillJob(user))
+            self.create_default_schedules(now)
 
-                if GenerateFullStatisticsJob.__name__ not in [job.__class__.__name__ for job in self.queued_jobs + self.running_jobs]:
-                    self.add_job(GenerateFullStatisticsJob(user))
+            due = ScheduledJob.query.filter(
+                ScheduledJob.enabled.is_(True),
+                ScheduledJob.hour <= now.hour,
+                (ScheduledJob.last_run_date.is_(None)) | (ScheduledJob.last_run_date != today),
+            ).all()
 
-            
+            to_queue = []
+            for schedule in due:
+                # Marked as run even if skipped below, so a failing schedule is not retried all day.
+                schedule.last_run_date = today
+                if schedule.job_name in JOB_TYPES:
+                    to_queue.append((schedule.user_id, schedule.job_name, dict(schedule.params or {})))
+
+            db.session.commit()
+
+            # Load users after the commit, which would otherwise expire them before the jobs use them.
+            for user_id, job_name, params in to_queue:
+                user = db.session.get(User, user_id)
+                job_type = JOB_TYPES[job_name]
+                if user is None or self.has_job(user, job_type):
+                    continue
+
+                try:
+                    self.add_job(job_type(user=user, **params))
+                except Exception:
+                    print(f"Could not create scheduled job {job_name} for user {user_id}:")
+                    print(traceback.format_exc())
 
     def stop(self, blocking=False):
         self.stop_requested = True

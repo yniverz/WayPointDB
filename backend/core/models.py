@@ -117,3 +117,21 @@ class DailyStatistic(db.Model):
     __table_args__ = (
         db.CheckConstraint("user_id IS NOT NULL OR trace_id IS NOT NULL"),
     )
+
+class ScheduledJob(db.Model):
+    """A job a user wants run automatically once per day at a given hour (server time)."""
+    __tablename__ = "scheduled_job"
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    user_id = db.Column(UUID(as_uuid=True), db.ForeignKey("user.id", ondelete="CASCADE"), nullable=False)
+    job_name = db.Column(db.String(64), nullable=False)
+    enabled = db.Column(db.Boolean, nullable=False, default=False)
+    hour = db.Column(db.Integer, nullable=False, default=0)
+    params = db.Column(db.JSON, nullable=False, default=dict)
+    last_run_date = db.Column(db.Date, nullable=True)
+
+    # One row per user and job type, so each job can be scheduled at most once a day.
+    __table_args__ = (
+        db.UniqueConstraint("user_id", "job_name"),
+        db.CheckConstraint("hour >= 0 AND hour <= 23"),
+    )
