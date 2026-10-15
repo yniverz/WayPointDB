@@ -1539,11 +1539,10 @@ class FullBleedBackground(MethodView):
     """
     decorators = [login_required]
 
-    WIDTH, HEIGHT = 1600, 900
-    # Thin lines are drawn this many times larger, softened and scaled down.
+    WIDTH, HEIGHT = 2048, 1152
+    # Lines are drawn this many times larger and scaled down, which smooths them.
     SUPERSAMPLE = 2
-    LINE_WIDTH = 1
-    BLUR_RADIUS = 1
+    LINE_WIDTH = 3
     # Half the width of the image, in meters.
     RADIUS_M = 5000.0
     # Longer steps between points are gaps in tracking, not travelled lines.
@@ -1624,7 +1623,6 @@ class FullBleedBackground(MethodView):
             draw.line([to_pixel(a.latitude, a.longitude), to_pixel(b.latitude, b.longitude)],
                       fill=self.speed_color(speed), width=self.LINE_WIDTH)
 
-        image = image.filter(ImageFilter.GaussianBlur(radius=self.BLUR_RADIUS))
         return image.resize((self.WIDTH, self.HEIGHT), Image.LANCZOS)
 
     def speed_color(self, speed_mps: float) -> tuple[int, int, int]:
