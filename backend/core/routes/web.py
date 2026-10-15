@@ -1535,24 +1535,24 @@ BACKDROP_MAX_AGE = timedelta(hours=12)
 class FullBleedBackground(MethodView):
     """
     The page backdrop: the user's tracks around their latest position, colored by
-    speed like the map, on a transparent background so it suits light and dark mode.
+    speed, on a transparent background so it suits light and dark mode.
     """
     decorators = [login_required]
 
-    WIDTH, HEIGHT = 2048, 1152
-    # Lines are drawn this many times larger and scaled down, which smooths them.
+    WIDTH, HEIGHT = 1600, 900
+    # Thin lines are drawn this many times larger, softened and scaled down.
     SUPERSAMPLE = 2
-    LINE_WIDTH = 4
+    LINE_WIDTH = 1
+    BLUR_RADIUS = 1
     # Half the width of the image, in meters.
     RADIUS_M = 5000.0
     # Longer steps between points are gaps in tracking, not travelled lines.
     MAX_SEGMENT_M = 100.0
     SPEED_STOPS = [
-        (0, (0, 200, 83)),
-        (15, (0, 184, 212)),
-        (30, (170, 0, 255)),
-        (50, (255, 193, 7)),
-        (100, (255, 61, 0)),
+        (0, (0, 0, 255)),
+        (30, (0, 255, 0)),
+        (60, (255, 255, 0)),
+        (90, (255, 0, 0)),
     ]
 
     def get(self):
@@ -1624,6 +1624,7 @@ class FullBleedBackground(MethodView):
             draw.line([to_pixel(a.latitude, a.longitude), to_pixel(b.latitude, b.longitude)],
                       fill=self.speed_color(speed), width=self.LINE_WIDTH)
 
+        image = image.filter(ImageFilter.GaussianBlur(radius=self.BLUR_RADIUS))
         return image.resize((self.WIDTH, self.HEIGHT), Image.LANCZOS)
 
     def speed_color(self, speed_mps: float) -> tuple[int, int, int]:

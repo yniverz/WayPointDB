@@ -24,7 +24,7 @@
 <body class="{% block body_class %}{% endblock %}">
 
 {% if current_user is not none %}
-    <div class="backdrop" data-src="{{ url_for('web.full_bleed_background') }}" aria-hidden="true"></div>
+    <div class="backdrop" data-src="{{ url_for('web.full_bleed_background', v=VERSION) }}" aria-hidden="true"></div>
 
     <div class="app">
         <header class="topbar">
