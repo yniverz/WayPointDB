@@ -1,3 +1,4 @@
+from collections import deque
 from datetime import datetime
 import threading
 import time
@@ -8,7 +9,7 @@ from flask import Flask
 from ..extensions import db
 from ..models import ScheduledJob, User
 from ..config import Config
-from .jobs import JOB_TYPES, ConcurrencyLimitType, Job
+from .jobs import JOB_TYPES, Job, JobCancelled, JobStatus
 
 
 SCHEDULE_CHECK_INTERVAL_SECONDS = 30
@@ -32,12 +33,17 @@ def apply_schedule_start(schedule: ScheduledJob, now: datetime):
 
 
 class JobManager:
+    # Finished jobs kept to show their outcome on the jobs page.
+    HISTORY_SIZE = 50
+
     def __init__(self):
         self.config = Config
         self.web_app: Flask = None
         self.queued_jobs: list[Job] = []
         self.running_jobs: list[Job] = []
-        self.threads = []
+        self.finished_jobs: deque[Job] = deque(maxlen=self.HISTORY_SIZE)
+        self.lock = threading.RLock()
+        self.wake = threading.Event()
 
         self.running = False
         self.stop_requested = False
@@ -48,107 +54,85 @@ class JobManager:
     def set_web_app(self, app):
         self.web_app = app
 
-    def get_jobs(self):
-        """
-        Return a list of tuples with the job name, done status, and progress.
-        
-        Example:
-        [
-            ("QueryPhotonJob", False, 50.4),
-            ("QueryPhotonJob", True, 100.0),
-            ...
-        ]
-        """ 
-        return [(job.user, job.__class__.__name__, job.running, job.progress, job.start_time) for job in self.queued_jobs + self.running_jobs]
+    def get_jobs(self, user_id=None) -> list[Job]:
+        """Running, queued and recently finished jobs, newest first; only the user's if given."""
+        with self.lock:
+            jobs = self.running_jobs + self.queued_jobs + list(reversed(self.finished_jobs))
+        return [job for job in jobs if user_id is None or job.user_id == user_id]
+
+    def get_job(self, job_id) -> Job | None:
+        return next((job for job in self.get_jobs() if job.id == job_id), None)
 
     def run_safely(self, job: Job):
         print(f"Running job {job.__class__.__name__}...")
         try:
             with self.web_app.app_context():
                 job.run()
-        except Exception:
+            job.status = JobStatus.CANCELLED if job.stop_requested else JobStatus.DONE
+            job.progress = 1.0 if job.status == JobStatus.DONE else job.progress
+        except JobCancelled:
+            job.status = JobStatus.CANCELLED
+        except Exception as e:
             print(traceback.format_exc())
+            job.status = JobStatus.FAILED
+            job.error = str(e) or e.__class__.__name__
 
-        job.done = True
+        job.end_time = time.time()
+        print(f"Job {job.__class__.__name__} {job.status} after {job.end_time - job.start_time:.3f} seconds.")
+        self.wake.set()
 
-        print(f"Job {job.__class__.__name__} finished in {time.time() - job.start_time:.3f} seconds.")
+    def can_start(self, job: Job, running: list[Job]) -> bool:
+        if len(running) >= self.config.BACKGROUND_MAX_THREADS:
+            return False
+        # One job at a time per user and lane, so jobs never change the same data at once.
+        if any(other.user_id == job.user_id and other.LANE == job.LANE for other in running):
+            return False
+        if job.GLOBAL_LIMIT is not None and sum(type(other) is type(job) for other in running) >= job.GLOBAL_LIMIT:
+            return False
+        return True
+
+    def start_jobs(self):
+        with self.lock:
+            for job in [job for job in self.running_jobs if job.done]:
+                self.running_jobs.remove(job)
+                self.finished_jobs.append(job)
+
+            # Queued jobs start in order, but a job that has to wait does not hold up others.
+            for job in list(self.queued_jobs):
+                if not self.can_start(job, self.running_jobs):
+                    continue
+                self.queued_jobs.remove(job)
+                job.status = JobStatus.RUNNING
+                job.start_time = time.time()
+                job.thread = threading.Thread(target=self.run_safely, args=(job,), daemon=True)
+                self.running_jobs.append(job)
+                job.thread.start()
 
     def run(self):
         last_schedule_check = 0
         self.running = True
-        while True:
-            if self.stop_requested:
-                break
-
+        while not self.stop_requested:
+            self.wake.clear()
             try:
-                if len(self.threads) < self.config.BACKGROUND_MAX_THREADS:
-                    running_global_types = [job.concurrency_limit_type for job in self.running_jobs if job.user is None]
-                    running_user_types = [str(job.user.email)+str(job.concurrency_limit_type) for job in self.running_jobs if job.user is not None]
-
-
-                    for job in self.queued_jobs:
-                        if job.concurrency_limit_type in running_global_types or (job.user is not None and str(job.user.email)+str(job.concurrency_limit_type) in running_user_types):
-                            continue
-
-                        job.running = True
-                        job.start_time = time.time()
-                        job.thread = threading.Thread(target=self.run_safely, args=(job,))
-                        job.thread.start()
-                        self.threads.append(job.thread)
-                        self.running_jobs.append(job)
-
-                    self.queued_jobs = [job for job in self.queued_jobs if job not in self.running_jobs]
-
-
-
-
-
-                    # for user in [job.user for job in self.queued_jobs + self.running_jobs]:
-                    #     concurrent_types = [job.concurrency_limit_type for job in self.running_jobs if job.concurrency_limit_type != None and job.user in [None, user]]
-                    #     if self.queued_jobs and ConcurrencyLimitType.GLOBAl not in concurrent_types:
-                    #         to_remove = []
-                    #         for job in self.queued_jobs:
-                    #             if job.concurrency_limit_type in concurrent_types and job.user not in [None, user]:
-                    #                 continue
-
-                    #             job.running = True
-                    #             job.start_time = time.time()
-                    #             job.thread = threading.Thread(target=self.run_safely, args=(job,))
-                    #             job.thread.start()
-                    #             self.threads.append(job.thread)
-                    #             self.running_jobs.append(job)
-                    #             to_remove.append(job)
-
-                    #         for job in to_remove:
-                    #             self.queued_jobs.remove(job)
-
-                for job in self.running_jobs:
-                    if job.done:
-                        try:
-                            self.threads.remove(job.thread)
-                        except ValueError:
-                            pass
-
-                self.running_jobs = [job for job in self.running_jobs if not job.done]
-
+                self.start_jobs()
 
                 if time.time() - last_schedule_check >= SCHEDULE_CHECK_INTERVAL_SECONDS:
                     last_schedule_check = time.time()
                     self.check_scheduled_jobs()
-
             except Exception:
                 print(traceback.format_exc())
 
-            time.sleep(0.1)
+            self.wake.wait(timeout=1)
 
         self.running = False
 
     def has_job(self, user: User, job_type: type) -> bool:
         """Whether a job of this type is already queued or running for the user."""
-        return any(
-            type(job) is job_type and job.user is not None and job.user.id == user.id
-            for job in self.queued_jobs + self.running_jobs
-        )
+        with self.lock:
+            return any(
+                type(job) is job_type and job.user_id == user.id
+                for job in self.queued_jobs + self.running_jobs
+            )
 
     def create_default_schedules(self, now: datetime):
         """Give users that have no schedules yet the default ones."""
@@ -201,30 +185,43 @@ class JobManager:
 
     def stop(self, blocking=False):
         self.stop_requested = True
-        self.queued_jobs.clear()
-        for job in self.running_jobs:
-            job.stop(blocking)
+        with self.lock:
+            for job in self.queued_jobs:
+                job.status = JobStatus.CANCELLED
+            self.queued_jobs.clear()
+            running = list(self.running_jobs)
+        for job in running:
+            job.stop()
+        self.wake.set()
 
         if blocking:
+            for job in running:
+                job.thread.join()
             while self.running:
                 time.sleep(0.1)
 
     def add_job(self, job: Job):
         job.set_config(self.config)
         job.set_web_app(self.web_app)
-        self.queued_jobs.append(job)
+        with self.lock:
+            self.queued_jobs.append(job)
+        self.wake.set()
 
-    def cancel_job(self, job_id, blocking=False):
-        print(f"Cancelling job {job_id}...")
-        for job in self.running_jobs:
-            if job.id == job_id:
-                job.stop(blocking)
-                return True
-            
-        for job in self.queued_jobs:
-            if job.id == job_id:
-                self.queued_jobs.remove(job)
-                return True
+    def cancel_job(self, job_id) -> bool:
+        """Cancel a queued job, or ask a running one to stop at its next checkpoint."""
+        with self.lock:
+            for job in self.queued_jobs:
+                if job.id == job_id:
+                    self.queued_jobs.remove(job)
+                    job.status = JobStatus.CANCELLED
+                    job.end_time = time.time()
+                    self.finished_jobs.append(job)
+                    return True
+
+            for job in self.running_jobs:
+                if job.id == job_id:
+                    job.stop()
+                    return True
 
         return False
 

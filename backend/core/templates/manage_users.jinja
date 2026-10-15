@@ -1,93 +1,72 @@
 {% extends "base.jinja" %}
+{% from "_macros.jinja" import icon %}
 
-{% block heading %}
-    Manage Users
-{% endblock %}
+{% block page_title %}Users{% endblock %}
+{% block subtitle %}Everyone who can sign in to this server.{% endblock %}
 
 {% block content %}
-    <h2>User List</h2>
-
-    <table border="1" cellpadding="5" cellspacing="0">
-        <thead>
-            <tr>
-                <th>Email</th>
-                <th>Is Admin</th>
-                <th></th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for user in users %}
+<section class="panel">
+    <div class="table-wrap">
+        <table class="data">
+            <thead>
+                <tr><th>Email</th><th>Role</th><th></th></tr>
+            </thead>
+            <tbody>
+                {% for user in users %}
                 <tr>
-                    <td>{{ user.email }}</td>
-                    <td>{{ 'Yes' if user.is_admin else 'No' }}</td>
-                    <td>
+                    <td>{{ user.email }}{% if current_user.id == user.id %} <span class="muted small">(you)</span>{% endif %}</td>
+                    <td>{% if user.is_admin %}<span class="badge-status running">Admin</span>{% else %}<span class="badge-status">User</span>{% endif %}</td>
+                    <td class="actions">
                         {% if current_user.id != user.id %}
-                            <form method="POST" style="display:inline;" onsubmit="return confirmDelete('{{ user.email }}')">
+                            <button type="button" class="button sm" data-reset-password="{{ user.id }}" data-email="{{ user.email }}">Set password</button>
+                            <form method="POST" data-confirm="Remove {{ user.email }}? This also deletes all of their points, traces and imports and cannot be undone.">
                                 <input type="hidden" name="action" value="remove_user">
                                 <input type="hidden" name="user_id" value="{{ user.id }}">
-                                <button type="submit">Remove</button>
+                                <button type="submit" class="button sm danger">Remove</button>
                             </form>
-                            <button onclick="changePassword('{{ user.id }}', '{{ user.email }}')">Change Password</button>
-                        {% else %}
-                            (Cannot edit self)
                         {% endif %}
                     </td>
                 </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-    
-    <hr/>
-    
-    <form method="POST">
-        <h3>Add User</h3>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<section class="panel">
+    <div class="panel-header"><h2>Add a user</h2></div>
+    <form method="POST" class="panel-body form-stack">
         <input type="hidden" name="action" value="add_user">
-        <label for="email">Email:</label><br/>
-        <input type="email" name="email" id="email" required><br>
-        <br>
-        <label for="password">Password:</label><br/>
-        <input type="password" name="password" id="password" required><br>
-        <br>
-        <label for="is_admin">Is Admin:</label>
-        <select name="is_admin" id="is_admin">
-            <option value="false">No</option>
-            <option value="true">Yes</option>
-        </select><br/>
-        <br>
-        <button type="submit">Add User</button>
+        <div class="field">
+            <label for="email">Email</label>
+            <input type="email" name="email" id="email" required autocomplete="off">
+        </div>
+        <div class="field">
+            <label for="password">Password</label>
+            <input type="password" name="password" id="password" required autocomplete="new-password">
+        </div>
+        <div class="field">
+            <label for="is_admin">Role</label>
+            <select name="is_admin" id="is_admin">
+                <option value="false">User</option>
+                <option value="true">Admin (can manage users)</option>
+            </select>
+        </div>
+        <div><button type="submit" class="button primary">{{ icon("plus") }}Add user</button></div>
     </form>
+</section>
+{% endblock %}
 
-    <script>
-        function confirmDelete(userEmail) {
-            return confirm("Are you sure you want to remove user " + userEmail + "? This action cannot be undone and will REMOVE ALL GPS DATA associated with this user.");
-        }
-
-        function changePassword(userId, userEmail) {
-            // ask for new password
-            new_password = prompt("Please enter the new password for user " + userEmail + ". The new password will be the user's email address.");
-
-            if (!new_password) {
-                return;
-            }
-
-            // escape password for URL
-            new_password = encodeURIComponent(new_password);
-
-            fetch(window.location.pathname, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/x-www-form-urlencoded",
-                },
-                body: "action=change_password&user_id=" + userId + "&password=" + new_password,
-            })
-                .then(response => {
-                    if (response.ok) {
-                        alert("Password reset successfully.");
-                    } else {
-                        alert("Error changing password");
-                    }
-                })
-                .catch(error => alert("Error changing password:" + error));
-        }
-    </script>
+{% block scripts %}
+<script>
+    document.querySelectorAll("[data-reset-password]").forEach(button => {
+        button.addEventListener("click", () => {
+            const password = prompt(`New password for ${button.dataset.email}:`);
+            if (!password) return;
+            WP.postForm(location.pathname, { action: "change_password", user_id: button.dataset.resetPassword, password })
+                .then(() => WP.notify(`Password for ${button.dataset.email} changed`, "success"))
+                .catch(() => {});
+        });
+    });
+</script>
 {% endblock %}

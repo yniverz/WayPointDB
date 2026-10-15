@@ -1,25 +1,21 @@
 {% extends "base.jinja" %}
+{% from "_macros.jinja" import icon %}
 
-{% block heading %}
-Export Data
-{% endblock %}
+{% block page_title %}Export{% endblock %}
+{% block subtitle %}Download your points as JSON.{% endblock %}
 
 {% block content %}
-<div class="container mt-4">
-    <p>
-        Click the button below to generate and download all your GPS points in JSON format.
-    </p>
-
-    <p>
-        The Button will download a JSON file with a <strong>list of dictionaries</strong>. Each dictionary might contain:
-        <code>timestamp</code>, <code>latitude</code>, <code>longitude</code>, <code>horizontal_accuracy</code>, 
-        <code>altitude</code>, <code>vertical_accuracy</code>,  <code>heading</code>, <code>heading_accuracy</code>, 
-        <code>speed</code>, <code>speed_accuracy</code>, <code>city</code> and <code>country</code>.
-        Values that dont have data might be empty or null.
-    </p>
-
-    <form method="POST" action="{{ url_for('web.exports') }}">
-        <button type="submit" class="btn btn-primary">Download JSON Export</button>
-    </form>
-</div>
+<section class="panel">
+    <div class="panel-body">
+        <p>The export contains every point of the {% if g.current_trace %}“{{ g.current_trace.name }}” trace{% else %}main trace{% endif %} as a list of objects with
+            <code>timestamp</code>, <code>latitude</code>, <code>longitude</code>, <code>horizontal_accuracy</code>,
+            <code>altitude</code>, <code>vertical_accuracy</code>, <code>heading</code>, <code>heading_accuracy</code>,
+            <code>speed</code>, <code>speed_accuracy</code>, <code>city</code> and <code>country</code>.
+            Missing values are <code>null</code>.</p>
+        <p class="muted small">The file uses the same format as imports, so it can be imported again.</p>
+        <form method="POST" action="{{ url_for('web.exports') }}">
+            <button type="submit" class="button primary">{{ icon("download") }}Download export</button>
+        </form>
+    </div>
+</section>
 {% endblock %}

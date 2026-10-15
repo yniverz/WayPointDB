@@ -1,309 +1,69 @@
 {% extends "base.jinja" %}
+{% from "_stats.jinja" import place_modal, place_counts, bar_chart_script %}
 
-{% block heading %}
-  Statistics
-{% endblock %}
-
-{% macro add_city_country_element(elements) %}
-  {% for element in elements %}
-    {% if is_photon_connected %}
-      {% if element|length == 2 %}
-        <li class="info-tooltip" >
-          <a href="{{ url_for('web.map') }}?q={{ element[0]|replace(' ', '+') }},{{ element[1]|replace(' ', '+') }}" target="_blank">{{ element[0] }}, {{ element[1] }}</a>
-          <span class="info-tooltip-text">Last visit: {{ last_visit_cities[element] }}</span>
-        </li><br>
-      {% else %}
-        <li class="info-tooltip">
-          <a href="{{ url_for('web.map') }}?q={{ element|replace(' ', '+') }}" target="_blank">{{ element }}</a>
-          <span class="info-tooltip-text">Last visit: {{ last_visit_countries[element] }}</span>
-        </li><br>
-      {% endif %}
-    {% else %}
-      {% if element|length == 2 %}
-        <li><p>{{ element[0] }}, {{ element[1] }}</p></li>
-      {% else %}
-        <li><p>{{ element }}</p></li>
-      {% endif %}
-    {% endif %}
-{% endfor %}
-
-{% endmacro %}
-
-
-{% block head %}
-  <style>
-        .stat-container {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            grid-gap: 10px;
-            padding: 10px;
-            border-radius: 20px;
-            box-shadow: 0 0 20px rgba(0, 0, 0, 0.317);
-        }
-
-        /* Stack vertically when the container is too small */
-        @media (max-width: 1000px) { 
-            .stat-container {
-                grid-template-columns: 1fr; /* Force single column */
-            }
-        }
-
-        .stat-container div {
-            text-align: center;
-        }
-
-        .stat-container p {
-            font-size: 2em;
-            font-weight: bold;
-            margin-bottom: 0;
-        }
-
-        .stat-container small {
-            font-size: 0.9em;
-            color: #6c757d;
-        }
-
-        .stat-button {
-            text-decoration: underline;
-            cursor: pointer;
-        }
-
-        .stat-button:hover {
-            color: #007bff;
-        }
-
-        .charts-container {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-            grid-gap: 20px;
-        }
-
-        .chart-container {
-            padding: 20px;
-            border-radius: 20px;
-            box-shadow: 0 0 20px rgba(0, 0, 0, 0.317);
-        }
-
-        .info-tooltip {
-          position: relative;
-          display: inline-block;
-          text-decoration: underline;
-          text-decoration-style: dotted;
-        }
-
-        .info-tooltip .info-tooltip-text {
-          visibility: hidden;
-          width: 220px;
-          background-color: black;
-          color: #a3a3a3;
-          text-align: center;
-          border-radius: 6px;
-          padding: 5px 0;
-          font-size: 0.8em;
-          
-          /* Position the tooltip */
-          position: absolute;
-          z-index: 1;
-          top: 100%;
-          left: 50%;
-          margin-left: -110px;
-        }
-
-        .info-tooltip:hover .info-tooltip-text {
-          visibility: visible;
-        }
-  </style>
-
-  <script src="/static/third_party/js/chart.js"></script>
-{% endblock %}
+{% block page_title %}Statistics{% endblock %}
+{% block subtitle %}Based on the last run of the “Generate statistics” job.{% endblock %}
+{% block actions %}<a class="button" href="{{ url_for('web.jobs') }}">Update statistics</a>{% endblock %}
 
 {% block content %}
-  
-
-  <div class="stat-container">
-    <div>
-      <p style="color: #747fff">{{ total_distance }}</p>
-      <small>Total distance travelled (km)</small>
+{% set show_places = is_photon_connected or total_cities|length > 0 or total_countries|length > 0 %}
+<div class="stat-grid">
+    <div class="panel stat">
+        <div class="stat-value">{{ total_distance }} km</div>
+        <div class="stat-label">Distance travelled</div>
     </div>
-    <div>
-      <p style="color: #00aa6e">{{ total_points }}</p>
-      <small>Total points</small>
+    <div class="panel stat">
+        <div class="stat-value">{{ total_points }}</div>
+        <div class="stat-label">Points</div>
     </div>
-
-    {% if is_photon_connected or total_cities|length > 0 or total_countries|length > 0 %}
-    <div>
-      <p style="color: #00aa6e">{{ total_geocoded }}</p>
-      <small>Total reverse geocoded<br>
-        <div class="info-tooltip">{{ total_not_geocoded }} without data
-          <span class="info-tooltip-text">Points that were reverse geocoded but have no data</span>
-        </div>
-      </small>
-      
+    {% if show_places %}
+    <div class="panel stat">
+        <div class="stat-value">{{ total_geocoded }}</div>
+        <div class="stat-label">Geocoded <span title="Geocoded, but the server had no location for them">· {{ total_not_geocoded }} without a place</span></div>
     </div>
-    <div>
-      <p style="color: #ffbe00" class="stat-button" data-bs-toggle="modal" data-bs-target="#modal-countries">{{ total_countries|length }}</p>
-      <small>
-        <div class="info-tooltip">Countries Visited
-          <span class="info-tooltip-text">Will count if you spend more than {{ MIN_COUNTRY_VISIT_DURATION_FOR_STATS }} in a country</span>
-        </div>
-      </small>
-    </div>
-    <div>
-      <p style="color: #a6adbb" class="stat-button" data-bs-toggle="modal" data-bs-target="#modal-cities">{{ total_cities|length }}</p>
-      <small>
-        <div class="info-tooltip">Cities Visited
-          <span class="info-tooltip-text">Will count if you spend more than {{ MIN_CITY_VISIT_DURATION_FOR_STATS }} in a city</span>
-        </div>
-      </small>
-    </div>
+    <button type="button" class="panel stat" data-bs-toggle="modal" data-bs-target="#all-countries">
+        <div class="stat-value">{{ total_countries|length }}</div>
+        <div class="stat-label" title="Counted after more than {{ MIN_COUNTRY_VISIT_DURATION_FOR_STATS }} in a country">Countries visited</div>
+    </button>
+    <button type="button" class="panel stat" data-bs-toggle="modal" data-bs-target="#all-cities">
+        <div class="stat-value">{{ total_cities|length }}</div>
+        <div class="stat-label" title="Counted after more than {{ MIN_CITY_VISIT_DURATION_FOR_STATS }} in a city">Cities visited</div>
+    </button>
     {% endif %}
-  </div>
+</div>
 
-
-  {% if is_photon_connected or total_cities|length > 0 or total_countries|length > 0 %}
-  <!-- Overall modal -->
-  <div class="modal fade" id="modal-cities" tabindex="-1" aria-labelledby="modalLabelAll" aria-hidden="true">
-    <div class="modal-dialog">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title" id="modalLabelAll">All Cities</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-        </div>
-        <div class="modal-body">
-          <h6>Cities</h6>
-          <ul>
-            {{ add_city_country_element(total_cities) }}
-          </ul>
-        </div>
-      </div>
-    </div>
-  </div>
-  <div class="modal fade" id="modal-countries" tabindex="-1" aria-labelledby="modalLabelAll" aria-hidden="true">
-    <div class="modal-dialog">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title" id="modalLabelAll">All Countries</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-        </div>
-        <div class="modal-body">
-          <h6>Countries</h6>
-          <ul>
-            {{ add_city_country_element(total_countries) }}
-          </ul>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  {% endif %}
-
-  <hr>
-
-  <!-- Now loop over each year, generating a bar chart and year-specific stats -->
-  <div class="charts-container">
-  {% for year, data in stats_by_year.items() %}
-    <div class="chart-container">
-      <p style="margin-bottom: 10px;"><a href="{{ url_for('web.yearly_stats', year=year) }}"><strong>{{ year }}</strong></a> <a style="color: #6c757d;" href="/map?start_date={{ year }}-01-01&end_date={{ year }}-12-31"><strong>[Map]</strong></a></p>
-
-      <!-- two elements next to each other horizontally -->
-      <div style="display: flex; font-size: 0.8em; color: #6c757d;">
-        <p>{{ data.total_distance|round(2) }} km</p>
-        {% if is_photon_connected or total_cities|length > 0 or total_countries|length > 0 %}
-        <p style="margin-left: auto; margin-right: 0;"><p class="stat-button" data-bs-toggle="modal" data-bs-target="#modal-countries-{{ year }}">{{ data.countries|length }}</p>&nbsp; countries,&nbsp; <p class="stat-button" data-bs-toggle="modal" data-bs-target="#modal-cities-{{ year }}">{{ data.cities|length }}</p>&nbsp; cities</p>
-        {% endif %}
-      </div>
-
-      <!-- The bar chart canvas for this year -->
-      <canvas id="chart-{{ year }}" width="800" height="400"></canvas>
-
-      <!-- Year-specific modal -->
-      <div class="modal fade" id="modal-cities-{{ year }}" tabindex="-1"
-          aria-labelledby="modalLabel-{{ year }}" aria-hidden="true">
-        <div class="modal-dialog">
-          <div class="modal-content">
-            <div class="modal-header">
-              <h5 class="modal-title" id="modalLabel-{{ year }}">
-                Cities for {{ year }}
-              </h5>
-              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+{% if stats_by_year %}
+<div class="chart-grid">
+    {% for year, data in stats_by_year.items() %}
+    <section class="panel chart-card">
+        <div class="panel-header">
+            <div>
+                <h2><a href="{{ url_for('web.yearly_stats', year=year) }}">{{ year }}</a></h2>
+                <p>{{ "{:,}".format(data.total_distance) }} km</p>
             </div>
-            <div class="modal-body">
-              <h6>Cities</h6>
-              <ul>
-                {{ add_city_country_element(data.cities) }}
-              </ul>
+            <div class="page-actions">
+                {{ place_counts("year-" ~ year, data, show_places) }}
+                <a class="button sm" href="{{ url_for('web.map') }}?start_date={{ year }}-01-01&end_date={{ year }}-12-31">Map</a>
             </div>
-          </div>
         </div>
-      </div>
+        <div class="panel-body" style="height: 230px;"><canvas id="chart-{{ year }}" aria-label="Distance per month in {{ year }}" role="img"></canvas></div>
+    </section>
+    {% if show_places %}
+        {{ place_modal("year-" ~ year ~ "-countries", "Countries in " ~ year, data.countries|sort, last_visit_countries, is_photon_connected) }}
+        {{ place_modal("year-" ~ year ~ "-cities", "Cities in " ~ year, data.cities|sort, last_visit_cities, is_photon_connected) }}
+    {% endif %}
+    {% endfor %}
+</div>
+{% else %}
+<section class="panel"><div class="empty">No statistics yet. Run “Generate statistics” on the <a href="{{ url_for('web.jobs') }}">Jobs</a> page.</div></section>
+{% endif %}
 
-      <div class="modal fade" id="modal-countries-{{ year }}" tabindex="-1"
-          aria-labelledby="modalLabel-{{ year }}" aria-hidden="true">
-        <div class="modal-dialog">
-          <div class="modal-content">
-            <div class="modal-header">
-              <h5 class="modal-title" id="modalLabel-{{ year }}">
-                Countries for {{ year }}
-              </h5>
-              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-              <h6>Countries</h6>
-              <ul>
-                {{ add_city_country_element(data.countries) }}
-              </ul>
-            </div>
-          </div>
-        </div>
-      </div>
+{% if show_places %}
+    {{ place_modal("all-countries", "All countries", total_countries, last_visit_countries, is_photon_connected) }}
+    {{ place_modal("all-cities", "All cities", total_cities, last_visit_cities, is_photon_connected) }}
+{% endif %}
+{% endblock %}
 
-    </div>
-  {% endfor %}
-  </div>
-
-
-  <script>
-    document.addEventListener('DOMContentLoaded', function() {
-      // stats_by_year is passed in from the backend as a dictionary
-      // Use the tojson filter to convert to a JSON object
-      var statsByYear = {{ stats_by_year|tojson }};
-
-      // For each year, generate a bar chart
-      for (let year in statsByYear) {
-        let yearData = statsByYear[year];
-        let ctx = document.getElementById("chart-" + year);
-
-        // yearData.monthly_distances is an array of 12 floats (km)
-        new Chart(ctx, {
-          type: 'bar',
-          data: {
-            labels: ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],
-            datasets: [{
-              label: "Distance (km)",
-              data: yearData.monthly_distances,
-              backgroundColor: "rgba(75, 192, 192, 0.2)",
-              borderColor: "rgba(75, 192, 192, 1)",
-              borderWidth: 1
-            }]
-          },
-          options: {
-            scales: {
-              y: {
-                beginAtZero: true
-              }
-            },
-            plugins: {
-              legend: {
-                display: false
-              },
-              title: {
-                display: false,
-                text: "Monthly Distance in " + year + " (km)"
-              }
-            }
-          }
-        });
-      }
-    });
-  </script>
+{% block scripts %}
+{{ bar_chart_script(stats_by_year, ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]) }}
 {% endblock %}

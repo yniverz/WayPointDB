@@ -1,266 +1,243 @@
 {% extends "base.jinja" %}
+{% from "_macros.jinja" import icon %}
 
-{% block heading %}
-    Jobs
-{% endblock %}
+{% block page_title %}Jobs{% endblock %}
+{% block subtitle %}Process and clean up your data in the background. You can leave this page while jobs run.{% endblock %}
 
 {% block head %}
 <style>
-  /* Add some spacing between categories */
-  .category {
-    margin-bottom: 20px;
-  }
-
-  /* Flex container for buttons to align them in one row */
-  .button-group {
-    display: flex;
-    gap: 10px; /* Optional: adds spacing between buttons */
-    flex-wrap: wrap; /* Ensures buttons wrap nicely on smaller screens */
-  }
+    .job-list { list-style: none; margin: 0; padding: 0; }
+    .job-list li {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px 20px;
+        padding: 12px 0;
+        border-top: 1px solid var(--border);
+    }
+    .job-list li:first-child { border-top: 0; padding-top: 0; }
+    .job-list li:last-child { padding-bottom: 0; }
+    .job-list .job-name { font-weight: 600; }
+    .job-list .job-desc { color: var(--text-muted); font-size: 0.86rem; max-width: 520px; }
+    .job-run { display: flex; align-items: center; gap: 8px; }
+    .job-run input { width: 90px; }
+    .job-group + .job-group { margin-top: 22px; }
+    .job-group h3 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 10px; }
+    .job-detail { font-size: 0.82rem; color: var(--text-muted); margin-top: 2px; }
+    .job-detail.error { color: var(--danger); }
 </style>
 {% endblock %}
 
 {% block content %}
-    <div>
-        {% if photon_active %}
-        <div class="category">
-            <h4>Reverse Geocoding</h4>
-            <div class="button-group">
-                <button onclick="startJob('photon_full')" title="Query Photon to reverse geocode, and overwrite any existing records">Geocode all points</button>
-                <button onclick="startJob('photon_fill')" title="Only query points which havent yet been reverse geocoded">Geocode new points</button>
-                <!--button onclick="startJob('reset_no_geocoding')" title="Reset to retry points with no geocoding data">Reset No Geocoding</button-->
-            </div>
-        </div>
-        {% endif %}
-
-        <div class="category">
-            <h4>Statistics</h4>
-            <div class="button-group">
-                <button onclick="startJob('full_stats')">Generate Statistics</button>
-                <button onclick="startJob('speed_data')" title="Will add speed information to points which dont already have any.">Generate Speed Data</button>
-            </div>
-        </div>
-
-        <div class="category">
-            <h4>Data Cleaning</h4>
-            <div class="button-group">
-                <button onclick="startJob('delete_duplicates')" title="Usefull in the case of bugs in tracking for example">Delete Duplicates</button>
-                <button onclick="startJob('filter_accuracy', 'Enter the maximum meter accuracy that should be allowed in the dataset', 'maximum_accuracy', '500')" title="Will remove points with horizontal accuracy greater than set value">Filter Large Accuracy</button>
-                <button onclick="startJob('filter_speed', 'Enter the maximum speed that should be allowed in the dataset (km/h)', 'maximum_speed_kmh', '1000')" title="Will remove points with speed greater than set value. Useful to generate speed data first.">Filter Large Speed</button>
-                <button onclick="startJob('filter_clusters', 'Enter the minimum distance between points that is allowed in the dataset', 'maximum_distance', '14')" title="Will remove points closer than set distance to each other">Reduce Clusters</button>
-            </div>
+<section class="panel">
+    <div class="panel-header">
+        <div>
+            <h2>Activity</h2>
+            <p>Running, queued and recently finished jobs.</p>
         </div>
     </div>
-
-
-    <br>
-    <h2>Scheduled Jobs</h2>
-    <p>Enabled jobs run once a day at the selected hour (server time, currently {{ server_time }}).</p>
-    <form method="POST">
-        <input type="hidden" name="saveSchedules" value="1">
-        <table border="1" cellpadding="5" cellspacing="0">
+    <div class="table-wrap">
+        <table class="data">
             <thead>
                 <tr>
-                    <th>Enabled</th>
                     <th>Job</th>
-                    <th>Hour</th>
-                    <th>Parameter</th>
-                    <th>Last Run</th>
+                    {% if current_user.is_admin %}<th>User</th>{% endif %}
+                    <th>Status</th>
+                    <th>Progress</th>
+                    <th>Time</th>
+                    <th></th>
                 </tr>
             </thead>
-            <tbody>
-                {% for schedule in schedules %}
+            <tbody id="jobs-tbody"></tbody>
+        </table>
+    </div>
+</section>
+
+<section class="panel">
+    <div class="panel-header">
+        <div>
+            <h2>Run a job</h2>
+            <p>Each job can only be queued once at a time.</p>
+        </div>
+    </div>
+    <div class="panel-body">
+        {% for group, infos in job_groups.items() %}
+        <div class="job-group">
+            <h3>{{ group }}</h3>
+            <ul class="job-list">
+                {% for info in infos %}
+                <li>
+                    <div>
+                        <div class="job-name">{{ info.label }}</div>
+                        <div class="job-desc">{{ info.description }}</div>
+                    </div>
+                    <form class="job-run" data-job="{{ info.name }}">
+                        {% if info.param %}
+                            <label class="small muted" for="run-{{ info.name }}">{{ info.param.label }}</label>
+                            <input type="number" id="run-{{ info.name }}" name="{{ info.param.name }}" value="{{ info.param.default }}" min="0" step="any" required>
+                            <span class="small muted">{{ info.param.unit }}</span>
+                        {% endif %}
+                        <button type="submit" class="button sm">{{ icon("play") }}Run</button>
+                    </form>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+
+<section class="panel">
+    <div class="panel-header">
+        <div>
+            <h2>Schedule</h2>
+            <p>Enabled jobs run once a day at the chosen hour (server time, currently {{ server_time }}).</p>
+        </div>
+    </div>
+    <form method="POST">
+        <input type="hidden" name="saveSchedules" value="1">
+        <div class="table-wrap">
+            <table class="data">
+                <thead>
                     <tr>
-                        <td><input type="checkbox" name="enabled_{{ schedule.job_name }}" {% if schedule.enabled %}checked{% endif %}></td>
-                        <td>{{ schedule.label }}</td>
+                        <th class="check">On</th>
+                        <th>Job</th>
+                        <th>Time</th>
+                        <th>Setting</th>
+                        <th>Last run</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for schedule in schedules %}
+                    {% set info = schedule.info %}
+                    <tr>
+                        <td class="check"><input type="checkbox" name="enabled_{{ info.name }}" aria-label="Schedule {{ info.label }}" {% if schedule.enabled %}checked{% endif %}></td>
+                        <td>{{ info.label }}</td>
                         <td>
-                            <select name="hour_{{ schedule.job_name }}">
+                            <select name="hour_{{ info.name }}" aria-label="Hour for {{ info.label }}">
                                 {% for hour in range(24) %}
                                     <option value="{{ hour }}" {% if hour == schedule.hour %}selected{% endif %}>{{ "%02d:00" % hour }}</option>
                                 {% endfor %}
                             </select>
                         </td>
                         <td>
-                            {% if schedule.param %}
-                                <label>{{ schedule.param[1] }}
-                                    <input type="number" name="param_{{ schedule.job_name }}" value="{{ schedule.param_value }}" min="0" step="any" style="width: 6em;">
-                                </label>
+                            {% if info.param %}
+                                <input type="number" name="param_{{ info.name }}" value="{{ schedule.param_value }}" min="0" step="any" style="width: 90px;" aria-label="{{ info.param.label }}">
+                                <span class="small muted">{{ info.param.unit }}</span>
                             {% endif %}
                         </td>
-                        <td>{{ schedule.last_run_date or "Never" }}</td>
+                        <td class="muted">{{ schedule.last_run_date or "Never" }}</td>
                     </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        <br>
-        <button type="submit">Save Schedule</button>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="panel-footer">
+            <span class="small muted">Changes apply from the next matching hour.</span>
+            <button type="submit" class="button primary">Save schedule</button>
+        </div>
     </form>
+</section>
+{% endblock %}
 
-    <br>
-    <h2>Jobs</h2>
-    <table border="1" cellpadding="5" cellspacing="0">
-        <thead>
-            <tr>
-                <th>User</th>
-                <th>Job Name</th>
-                <th>Running</th>
-                <th>Progress</th>
-                <th>Time Elapsed</th>
-                <th>Time Remaining</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
-        <tbody id="jobs-tbody">
-            {% for job in jobs %}
-                <tr>
-                    <td>{{ job[6] }}</td>
-                    <td>{{ job[1] }}</td>
-                    <td>{{ job[2] }}</td>
-                    <td>{{ job[3]|round(2) }}%</td>
-                    <td>{{ job[4] }}</td>
-                    <td>{{ job[5] }}</td>
-                    <td>
-                        <form method="POST" style="display:inline;">
-                            <input type="hidden" name="cancelJob" value="{{ job[0] }}">
-                            <button type="submit">Cancel</button>
-                        </form>
-                    </td>
-                </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-    <br>
-
-    <!-- Toggle button to enable or disable auto refresh -->
-    <button id="toggle-refresh">Disable Auto Refresh</button>
-    
-    <script>
-    let refreshEnabled = true;
-    const toggleBtn = document.getElementById("toggle-refresh");
+{% block scripts %}
+<script>
+    const showUser = {{ current_user.is_admin | tojson }};
     const tbody = document.getElementById("jobs-tbody");
+    const STATUS_LABELS = { queued: "Queued", running: "Running", done: "Done", failed: "Failed", cancelled: "Cancelled" };
 
-    toggleBtn.addEventListener("click", function() {
-        refreshEnabled = !refreshEnabled;
-        this.textContent = refreshEnabled ? "Disable Auto Refresh" : "Enable Auto Refresh";
-    });
-
-    function autoRefresh() {
-        if (!refreshEnabled) return;
-
-        // Fetch updated job data from the server
-        fetch(window.location.pathname + "?update=1")
-            .then(response => response.json())
-            .then(data => {
-                // data is a list of jobs in the same format as `jobs` from the server
-                updateJobsTable(data);
-            })
-            .catch(error => console.error("Error fetching jobs update:", error));
+    function cell(content, className) {
+        const td = document.createElement("td");
+        if (className) td.className = className;
+        if (content instanceof Node) td.appendChild(content);
+        else td.textContent = content;
+        return td;
     }
 
-    function updateJobsTable(jobs) {
-        // Clear existing rows
-        tbody.innerHTML = "";
+    function renderJobs(jobs) {
+        tbody.replaceChildren();
+        if (!jobs.length) {
+            const td = cell("No jobs yet. Start one below.", "empty");
+            td.colSpan = showUser ? 6 : 5;
+            tbody.appendChild(document.createElement("tr")).appendChild(td);
+            return;
+        }
 
-        // Build rows from the updated job data
-        for (let job of jobs) {
-            const [ jobId, jobName, running, progress, timePassed, timeLeft ] = job;
+        for (const job of jobs) {
             const row = document.createElement("tr");
 
-            // User
-            const userCell = document.createElement("td");
-            userCell.textContent = job[6];
-            row.appendChild(userCell);
-            
-            // Job Name
-            const nameCell = document.createElement("td");
-            nameCell.textContent = jobName;
-            row.appendChild(nameCell);
+            const name = document.createElement("div");
+            name.append(Object.assign(document.createElement("div"), { textContent: job.label }));
+            const detail = job.error || job.message;
+            if (detail) {
+                name.append(Object.assign(document.createElement("div"), {
+                    className: "job-detail" + (job.error ? " error" : ""),
+                    textContent: detail,
+                }));
+            }
+            row.appendChild(cell(name));
+            if (showUser) row.appendChild(cell(job.user || "–", "muted"));
 
-            // Running?
-            const runningCell = document.createElement("td");
-            runningCell.textContent = running;
-            row.appendChild(runningCell);
+            const status = job.stopping ? "Stopping" : STATUS_LABELS[job.status];
+            row.appendChild(cell(Object.assign(document.createElement("span"), {
+                className: "badge-status " + job.status,
+                textContent: status,
+            })));
 
-            // Progress
-            const progressCell = document.createElement("td");
-            progressCell.textContent = progress.toFixed(2) + "%";
-            row.appendChild(progressCell);
+            if (job.status === "running") {
+                const track = Object.assign(document.createElement("div"), { className: "progress-bar-track", title: `${(job.progress * 100).toFixed(1)}%` });
+                track.appendChild(Object.assign(document.createElement("div"), { className: "progress-bar-fill" })).style.width = `${job.progress * 100}%`;
+                row.appendChild(cell(track));
+            } else {
+                row.appendChild(cell(""));
+            }
 
-            // Time Elapsed
-            const timePassedCell = document.createElement("td");
-            timePassedCell.textContent = timePassed; // e.g. "00:05:12" or "1d 03:12:45"
-            row.appendChild(timePassedCell);
+            let time = "";
+            if (job.status === "running") {
+                time = WP.formatDuration(job.elapsed) + (job.remaining != null ? ` · ~${WP.formatDuration(job.remaining)} left` : "");
+            } else if (job.finished_ago != null) {
+                time = `${WP.formatDuration(job.finished_ago)} ago` + (job.elapsed ? `, took ${WP.formatDuration(job.elapsed)}` : "");
+            }
+            row.appendChild(cell(time, "muted small nowrap"));
 
-            // Time Remaining
-            const timeLeftCell = document.createElement("td");
-            timeLeftCell.textContent = timeLeft;
-            row.appendChild(timeLeftCell);
-
-            // Actions (Cancel Form)
-            const actionsCell = document.createElement("td");
-            const cancelForm = document.createElement("form");
-            cancelForm.method = "POST";
-            cancelForm.style.display = "inline";
-
-            const hiddenInput = document.createElement("input");
-            hiddenInput.type = "hidden";
-            hiddenInput.name = "cancelJob";
-            hiddenInput.value = jobId;
-            cancelForm.appendChild(hiddenInput);
-
-            const cancelButton = document.createElement("button");
-            cancelButton.type = "submit";
-            cancelButton.textContent = "Cancel";
-            cancelForm.appendChild(cancelButton);
-
-            actionsCell.appendChild(cancelForm);
-            row.appendChild(actionsCell);
+            const actions = cell("", "actions");
+            if ((job.status === "queued" || job.status === "running") && !job.stopping) {
+                const cancel = Object.assign(document.createElement("button"), { className: "button sm danger", textContent: "Cancel", type: "button" });
+                cancel.addEventListener("click", () => WP.postForm(location.pathname, { cancelJob: job.id }).then(refresh).catch(() => {}));
+                actions.appendChild(cancel);
+            }
+            row.appendChild(actions);
 
             tbody.appendChild(row);
         }
     }
 
-    // Refresh the table every 1 second (only if refresh is enabled)
-    setInterval(autoRefresh, 1000);
-
-
-
-    function startJob(jobName, promptText = null, varName = null, defaultValue = null) {
-        if (promptText !== null) {
-            const value = prompt(promptText, defaultValue);
-            if (value === null) {
-                return;
-            }
-
-            fetch(window.location.pathname, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/x-www-form-urlencoded",
-                },
-                body: `newJob=${jobName}&${varName}=${value}`,
-            })
-                .then(response => response.json())
-                .then(data => {
-                    // data is a list of jobs in the same format as `jobs` from the server
-                    updateJobsTable(data);
-                })
-                .catch(error => console.error(`Error starting ${jobName} job:`, error));
-        } else {
-            fetch(window.location.pathname, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/x-www-form-urlencoded",
-                },
-                body: `newJob=${jobName}`,
-            })
-                .then(response => response.json())
-                .then(data => {
-                    // data is a list of jobs in the same format as `jobs` from the server
-                    updateJobsTable(data);
-                })
-                .catch(error => console.error(`Error starting ${jobName} job:`, error));
-        }
+    function refresh() {
+        return fetch(location.pathname + "?update=1")
+            .then(response => response.json())
+            .then(renderJobs)
+            .catch(error => console.error("Could not refresh jobs:", error));
     }
 
-    </script>
+    document.querySelectorAll("form.job-run").forEach(form => {
+        form.addEventListener("submit", event => {
+            event.preventDefault();
+            const fields = { newJob: form.dataset.job, ...Object.fromEntries(new FormData(form)) };
+            const button = form.querySelector("button");
+            button.disabled = true;
+            WP.postForm(location.pathname, fields)
+                .then(() => {
+                    WP.notify(`${form.closest("li").querySelector(".job-name").textContent} queued`, "success", 3000);
+                    return refresh();
+                })
+                .catch(() => {})
+                .finally(() => { button.disabled = false; });
+        });
+    });
+
+    renderJobs({{ jobs | tojson }});
+    // Only poll while the tab is visible.
+    setInterval(() => { if (!document.hidden) refresh(); }, 2000);
+</script>
 {% endblock %}

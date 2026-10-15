@@ -16,14 +16,14 @@ import json
 from urllib.parse import urljoin, urlparse
 from flask import (
     Blueprint, Response, make_response, render_template, request, redirect, send_file, stream_with_context, url_for, 
-    session, g, jsonify
+    session, g, jsonify, flash
 )
 from flask.views import MethodView
 import requests
-from sqlalchemy import Integer, Numeric, cast, func, text
+from sqlalchemy import Integer, Numeric, cast, func, select, text
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from ..background.jobs import JOB_TYPES, ImportJob
+from ..background.jobs import JOB_TYPES, ImportJob, JobStatus
 from ..background import apply_schedule_start, job_manager
 from ..models import DailyStatistic, Import, ScheduledJob, User, GPSData, db, AdditionalTrace
 from ..utils import login_required
@@ -86,6 +86,27 @@ def is_safe_redirect_target(target: str) -> bool:
     return test_url.scheme in ("http", "https") and host_url.netloc == test_url.netloc
 
 
+def delete_series_data(column: str, series_id) -> None:
+    """Delete the points, statistics and imports (with their files) of a user's main trace or of a trace."""
+    for imp in Import.query.filter(getattr(Import, column) == series_id).all():
+        path = os.path.join(Config.UPLOAD_FOLDER, imp.filename)
+        if imp.filename and os.path.exists(path):
+            os.remove(path)
+    GPSData.query.filter(getattr(GPSData, column) == series_id).delete(synchronize_session=False)
+    DailyStatistic.query.filter(getattr(DailyStatistic, column) == series_id).delete(synchronize_session=False)
+    Import.query.filter(getattr(Import, column) == series_id).delete(synchronize_session=False)
+
+
+def delete_trace(trace: AdditionalTrace) -> None:
+    """Delete a trace with all its data, and the API keys that write to it."""
+    delete_series_data("trace_id", trace.id)
+    for user in User.query.all():
+        keys = [(key, trace_id) for key, trace_id in user.api_keys if trace_id != str(trace.id)]
+        if len(keys) != len(user.api_keys):
+            user.api_keys = keys
+    db.session.delete(trace)
+
+
 class HomeView(MethodView):
     decorators = [login_required]
 
@@ -105,7 +126,9 @@ class LoginView(MethodView):
 
         remaining = _login_lock_remaining(throttle_key)
         if remaining > 0:
-            response = make_response("Too many failed login attempts. Try again later.", 429)
+            response = make_response(render_template(
+                "login.jinja", email=email, error="Too many failed login attempts. Try again later."
+            ), 429)
             response.headers["Retry-After"] = str(int(remaining) + 1)
             return response
 
@@ -118,7 +141,7 @@ class LoginView(MethodView):
 
         if not password_ok:
             _record_login_failure(throttle_key)
-            return "Invalid credentials", 401
+            return render_template("login.jinja", email=email, error="Wrong email or password."), 401
 
         _clear_login_failures(throttle_key)
         session["user_id"] = user.id
@@ -134,93 +157,102 @@ class LogoutView(MethodView):
         session.clear()
         return redirect(url_for("web.login"))
 
-# Jobs that can be scheduled from the jobs page: (job name, label, optional (parameter, label, default)).
-SCHEDULABLE_JOBS = [
-    ("photon_fill", "Geocode new points", None),
-    ("photon_full", "Geocode all points", None),
-    ("full_stats", "Generate Statistics", None),
-    ("speed_data", "Generate Speed Data", None),
-    ("delete_duplicates", "Delete Duplicates", None),
-    ("filter_accuracy", "Filter Large Accuracy", ("maximum_accuracy", "Max. accuracy (m)", 500)),
-    ("filter_speed", "Filter Large Speed", ("maximum_speed_kmh", "Max. speed (km/h)", 1000)),
-    ("filter_clusters", "Reduce Clusters", ("maximum_distance", "Min. distance (m)", 14)),
+JobParam = namedtuple("JobParam", "name label default unit")
+JobInfo = namedtuple("JobInfo", "name label group description param", defaults=(None,))
+
+# Jobs offered on the jobs page, to run now or on a schedule, in display order.
+JOB_CATALOG = [
+    JobInfo("photon_fill", "Geocode new points", "Geocoding",
+            "Looks up country, city and address for points that have not been geocoded yet."),
+    JobInfo("photon_full", "Geocode all points", "Geocoding",
+            "Looks up every point again and overwrites existing location names."),
+    JobInfo("full_stats", "Generate statistics", "Statistics",
+            "Recalculates daily distances and visited countries and cities."),
+    JobInfo("speed_data", "Generate speed data", "Statistics",
+            "Calculates a speed for points that have none, from the distance to the previous point."),
+    JobInfo("delete_duplicates", "Delete duplicates", "Data cleaning",
+            "Removes points with the same time and position as another point."),
+    JobInfo("filter_accuracy", "Filter inaccurate points", "Data cleaning",
+            "Removes points whose horizontal accuracy is worse than the limit.",
+            JobParam("maximum_accuracy", "Max. accuracy", 500, "m")),
+    JobInfo("filter_speed", "Filter GPS jumps", "Data cleaning",
+            "Removes points that could only be reached faster than the limit, such as GPS jumps.",
+            JobParam("maximum_speed_kmh", "Max. speed", 1000, "km/h")),
+    JobInfo("filter_clusters", "Reduce clusters", "Data cleaning",
+            "Thins out points while standing still, keeping the first and last point of each stay.",
+            JobParam("maximum_distance", "Min. distance", 14, "m")),
 ]
 
 
 class JobsView(MethodView):
     decorators = [login_required]
 
+    @staticmethod
+    def available_jobs() -> list[JobInfo]:
+        return [info for info in JOB_CATALOG if info.name in JOB_TYPES]
+
     def get_schedules(self, user: User):
         """The schedulable jobs available on this server, with the user's saved settings."""
         saved = {s.job_name: s for s in ScheduledJob.query.filter_by(user_id=user.id).all()}
 
         schedules = []
-        for job_name, label, param in SCHEDULABLE_JOBS:
-            if job_name not in JOB_TYPES:
-                continue
-
-            schedule = saved.get(job_name)
+        for info in self.available_jobs():
+            schedule = saved.get(info.name)
             param_value = None
-            if param:
-                param_value = (schedule.params or {}).get(param[0], param[2]) if schedule else param[2]
+            if info.param:
+                param_value = (schedule.params or {}).get(info.param.name, info.param.default) if schedule else info.param.default
 
             schedules.append({
-                "job_name": job_name,
-                "label": label,
+                "info": info,
                 "enabled": bool(schedule and schedule.enabled),
                 "hour": schedule.hour if schedule else 0,
                 "last_run_date": schedule.last_run_date if schedule else None,
-                "param": param,
                 "param_value": param_value,
             })
 
         return schedules
 
+    @staticmethod
+    def serialize_job(job) -> dict:
+        now = time.time()
+        elapsed = ((job.end_time or now) - job.start_time) if job.start_time else 0
+        remaining = None
+        if job.status == JobStatus.RUNNING and job.progress > 0.01:
+            remaining = elapsed / job.progress - elapsed
+
+        return {
+            "id": job.id,
+            "label": job.LABEL,
+            "user": job.user_email,
+            "status": job.status,
+            "progress": job.progress,
+            "elapsed": elapsed,
+            "remaining": remaining,
+            "finished_ago": (now - job.end_time) if job.end_time else None,
+            "message": job.message,
+            "error": job.error,
+            "stopping": job.stop_requested and not job.done,
+        }
+
+    def visible_jobs(self):
+        # Non-admins only see their own jobs; the full list leaks other users' emails and activity.
+        user = g.current_user
+        return job_manager.get_jobs(None if user.is_admin else user.id)
+
     def get(self):
-        """Example protected dashboard."""
-
-        is_admin = bool(g.current_user.is_admin)
-
-        raw_jobs = job_manager.get_jobs()
-        jobs = []
-        for job in raw_jobs:
-            # Non-admins only see their own jobs; the full list leaks other users' emails and activity.
-            if not is_admin and (job[0] is None or job[0].id != g.current_user.id):
-                continue
-
-            start_time = job[4] or time.time()
-            progress = job[3] * 100
-            safe_progress = max(0.01, progress)
-
-            time_passed = time.time() - start_time
-            time_left = max(0, (100 - job[3]) * ((time.time() - start_time) / safe_progress) - time_passed)
-
-            time_passed_str = time.strftime("%H:%M:%S", time.gmtime(time_passed))
-            if time_passed > 60*60*24:
-                time_passed_str = f"{time_passed // (60*60*24):.0f}d " + time_passed_str
-            
-            time_left_str = time.strftime("%H:%M:%S", time.gmtime(time_left))
-            if time_left > 60*60*24:
-                time_left_str = f"{time_left // (60*60*24):.0f}d " + time_left_str
-            
-            jobs.append((
-                job[0].id if job[0] else None, 
-                job[1], 
-                job[2], 
-                progress, 
-                time_passed_str,
-                time_left_str,
-                job[0].email if job[0] else None
-            ))
-
+        jobs = [self.serialize_job(job) for job in self.visible_jobs()]
 
         if request.args.get("update"):
             return jsonify(jobs)
 
+        job_groups = OrderedDict()
+        for info in self.available_jobs():
+            job_groups.setdefault(info.group, []).append(info)
+
         return render_template(
             "jobs.jinja",
             jobs=jobs,
-            photon_active=len(Config.PHOTON_SERVER_HOST) != 0,
+            job_groups=job_groups,
             schedules=self.get_schedules(g.current_user),
             server_time=datetime.now().astimezone().strftime("%H:%M %Z"),
         )
@@ -236,49 +268,50 @@ class JobsView(MethodView):
         if "cancelJob" in request.form:
             return self.do_cancel_job(request.form)
         
-        return "Invalid request", 405
+        return jsonify(error="Invalid request"), 400
 
     def do_cancel_job(self, params: dict):
-        job_id = params.get("cancelJob")
-        job_manager.cancel_job(job_id, blocking=True)
+        job = job_manager.get_job(params.get("cancelJob"))
+        if job is None or (job.user_id != g.current_user.id and not g.current_user.is_admin):
+            return jsonify(error="Job not found"), 404
 
-        return redirect(url_for("web.jobs"))
+        job_manager.cancel_job(job.id)
+        return jsonify(ok=True)
 
     def do_new_job(self, params: dict):
         job_name = params.get("newJob")
         
         if job_name not in JOB_TYPES:
-            return "Invalid job name", 405
-        
+            return jsonify(error="Unknown job"), 400
         
         job = JOB_TYPES[job_name]
 
         if job_manager.has_job(g.current_user, job):
-            return "This job is already queued or running", 409
+            return jsonify(error=f"{job.LABEL} is already queued or running"), 409
 
-        for param in job.PARAMETERS:
+        kwargs = {}
+        for param, param_type in job.PARAMETERS.items():
             if param == "user":
                 continue
+            try:
+                value = param_type(params[param])
+            except (KeyError, ValueError):
+                return jsonify(error=f"Missing or invalid value for {param}"), 400
+            if isinstance(value, float) and (not math.isfinite(value) or value < 0):
+                return jsonify(error=f"Invalid value for {param}"), 400
+            kwargs[param] = value
 
-            if param not in params:
-                return f"Missing parameter: {param}", 401
-        
-        needed_params = set(job.PARAMETERS) - {"user"}
-            
-        job_instance = job(user=g.current_user, **{param: job.PARAMETERS[param](params[param]) for param in needed_params})
-        
-        job_manager.add_job(job_instance)
+        job_manager.add_job(job(user=g.current_user, **kwargs))
 
-        return redirect(url_for("web.jobs"))
+        return jsonify(ok=True)
 
     def do_save_schedules(self, params: dict):
         user = g.current_user
         now = datetime.now()
         saved = {s.job_name: s for s in ScheduledJob.query.filter_by(user_id=user.id).all()}
 
-        for job_name, _, param in SCHEDULABLE_JOBS:
-            if job_name not in JOB_TYPES:
-                continue
+        for info in self.available_jobs():
+            job_name, param = info.name, info.param
 
             try:
                 hour = int(params.get(f"hour_{job_name}", 0))
@@ -290,12 +323,12 @@ class JobsView(MethodView):
             job_params = {}
             if param:
                 try:
-                    value = float(params.get(f"param_{job_name}", param[2]))
+                    value = float(params.get(f"param_{job_name}", param.default))
                 except ValueError:
                     return f"Invalid value for {job_name}", 400
                 if not math.isfinite(value) or value < 0:
                     return f"Invalid value for {job_name}", 400
-                job_params[param[0]] = value
+                job_params[param.name] = value
 
             schedule = saved.get(job_name)
             if schedule is None:
@@ -308,6 +341,7 @@ class JobsView(MethodView):
             apply_schedule_start(schedule, now)
 
         db.session.commit()
+        flash("Schedule saved")
 
         return redirect(url_for("web.jobs"))
 
@@ -349,10 +383,10 @@ class StatsView(MethodView):
             # Update visited cities / countries (they are stored in JSON columns)
             if stat.visited_cities:
                 stats_by_year[year]["cities"].update([tuple(city) for city in stat.visited_cities])
-                last_visit_cities.update([(tuple(city), f"{stat.day:02d}-{stat.month:02d}-{stat.year}") for city in stat.visited_cities])
+                last_visit_cities.update([(tuple(city), f"{stat.year}-{stat.month:02d}-{stat.day:02d}") for city in stat.visited_cities])
             if stat.visited_countries:
                 stats_by_year[year]["countries"].update(stat.visited_countries)
-                last_visit_countries.update([(country, f"{stat.day:02d}-{stat.month:02d}-{stat.year}") for country in stat.visited_countries])
+                last_visit_countries.update([(country, f"{stat.year}-{stat.month:02d}-{stat.day:02d}") for country in stat.visited_countries])
 
             # Track total distance in meters for each year
             stats_by_year[year]["total_distance"] += stat.total_distance_m
@@ -371,7 +405,7 @@ class StatsView(MethodView):
             total_distance += data["total_distance"]
 
             stats_by_year_processed[year] = {
-                "monthly_distances": [int(dist_m / 1000) for dist_m in data["monthly_distances"]],
+                "monthly_distances": [round(dist_m / 1000, 1) for dist_m in data["monthly_distances"]],
                 "cities": list(data["cities"]),
                 "countries": list(data["countries"]),
                 "total_distance": int(data["total_distance"] / 1000.0),  # store in KM
@@ -442,10 +476,10 @@ class YearlyStatsView(MethodView):
             # Update visited cities / countries (they are stored in JSON columns)
             if stat.visited_cities:
                 stats_by_month[month]["cities"].update([tuple(city) for city in stat.visited_cities])
-                last_visit_cities.update([(tuple(city), f"{stat.day:02d}-{stat.month:02d}-{stat.year}") for city in stat.visited_cities])
+                last_visit_cities.update([(tuple(city), f"{stat.year}-{stat.month:02d}-{stat.day:02d}") for city in stat.visited_cities])
             if stat.visited_countries:
                 stats_by_month[month]["countries"].update(stat.visited_countries)
-                last_visit_countries.update([(country, f"{stat.day:02d}-{stat.month:02d}-{stat.year}") for country in stat.visited_countries])
+                last_visit_countries.update([(country, f"{stat.year}-{stat.month:02d}-{stat.day:02d}") for country in stat.visited_countries])
 
             # Track total distance in meters for each month
             stats_by_month[month]["total_distance"] += stat.total_distance_m
@@ -463,7 +497,7 @@ class YearlyStatsView(MethodView):
             total_distance += data["total_distance"]
 
             stats_by_month_processed[month] = {
-                "monthly_distances": [int(dist_m / 1000) for dist_m in data["monthly_distances"]],
+                "monthly_distances": [round(dist_m / 1000, 1) for dist_m in data["monthly_distances"]],
                 "cities": list(data["cities"]),
                 "countries": list(data["countries"]),
                 "total_distance": int(data["total_distance"] / 1000.0),  # store in KM
@@ -490,7 +524,7 @@ class PointsView(MethodView):
         
         # Retrieve query parameters
         the_date_str = request.args.get("date")
-        import_id = request.args.get("import")
+        import_id = request.args.get("importid")
         page = request.args.get("page", 1)
         per_page = request.args.get("per_page", 100)
 
@@ -526,14 +560,15 @@ class PointsView(MethodView):
 
         end_date = start_date + timedelta(days=1)  # Use days=1 for clarity
 
-        # Build the base query
-        points_query = GPSData.query.filter_by(**g.trace_query).filter(
-            GPSData.timestamp >= start_date,
-            GPSData.timestamp < end_date
-        )
-
+        # An import spans many days, so it is shown as a whole instead of per day.
+        points_query = GPSData.query.filter_by(**g.trace_query)
         if import_id:
-            points_query = points_query.filter_by(import_id=import_id)
+            try:
+                points_query = points_query.filter_by(import_id=uuid.UUID(import_id))
+            except ValueError:
+                import_id = None
+        if not import_id:
+            points_query = points_query.filter(GPSData.timestamp >= start_date, GPSData.timestamp < end_date)
 
         # Calculate total points for pagination
         total_points = points_query.count()
@@ -617,6 +652,7 @@ class ImportsView(MethodView):
 
         # Fetch all 'Import' records for this user
         raw_imports: list[Import] = Import.query.filter_by(**g.trace_query).order_by(Import.created_at.desc()).all()
+        running_imports = {job.import_id for job in job_manager.get_jobs(user.id) if isinstance(job, ImportJob) and not job.done}
 
         imports = []
         for imp in raw_imports:
@@ -627,6 +663,7 @@ class ImportsView(MethodView):
                 "total_entries": imp.total_entries,
                 "total_imported": GPSData.query.filter_by(**g.trace_query, import_id=imp.id).count(),
                 "done_importing": imp.done_importing,
+                "importing": imp.id in running_imports,
             })
 
 
@@ -652,14 +689,16 @@ class ImportsView(MethodView):
         """Handle the form submission where a user uploads a JSON file."""
         file = request.files.get("json_file")
         if not file or file.filename == "":
-            return "No file selected", 400
+            flash("Choose a file to upload", "error")
+            return redirect(url_for("web.imports"))
 
         # Optional check for allowed extension
         filename = secure_filename(file.filename)
         name = os.path.splitext(filename)[0]
         ext = os.path.splitext(filename)[1].lower()
         if ext.replace(".", "") not in self.ALLOWED_EXTENSIONS:
-            return "Invalid file type. Only .json allowed.", 400
+            flash("Only .json files can be imported", "error")
+            return redirect(url_for("web.imports"))
 
         # Save file to disk with a unique name to avoid collisions
         # Example: "user_<filename>_<user_id>_<uuid>.json"
@@ -674,7 +713,14 @@ class ImportsView(MethodView):
         try:
             json_data = json.loads(data)
         except json.JSONDecodeError:
-            return "Invalid JSON file", 400
+            os.remove(save_path)
+            flash("This file is not valid JSON", "error")
+            return redirect(url_for("web.imports"))
+
+        if not isinstance(json_data, list):
+            os.remove(save_path)
+            flash("The file must contain a list of points", "error")
+            return redirect(url_for("web.imports"))
         
         kwarg = {"user_id": user.id}
         if g.current_trace:
@@ -690,8 +736,8 @@ class ImportsView(MethodView):
         )
         db.session.add(new_import)
         db.session.commit()
+        flash(f"Uploaded {filename} with {len(json_data):,} entries. Start the import when ready.")
 
-        # Redirect back to /imports
         return redirect(url_for("web.imports"))
 
     def start_import_job(self, user, trace=None):
@@ -701,16 +747,17 @@ class ImportsView(MethodView):
             return "Missing import_id", 400
 
         import_record = Import.query.filter_by(id=import_id, user_id=user.id).first()
-        if not import_record:
+        if not import_record and trace:
             import_record = Import.query.filter_by(id=import_id, trace_id=trace.id).first()
-            if not import_record:
-                return "Import not found or not yours", 404
+        if not import_record:
+            return "Import not found or not yours", 404
 
         # Add job to job manager
         # The job itself (ImportJob) will handle reading the file from disk,
         # validating JSON, inserting GPSData, etc.
         job_instance = ImportJob(user=user, import_obj=import_record, trace=trace)
         job_manager.add_job(job_instance)
+        flash("Import started. You can follow it on the Jobs page.")
 
         return redirect(url_for("web.imports"))
 
@@ -721,10 +768,10 @@ class ImportsView(MethodView):
             return "Missing import_id", 400
 
         import_record = Import.query.filter_by(id=import_id, user_id=user.id).first()
-        if not import_record:
+        if not import_record and g.current_trace:
             import_record = Import.query.filter_by(id=import_id, trace_id=g.current_trace.id).first()
-            if not import_record:
-                return "Import not found or not yours", 404
+        if not import_record:
+            return "Import not found or not yours", 404
 
         # First delete associated GPSData by this import_id
         # Note the "import_id" in GPSData is a string field, so match accordingly
@@ -739,6 +786,7 @@ class ImportsView(MethodView):
         if os.path.exists(file_path):
             os.remove(file_path)
 
+        flash("Import and its points deleted")
         return redirect(url_for("web.imports"))
 
 
@@ -999,8 +1047,8 @@ class MapView(MethodView):
         for row in rows:
             gps_data.append({
                 "id": row[0],
-                "uid": row[1],
-                "t": row[2].astimezone(timezone.utc).isoformat() if row[2] else None,
+                "uid": str(row[1]) if row[1] else None,
+                "t": row[2].replace(tzinfo=timezone.utc).isoformat() if row[2] else None,
                 "lat": row[3],
                 "lng": row[4],
                 "ha": row[5],
@@ -1145,7 +1193,7 @@ class SpeedMapView(MethodView):
             gps_data.append({
                 "id": row.id,
                 "uid": row.user_id,
-                "t": row.timestamp.astimezone(timezone.utc).isoformat() if row.timestamp else None,
+                "t": row.timestamp.replace(tzinfo=timezone.utc).isoformat() if row.timestamp else None,
                 "lat": row.latitude,
                 "lng": row.longitude,
                 "ha": row.horizontal_accuracy,
@@ -1172,59 +1220,64 @@ class ManageUsersView(MethodView):
         return render_template("manage_users.jinja", users=users)
     
     def post(self):
-        user = g.current_user
-        if not user.is_admin:
+        admin = g.current_user
+        if not admin.is_admin:
             return "Access denied", 403
-        
+
         action = request.form.get("action")
 
-        if action == "remove_user":
-            user_id = request.form.get("user_id")
+        def fail(message, status=400):
+            if action == "change_password":
+                return jsonify(error=message), status
+            flash(message, "error")
+            return redirect(url_for("web.manage_users"))
 
-            if not user_id:
-                return "Missing user_id", 400
-            
-            if user_id == user.id:
-                return "Cannot delete yourself", 400
-            
-            user = User.query.filter_by(id=user_id).first()
-            if not user:
-                return "User not found", 404
-            db.session.delete(user)
-            db.session.commit()
-
-        elif action == "add_user":
-            email = request.form.get("email")
+        if action == "add_user":
+            email = (request.form.get("email") or "").strip()
             password = request.form.get("password")
-            is_admin = request.form.get("is_admin").lower() == "true"
+            is_admin = (request.form.get("is_admin") or "").lower() == "true"
 
             if not email or not password:
-                return "Missing email or password", 400
-
-            existing_user = User.query.filter_by(email=email).first()
-            if existing_user:
-                return "User already exists", 400
+                return fail("Enter an email and a password")
+            if User.query.filter_by(email=email).first():
+                return fail("A user with that email already exists")
 
             new_user = User(email=email, is_admin=is_admin)
             new_user.set_password(password)
             db.session.add(new_user)
             db.session.commit()
+            flash(f"User {email} added")
+            return redirect(url_for("web.manage_users"))
+
+        target = ManageTracesView.get_target_user(request.form.get("user_id"))
+        if not target:
+            return fail("User not found", 404)
+
+        if action == "remove_user":
+            if target.id == admin.id:
+                return fail("You cannot remove your own account")
+
+            for trace in AdditionalTrace.query.filter_by(owner_id=target.id).all():
+                delete_trace(trace)
+            for trace in AdditionalTrace.query.all():
+                if str(target.id) in trace.share_with_list:
+                    trace.share_with_list.remove(str(target.id))
+            delete_series_data("user_id", target.id)
+            db.session.delete(target)
+            db.session.commit()
+            flash(f"User {target.email} and all their data removed")
 
         elif action == "change_password":
-            user_id = request.form.get("user_id")
             password = request.form.get("password")
+            if not password:
+                return fail("Enter a password")
 
-            if not user_id or not password:
-                return "Missing user_id or password", 400
-
-            user: User = User.query.filter_by(id=user_id).first()
-            if not user:
-                return "User not found", 404
-
-            user.set_password(password)
+            target.set_password(password)
             db.session.commit()
+            return jsonify(ok=True)
 
-            return "OK", 200
+        else:
+            return fail("Unknown action")
 
         return redirect(url_for("web.manage_users"))
     
@@ -1293,88 +1346,65 @@ class ManageTracesView(MethodView):
 
     def post(self):
         user = g.current_user
-
         action = request.form.get("action")
 
-        if action == "remove_trace":
-            trace_id = request.form.get("trace_id")
+        def fail(message):
+            flash(message, "error")
+            return redirect(url_for("web.manage_traces"))
 
-            if not trace_id:
-                return "Missing trace_id", 400
-
-            trace = self.get_owned_trace(trace_id, user)
-            if not trace:
-                return "Trace not found", 404
-            db.session.delete(trace)
-            db.session.commit()
-
-        elif action == "add_trace":
-            name = request.form.get("name")
-            description = request.form.get("description")
-
+        if action == "add_trace":
+            name = (request.form.get("name") or "").strip()
             if not name:
-                return "Missing name", 400
+                return fail("Enter a name for the trace")
 
-            new_trace = AdditionalTrace(name=name, owner_id=user.id, description=description)
-            db.session.add(new_trace)
+            db.session.add(AdditionalTrace(name=name, owner_id=user.id, description=request.form.get("description")))
             db.session.commit()
+            flash(f"Trace “{name}” created")
+            return redirect(url_for("web.manage_traces"))
+
+        trace = self.get_owned_trace(request.form.get("trace_id"), user)
+        if not trace:
+            return fail("Trace not found")
+
+        if action == "remove_trace":
+            if g.current_trace and g.current_trace.id == trace.id:
+                session.pop("trace_id", None)
+            delete_trace(trace)
+            db.session.commit()
+            flash(f"Trace “{trace.name}” deleted")
 
         elif action == "share_trace":
-            trace_id = request.form.get("trace_id")
-
-            if not trace_id:
-                return "Missing trace_id", 400
-
-            trace = self.get_owned_trace(trace_id, user)
-            if not trace:
-                return "Trace not found", 404
-
             target = self.resolve_target_user()
             if not target:
-                return "User not found", 404
-
+                return fail("No user with that email")
             if target.id == user.id:
-                return "Cannot share with yourself", 400
+                return fail("You already own this trace")
 
             if str(target.id) not in trace.share_with_list:
                 trace.share_with_list.append(str(target.id))
                 db.session.commit()
+            flash(f"Shared “{trace.name}” with {target.email}")
 
         elif action == "unshare_trace":
             user_id = request.form.get("user_id")
-            trace_id = request.form.get("trace_id")
-
-            if not user_id or not trace_id:
-                return "Missing user_id or trace_id", 400
-
-            trace = self.get_owned_trace(trace_id, user)
-            if not trace:
-                return "Trace not found", 404
-
             if user_id in trace.share_with_list:
                 trace.share_with_list.remove(user_id)
                 db.session.commit()
+                flash("Sharing removed")
 
         elif action == "transfer_trace":
-            trace_id = request.form.get("trace_id")
-
-            if not trace_id:
-                return "Missing trace_id", 400
-
-            trace = self.get_owned_trace(trace_id, user)
-            if not trace:
-                return "Trace not found", 404
-
             target = self.resolve_target_user()
             if not target:
-                return "User not found", 404
+                return fail("No user with that email")
+            if target.id == user.id:
+                return fail("You already own this trace")
 
-            if target.id != user.id:
-                trace.owner_id = target.id
-                db.session.commit()
+            trace.owner_id = target.id
+            db.session.commit()
+            flash(f"“{trace.name}” now belongs to {target.email}")
 
         else:
-            return "Unknown action", 400
+            return fail("Unknown action")
 
         return redirect(url_for("web.manage_traces"))
 
@@ -1448,21 +1478,28 @@ class AccountView(MethodView):
 
             user.api_keys.append((uuid.uuid4().hex, trace_id))
             db.session.commit()
+            flash("API key created")
 
         if "delete_key" in request.form:
             api_key = request.form.get("api_key")
             if api_key:
                 user.api_keys = [(key, trace_id) for key, trace_id in user.api_keys if key != api_key]
                 db.session.commit()
+                flash("API key deleted")
 
         if "update_account" in request.form:
             new_email = request.form.get("new_email")
             new_password = request.form.get("new_password")
-            if new_email:
+            if new_email and new_email != user.email:
+                if User.query.filter_by(email=new_email).first():
+                    flash("That email is already used by another account", "error")
+                    return redirect(url_for("web.account"))
                 user.email = new_email
             if new_password:
                 user.set_password(new_password)
             db.session.commit()
+            if new_email or new_password:
+                flash("Account updated")
         
         return redirect(url_for("web.account"))
     
@@ -1490,201 +1527,120 @@ class SetTraceView(MethodView):
 
 
 
-full_bleed_background_img_store = {}
-full_bleed_background_date_store = {}
+# Rendered page backdrops per user id: (rendered at, PNG bytes).
+backdrop_store: dict = {}
+BACKDROP_MAX_AGE = timedelta(hours=12)
+
 
 class FullBleedBackground(MethodView):
+    """
+    The page backdrop: the user's tracks around their latest position, colored by
+    speed like the map, on a transparent background so it suits light and dark mode.
+    """
     decorators = [login_required]
 
+    WIDTH, HEIGHT = 2048, 1152
+    # Lines are drawn this many times larger and scaled down, which smooths them.
+    SUPERSAMPLE = 2
+    LINE_WIDTH = 4
+    # Half the width of the image, in meters.
+    RADIUS_M = 5000.0
+    # Longer steps between points are gaps in tracking, not travelled lines.
+    MAX_SEGMENT_M = 100.0
+    SPEED_STOPS = [
+        (0, (0, 200, 83)),
+        (15, (0, 184, 212)),
+        (30, (170, 0, 255)),
+        (50, (255, 193, 7)),
+        (100, (255, 61, 0)),
+    ]
 
     def get(self):
-        global full_bleed_background_img_store, full_bleed_background_date_store
+        user_id = g.current_user.id
 
-        if g.current_user.id in full_bleed_background_img_store and full_bleed_background_date_store[g.current_user.id] > datetime.now() - timedelta(hours=12):
-            return self.serve_pil_image(full_bleed_background_img_store[g.current_user.id])
+        cached = backdrop_store.get(user_id)
+        if not cached or datetime.now() - cached[0] > BACKDROP_MAX_AGE:
+            image = self.render(user_id)
+            if image is None:
+                return "", 204
+            buffer = BytesIO()
+            image.save(buffer, "PNG", optimize=True)
+            cached = backdrop_store[user_id] = (datetime.now(), buffer.getvalue())
 
-        # get last point
-        last_point: GPSData = GPSData.query.filter_by(user_id = g.current_user.id).order_by(GPSData.timestamp.desc()).first()
-        if not last_point:
-            return "No points found", 404
-        # get all points within 10000m of the last point
-        points = GPSData.query.filter_by(user_id = g.current_user.id).filter(
-            GPSData.latitude.between(last_point.latitude - 0.1, last_point.latitude + 0.1),
-            GPSData.longitude.between(last_point.longitude - 0.1, last_point.longitude + 0.1)
-        ).order_by(GPSData.timestamp.asc()).all()
-        if not points:
-            return "No points found", 404
-        # generate image
-        image = self.generateImage(points)
-
-        # store image in memory
-        full_bleed_background_img_store[g.current_user.id] = image
-        full_bleed_background_date_store[g.current_user.id] = datetime.now()
-        
-        return self.serve_pil_image(image)
-        
-
-
-    def serve_pil_image(self, pil_img: Image.Image):
-        img_io = BytesIO()
-        pil_img.save(img_io, 'PNG')
-        img_io.seek(0)
-        response = send_file(img_io, mimetype='image/png')
+        response = make_response(cached[1])
+        response.headers["Content-Type"] = "image/png"
         # Rendered from the user's own location history, so it must never enter a shared cache.
         response.headers["Cache-Control"] = "private, max-age=43200"
         return response
 
-    # A small "color stop" helper, storing speed in km/h and an RGB color tuple.
-    class ColorStop:
-        def __init__(self, speed_kmh, color):
-            self.SpeedKmh = speed_kmh
-            self.Color = color  # (R, G, B)
+    def render(self, user_id) -> Image.Image | None:
+        last = db.session.execute(
+            select(GPSData.latitude, GPSData.longitude)
+            .where(GPSData.user_id == user_id)
+            .order_by(GPSData.timestamp.desc())
+            .limit(1)
+        ).first()
+        if not last:
+            return None
 
-    def generateImage(self, points):
-        # ************************ Configuration Variables ************************
+        center_lat, center_lng = last
+        meters_per_deg_lat = 111320.0
+        meters_per_deg_lng = 111320.0 * max(0.01, math.cos(math.radians(center_lat)))
+        half_width_m = self.RADIUS_M
+        half_height_m = self.RADIUS_M * self.HEIGHT / self.WIDTH
 
-        # We'll no longer hard-code the center lat/lng; computed from the last point.
-        global centerLat, centerLng
+        rows = db.session.execute(
+            select(GPSData.latitude, GPSData.longitude, GPSData.timestamp, GPSData.speed)
+            .where(
+                GPSData.user_id == user_id,
+                GPSData.latitude.between(center_lat - half_height_m / meters_per_deg_lat, center_lat + half_height_m / meters_per_deg_lat),
+                GPSData.longitude.between(center_lng - half_width_m / meters_per_deg_lng, center_lng + half_width_m / meters_per_deg_lng),
+            )
+            .order_by(GPSData.timestamp)
+        ).all()
 
-        # Define the "zoom" as a radius (in meters) representing half of the horizontal width.
-        radiusMeters = 5000.0
+        width, height = self.WIDTH * self.SUPERSAMPLE, self.HEIGHT * self.SUPERSAMPLE
+        scale = width / (2 * half_width_m)
 
-        # Image dimensions.
-        imageWidth = 1600*2
-        imageHeight = 900*2
+        def to_pixel(lat, lng):
+            return (
+                width / 2 + (lng - center_lng) * meters_per_deg_lng * scale,
+                height / 2 - (lat - center_lat) * meters_per_deg_lat * scale,
+            )
 
-        # Configurable line thickness (pixels in Pillow).
-        lineThickness = 1
-
-        # Max distance (meters) between consecutive points to draw a line.
-        maxPointDistance = 100.0
-
-        # color stops for speed-based interpolation (in km/h).
-        colorStops = [
-            self.ColorStop(0,   (0,   0, 255)),  # Blue
-            self.ColorStop(30,  (0, 255,   0)),  # Green
-            self.ColorStop(60,  (255, 255,  0)), # Yellow
-            self.ColorStop(90,  (255,   0,  0)), # Red
-        ]
-
-        # 2) Compute center as last point in dataset.
-        centerLat = points[-1].latitude
-        centerLng = points[-1].longitude
-
-        # 3) Meters-per-degree for lat/lng. 
-        #    This is approximate and depends on latitude.
-        metersPerDegLat = 111320.0
-        metersPerDegLng = 111320.0 * math.cos(math.radians(centerLat))
-
-        # 4) Compute scale (pixels per meter).
-        scale = imageWidth / (2.0 * radiusMeters)
-
-        # 5) Create a Pillow image (RGBA or RGB).
-        image = Image.new('RGBA', (imageWidth, imageHeight), (0, 0, 0, 0))
+        image = Image.new("RGBA", (width, height), (0, 0, 0, 0))
         draw = ImageDraw.Draw(image)
-
-        # 6) Draw each consecutive line segment between GPS points.
-        for i in range(1, len(points)):
-            pA = points[i - 1]
-            pB = points[i]
-
-            # Skip if distance too large
-            dist = self.haversine(pA.latitude, pA.longitude, pB.latitude, pB.longitude)
-            if dist > maxPointDistance:
+        for a, b in zip(rows, rows[1:]):
+            distance = self.haversine(a.latitude, a.longitude, b.latitude, b.longitude)
+            if distance > self.MAX_SEGMENT_M:
                 continue
 
-            # Convert lat/lng to pixel
-            x1, y1 = self.map_to_pixel(pA.latitude, pA.longitude,
-                                centerLat, centerLng,
-                                metersPerDegLat, metersPerDegLng,
-                                scale, imageWidth, imageHeight)
-            x2, y2 = self.map_to_pixel(pB.latitude, pB.longitude,
-                                centerLat, centerLng,
-                                metersPerDegLat, metersPerDegLng,
-                                scale, imageWidth, imageHeight)
-
-            # Average speed for color
-            if pA.speed is not None and pB.speed is not None:
-                avgSpeed = (pA.speed + pB.speed) / 2.0
+            if a.speed is not None and b.speed is not None and a.speed >= 0 and b.speed >= 0:
+                speed = (a.speed + b.speed) / 2
             else:
-                avgSpeed = dist / (pB.timestamp - pA.timestamp).total_seconds()
-            segmentColor = self.get_color_from_speed(avgSpeed, colorStops)
+                seconds = (b.timestamp - a.timestamp).total_seconds()
+                speed = distance / seconds if seconds > 0 else 0
 
-            # Draw line
-            draw.line([(x1, y1), (x2, y2)], fill=segmentColor, width=lineThickness)
+            draw.line([to_pixel(a.latitude, a.longitude), to_pixel(b.latitude, b.longitude)],
+                      fill=self.speed_color(speed), width=self.LINE_WIDTH)
 
-        # antialiasing
-        image = image.filter(ImageFilter.GaussianBlur(radius=1))
+        return image.resize((self.WIDTH, self.HEIGHT), Image.LANCZOS)
 
-        # halve resolution
-        image = image.resize((imageWidth // 2, imageHeight // 2), Image.LANCZOS)
+    def speed_color(self, speed_mps: float) -> tuple[int, int, int]:
+        kmh = max(0.0, speed_mps * 3.6)
+        for (low, low_color), (high, high_color) in zip(self.SPEED_STOPS, self.SPEED_STOPS[1:]):
+            if kmh <= high:
+                f = (kmh - low) / (high - low)
+                return tuple(round(c1 + (c2 - c1) * f) for c1, c2 in zip(low_color, high_color))
+        return self.SPEED_STOPS[-1][1]
 
-        return image
-
-    def map_to_pixel(self, lat, lng,
-                    centerLat, centerLng,
-                    metersPerDegLat, metersPerDegLng,
-                    scale, imageWidth, imageHeight):
-        """
-        Convert (lat,lng) to (x,y) in image coords, given:
-        centerLat, centerLng as the "map center" in lat/lng
-        metersPerDegLat, metersPerDegLng approximations
-        scale (pixels per meter)
-        imageWidth, imageHeight
-        """
-        dLat = lat - centerLat
-        dLng = lng - centerLng
-
-        # Convert degrees to meters
-        dx = dLng * metersPerDegLng
-        dy = dLat * metersPerDegLat
-
-        # Then convert meters to pixels
-        x = (imageWidth / 2.0) + dx * scale
-        # invert y so north is up
-        y = (imageHeight / 2.0) - dy * scale
-
-        return (x, y)
-
-
-    def haversine(self, lat1, lon1, lat2, lon2):
-        """
-        Calculate distance in meters between two lat/lon points using the Haversine formula.
-        """
-        R = 6371000.0  # Earth radius in meters
-        dLat = math.radians(lat2 - lat1)
-        dLon = math.radians(lon2 - lon1)
-        a = (math.sin(dLat / 2) ** 2
-            + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2))
-            * math.sin(dLon / 2) ** 2)
-        c = 2.0 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-        return R * c
-
-
-    def get_color_from_speed(self, speed_mps, colorStops: list[ColorStop]):
-        """
-        Interpolate a color based on speed (m/s). colorStops are in km/h.
-        Returns an (R,G,B) tuple for Pillow.
-        """
-        speed_kmh = speed_mps * 3.6
-        # If speed is below or equal to first stop:
-        if speed_kmh <= colorStops[0].SpeedKmh:
-            return colorStops[0].Color
-
-        for i in range(1, len(colorStops)):
-            prevStop = colorStops[i - 1]
-            nextStop = colorStops[i]
-            if speed_kmh <= nextStop.SpeedKmh:
-                # Interpolate between prevStop and nextStop
-                ratio = ((speed_kmh - prevStop.SpeedKmh)
-                        / (nextStop.SpeedKmh - prevStop.SpeedKmh))
-                r = int(round(prevStop.Color[0] + (nextStop.Color[0] - prevStop.Color[0]) * ratio))
-                g = int(round(prevStop.Color[1] + (nextStop.Color[1] - prevStop.Color[1]) * ratio))
-                b = int(round(prevStop.Color[2] + (nextStop.Color[2] - prevStop.Color[2]) * ratio))
-                return (r, g, b)
-
-        # If above the highest speed, return the last stop's color
-        return colorStops[-1].Color
+    @staticmethod
+    def haversine(lat1, lon1, lat2, lon2):
+        """Distance in meters between two points."""
+        d_lat = math.radians(lat2 - lat1)
+        d_lon = math.radians(lon2 - lon1)
+        a = math.sin(d_lat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(d_lon / 2) ** 2
+        return 2 * 6371000.0 * math.asin(min(1.0, math.sqrt(a)))
 
 
 

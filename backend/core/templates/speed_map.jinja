@@ -1,271 +1,266 @@
 {% extends "base.jinja" %}
 
-{% block heading %}
-Speed Map
-{% endblock %}
+{% block page_title %}Speed map{% endblock %}
+{% block subtitle %}Pick a moment to see the speed around it. Click the chart to jump between points.{% endblock %}
 
 {% block head %}
-<!-- Leaflet -->
 <link rel="stylesheet" href="/static/third_party/css/leaflet.css" />
+<link rel="stylesheet" href="/static/third_party/css/leaflet.fullscreen.css" />
 <script src="/static/third_party/js/leaflet.js"></script>
-<script src="/static/third_party/js/leaflet-heat.js"></script>
-
-<!-- Highcharts (with broken‑axis) -->
+<script src="/static/third_party/js/leaflet.fullscreen.js"></script>
 <script src="https://code.highcharts.com/highcharts.js"></script>
 <script src="https://code.highcharts.com/modules/broken-axis.js"></script>
-
 <style>
-    #map            { height:400px; width:100%; position:relative; }
-    .loading-spinner{ position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
-                      border:5px solid rgba(255,255,255,.3); border-top:5px solid #3498db;
-                      border-radius:50%; width:40px; height:40px; animation:spin 1s linear infinite;
-                      display:none;   z-index:1000; }
-    @keyframes spin { 0%{transform:translate(-50%,-50%) rotate(0deg);}
-                       100%{transform:translate(-50%,-50%) rotate(360deg);} }
-    .date-selector  { margin-bottom:10px; display:flex; flex-wrap:wrap; gap:10px;
-                      align-items:center; justify-content:center; }
-    .date-selector input{ flex:1 1 auto; min-width:100px; }
-    #chart-container{ margin-top:20px; }
+    .speed-map-frame { height: 46vh; min-height: 300px; flex: none; }
+    #speedChart { height: 300px; }
 </style>
 {% endblock %}
 
+{% block actions %}
+<div class="form-row">
+    <input type="date" id="date" aria-label="Date">
+    <input type="time" id="time" step="1" aria-label="Time (UTC)">
+    <span class="small muted">UTC</span>
+</div>
+{% endblock %}
+
 {% block content %}
-<div class="container mt-4">
-    <div class="date-selector">
-        <input type="date" id="date">
-        <input type="time" id="time">
-    </div>
-
-    <div id="map"><div id="loading-spinner" class="loading-spinner"></div></div>
-
-    <div id="chart-container"><div id="speedChart" style="height:300px;"></div></div>
+<div class="map-frame speed-map-frame">
+    <div id="map"></div>
+    <div class="map-loading" id="map-loading" role="status"><span class="spinner"></span><span>Loading…</span></div>
 </div>
 
+<section class="panel">
+    <div class="panel-header">
+        <h2>Speed</h2>
+        <div class="speed-legend"><span>0</span><span class="scale" id="speed-scale"></span><span>100+ km/h</span></div>
+    </div>
+    <div class="panel-body"><div id="speedChart"></div></div>
+</section>
+{% endblock %}
+
+{% block scripts %}
 <script>
-/* ----------------------- Globals ----------------------- */
-let map, polylineLayer, markerLayer, radiusLayer;
-let gpsCoordinates = [];
-let selectedPointID = null;
-let speedChart;
-const default_map_zoom = 16;
+(function () {
+    "use strict";
 
-/* ----------------------- Map init ---------------------- */
-function initMap(){
-    const p = new URLSearchParams(location.search);
-    const lat = parseFloat(p.get('lat')) || {{ latitude }};
-    const lng = parseFloat(p.get('lng')) || {{ longitude }};
-    const z   = parseInt  (p.get('zoom'))|| default_map_zoom;
+    const DEFAULT_CENTER = [{{ latitude | tojson }}, {{ longitude | tojson }}];
+    const DEFAULT_ZOOM = 16;
+    const SPEED_STOPS = [
+        { kmh: 0, color: [0, 200, 83] },
+        { kmh: 15, color: [0, 184, 212] },
+        { kmh: 30, color: [170, 0, 255] },
+        { kmh: 50, color: [255, 193, 7] },
+        { kmh: 100, color: [255, 61, 0] },
+    ];
 
-    map = L.map('map').setView([lat,lng], z);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-        { attribution:'&copy; OpenStreetMap', maxZoom:19 }).addTo(map);
-    if (L.control.fullscreen) L.control.fullscreen().addTo(map);
+    const dateInput = document.getElementById("date");
+    const timeInput = document.getElementById("time");
+    const loading = document.getElementById("map-loading");
 
-    polylineLayer = L.layerGroup().addTo(map);
-    markerLayer   = L.layerGroup().addTo(map);
-    radiusLayer   = L.layerGroup().addTo(map);
+    let map, renderer, trackLayer, markerLayer, accuracyLayer, chart;
+    let points = [];
+    let selectedId = null;
 
-    map.on('moveend', updateMapPositionInURL);
-    updateFromURL();
-}
-function updateMapPositionInURL(){
-    const c = map.getCenter(), p = new URLSearchParams(location.search);
-    p.set('lat',c.lat.toFixed(6)); p.set('lng',c.lng.toFixed(6));
-    p.set('zoom',map.getZoom()); history.replaceState({},'',`${location.pathname}?${p}`);
-}
-
-/* --------------------- URL helpers --------------------- */
-function updateFromURL(){
-    const p = new URLSearchParams(location.search);
-    let date = p.get('date'), time = p.get('time');
-    if (!date || !time){
-        const now = new Date();
-        date = now.toISOString().split('T')[0];
-        time = now.toISOString().split('T')[1].split('.')[0];
+    function speedColor(speed) {
+        const kmh = Math.max(0, (speed || 0) * 3.6);
+        for (let i = 1; i < SPEED_STOPS.length; i++) {
+            if (kmh <= SPEED_STOPS[i].kmh) {
+                const a = SPEED_STOPS[i - 1], b = SPEED_STOPS[i];
+                const f = (kmh - a.kmh) / (b.kmh - a.kmh);
+                const c = a.color.map((v, k) => Math.round(v + (b.color[k] - v) * f));
+                return `rgb(${c[0]},${c[1]},${c[2]})`;
+            }
+        }
+        return `rgb(${SPEED_STOPS[SPEED_STOPS.length - 1].color.join(",")})`;
     }
-    selectedPointID = p.get('point_id') || null;
-    dateInput.value = date; timeInput.value = time;
-    fetchGPSData();
-}
-function updateURLParams(d,t){
-    const p = new URLSearchParams(location.search);
-    if (selectedPointID){ p.set('point_id',selectedPointID); p.delete('date'); p.delete('time'); }
-    else { p.set('date',d); p.set('time',t); p.delete('point_id'); }
-    history.replaceState({},'',`${location.pathname}?${p}`);
-}
 
-/* -------------------- Data fetch ----------------------- */
-function fetchGPSData(){
-    spinner.style.display='block';
-    const body = selectedPointID ? {point_id:selectedPointID}
-              : {date:dateInput.value,time:timeInput.value};
-    fetch('',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
-     .then(r=>r.json()).then(updatePoints)
-     .catch(e=>console.error('Fetch error',e))
-     .finally(()=>spinner.style.display='none');
-}
-
-/* ------------------ Map / Chart draw ------------------- */
-function updatePoints(raw){
-    polylineLayer.clearLayers(); markerLayer.clearLayers(); radiusLayer.clearLayers();
-    if(!raw.length){ gpsCoordinates=[]; if(speedChart) speedChart.series[0].setData([]); return; }
-
-    gpsCoordinates = raw.map(r=>({id:r.id,lat:r.lat,lng:r.lng,accuracy:r.ha,
-                                  speed:r.s,altitude:r.a,timestamp:r.t}));
-
-    // polylines colour‑coded by speed
-    for(let i=0;i<gpsCoordinates.length-1;i++){
-        L.polyline([[gpsCoordinates[i].lat,gpsCoordinates[i].lng],
-                    [gpsCoordinates[i+1].lat,gpsCoordinates[i+1].lng]],
-                   {color:getSpeedColor(gpsCoordinates[i].speed||0),weight:2})
-         .addTo(polylineLayer);
+    function setUrlParams(params) {
+        const url = new URLSearchParams(location.search);
+        for (const [key, value] of Object.entries(params)) {
+            if (value === null) url.delete(key);
+            else url.set(key, value);
+        }
+        history.replaceState({}, "", `${location.pathname}?${url}`);
     }
-    // accuracy circles
-    gpsCoordinates.forEach(c=>{
-        if(c.accuracy>=5)
-            L.circle([c.lat,c.lng],{radius:c.accuracy,color:'blue',weight:0,
-                                     opacity:0,fillOpacity:.07}).addTo(radiusLayer);
+
+    function themeColors() {
+        const style = getComputedStyle(document.documentElement);
+        return { text: style.getPropertyValue("--text-muted").trim(), grid: style.getPropertyValue("--border").trim(), accent: style.getPropertyValue("--accent").trim() };
+    }
+
+    // ---------- Data ----------
+
+    async function load() {
+        loading.classList.add("visible");
+        const body = selectedId ? { point_id: selectedId } : { date: dateInput.value, time: timeInput.value.length === 5 ? timeInput.value + ":00" : timeInput.value };
+        try {
+            const response = await fetch(location.pathname, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(body),
+            });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
+            points = data.map(r => ({ id: r.id, lat: r.lat, lng: r.lng, accuracy: r.ha, speed: r.s, altitude: r.a, timestamp: r.t }));
+            draw();
+        } catch (error) {
+            console.error(error);
+            WP.notify("Could not load points", "error");
+        } finally {
+            loading.classList.remove("visible");
+        }
+    }
+
+    function draw() {
+        trackLayer.clearLayers();
+        accuracyLayer.clearLayers();
+        for (let i = 0; i < points.length - 1; i++) {
+            L.polyline([[points[i].lat, points[i].lng], [points[i + 1].lat, points[i + 1].lng]],
+                { color: speedColor(points[i].speed), weight: 4, renderer }).addTo(trackLayer);
+        }
+        for (const p of points) {
+            if (p.accuracy >= 5) L.circle([p.lat, p.lng], { radius: p.accuracy, stroke: false, fillColor: "#3a7bf7", fillOpacity: 0.07, renderer, interactive: false }).addTo(accuracyLayer);
+        }
+        updateChart();
+
+        if (!points.length) {
+            markerLayer.clearLayers();
+            WP.notify("No points near this time", "info", 2500);
+            return;
+        }
+        const keep = points.find(p => p.id == selectedId);
+        select((keep || points[Math.floor(points.length / 2)]).id, false);
+    }
+
+    function select(id, mayLoadMore = true) {
+        const point = points.find(p => p.id == id);
+        if (!point) return;
+        selectedId = point.id;
+
+        markerLayer.clearLayers();
+        const speed = point.speed == null || point.speed < 0 ? "–" : (point.speed * 3.6).toFixed(1) + " km/h";
+        const day = new Date(point.timestamp).toISOString().slice(0, 10);
+        L.circleMarker([point.lat, point.lng], { radius: 7, fillColor: "#e5484d", color: "#fff", weight: 2, fillOpacity: 1, renderer })
+            .bindPopup(`<div class="point-popup"><dl>
+                <dt>Time</dt><dd>${WP.formatDateTime(point.timestamp)}</dd>
+                <dt>Speed</dt><dd>${speed}</dd>
+                <dt>Altitude</dt><dd>${point.altitude == null ? "–" : point.altitude.toFixed(0) + " m"}</dd>
+                <dt>Accuracy</dt><dd>${point.accuracy == null ? "–" : point.accuracy.toFixed(1) + " m"}</dd>
+            </dl><a class="button sm" href="/map?point_id=${point.id}&start_date=${day}&end_date=${day}">Show on map</a></div>`)
+            .addTo(markerLayer);
+        map.setView([point.lat, point.lng], Math.max(map.getZoom(), DEFAULT_ZOOM));
+
+        const iso = new Date(point.timestamp).toISOString();
+        dateInput.value = iso.slice(0, 10);
+        timeInput.value = iso.slice(11, 19);
+        setUrlParams({ point_id: point.id, date: null, time: null });
+
+        if (chart) {
+            chart.xAxis[0].removePlotLine("selected");
+            chart.xAxis[0].addPlotLine({ id: "selected", color: "#e5484d", width: 2, value: Date.parse(point.timestamp), zIndex: 5 });
+        }
+
+        // Near the ends of the loaded window, load the window around the new point.
+        const index = points.indexOf(point);
+        if (mayLoadMore && (index < 10 || index > points.length - 10)) load();
+    }
+
+    // ---------- Chart ----------
+
+    function initChart() {
+        const c = themeColors();
+        chart = Highcharts.chart("speedChart", {
+            chart: { backgroundColor: "transparent", zooming: { type: "x" }, panning: { enabled: true, type: "x" }, panKey: "ctrl", style: { fontFamily: "inherit" } },
+            credits: { enabled: false },
+            title: { text: null },
+            legend: { enabled: false },
+            xAxis: { type: "datetime", breaks: [], lineColor: c.grid, tickColor: c.grid, labels: { style: { color: c.text } } },
+            yAxis: { title: { text: null }, gridLineColor: c.grid, labels: { format: "{value} km/h", style: { color: c.text } } },
+            tooltip: { xDateFormat: "%Y-%m-%d %H:%M:%S UTC", valueSuffix: " km/h" },
+            plotOptions: {
+                series: {
+                    color: c.accent,
+                    connectNulls: false,
+                    turboThreshold: 0,
+                    marker: { radius: 3 },
+                    cursor: "pointer",
+                    point: { events: { click() { select(this.id); } } },
+                },
+            },
+            series: [{ name: "Speed", data: [] }],
+        });
+    }
+
+    // Gaps longer than a few minutes are compressed so the chart stays readable.
+    function updateChart() {
+        if (!chart) return;
+        const MAX_GAP = 3 * 60 * 1000, BREAK_SIZE = 5 * 60 * 1000;
+        const data = [], breaks = [];
+        let previous = null;
+        for (const p of points) {
+            const t = Date.parse(p.timestamp);
+            if (previous && t - previous > MAX_GAP) {
+                breaks.push({ from: previous, to: t - 1, breakSize: BREAK_SIZE });
+                data.push({ x: previous + 1, y: null });
+            }
+            data.push({ x: t, y: p.speed == null || p.speed < 0 ? null : +(p.speed * 3.6).toFixed(1), id: p.id });
+            previous = t;
+        }
+        chart.series[0].setData(data, false);
+        chart.xAxis[0].update({ breaks }, false);
+        chart.redraw();
+    }
+
+    document.addEventListener("themechange", () => {
+        if (!chart) return;
+        const c = themeColors();
+        chart.update({
+            xAxis: { lineColor: c.grid, tickColor: c.grid, labels: { style: { color: c.text } } },
+            yAxis: { gridLineColor: c.grid, labels: { style: { color: c.text } } },
+            plotOptions: { series: { color: c.accent } },
+        });
     });
 
-    updateSpeedChart();
+    // ---------- Setup ----------
 
-    if(!selectedPointID && gpsCoordinates.length)
-         updateSelectedPoint(gpsCoordinates[Math.floor(gpsCoordinates.length/2)].id);
-    else if(selectedPointID) updateSelectedPoint(selectedPointID);
-}
+    document.addEventListener("DOMContentLoaded", () => {
+        const scale = SPEED_STOPS.map((stop, i) => `rgb(${stop.color.join(",")}) ${i / (SPEED_STOPS.length - 1) * 100}%`).join(", ");
+        document.getElementById("speed-scale").style.background = `linear-gradient(90deg, ${scale})`;
 
-/* -------------------- Selection sync ------------------- */
-function updateSelectedPoint(id){
-    selectedPointID=id;
-    const pt=gpsCoordinates.find(p=>p.id==id); if(!pt) return;
+        const params = new URLSearchParams(location.search);
+        const lat = parseFloat(params.get("lat")), lng = parseFloat(params.get("lng")), zoom = parseInt(params.get("zoom"), 10);
+        renderer = L.canvas({ padding: 0.5 });
+        map = L.map("map", { preferCanvas: true }).setView(isNaN(lat) || isNaN(lng) ? DEFAULT_CENTER : [lat, lng], isNaN(zoom) ? DEFAULT_ZOOM : zoom);
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "&copy; OpenStreetMap contributors", maxZoom: 19 }).addTo(map);
+        L.control.fullscreen().addTo(map);
+        accuracyLayer = L.layerGroup().addTo(map);
+        trackLayer = L.layerGroup().addTo(map);
+        markerLayer = L.layerGroup().addTo(map);
+        map.on("moveend", () => {
+            const center = map.getCenter();
+            setUrlParams({ lat: center.lat.toFixed(6), lng: center.lng.toFixed(6), zoom: map.getZoom() });
+        });
+        new ResizeObserver(() => map.invalidateSize()).observe(document.getElementById("map"));
 
-    // map marker
-    markerLayer.clearLayers();
+        if (window.Highcharts) initChart();
+        else WP.notify("The speed chart could not be loaded", "error");
 
+        selectedId = params.get("point_id");
+        const now = new Date().toISOString();
+        dateInput.value = params.get("date") || now.slice(0, 10);
+        timeInput.value = params.get("time") || now.slice(11, 19);
 
-    // convert timestamp iso to local date
-    let date = new Date(pt.timestamp);
-    let formattedDate = date.toLocaleString('en-US', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit'
+        const onPick = () => {
+            selectedId = null;
+            setUrlParams({ point_id: null, date: dateInput.value, time: timeInput.value });
+            load();
+        };
+        dateInput.addEventListener("change", onPick);
+        timeInput.addEventListener("change", onPick);
+
+        load();
     });
-
-    L.circleMarker([pt.lat,pt.lng],
-        {radius:6,fillColor:'#0b84ff',color:'#c7c7cb',weight:3,fillOpacity:1})
-      .addTo(markerLayer)
-      .bindPopup(`<b>Timestamp:</b> ${formattedDate}<br>
-                  <b>Speed:</b> ${pt.speed?(pt.speed*3.6).toFixed(2)+' km/h':'N/A'}<br>
-                  <b>Altitude:</b> ${pt.altitude?pt.altitude.toFixed(2)+' m':'N/A'}<br>
-                  <b>Accuracy:</b> ${pt.accuracy?pt.accuracy.toFixed(2)+' m':'N/A'}<br>
-                  <button onclick=\"viewOnRealMap('${pt.id}')\">View on Map</button>`);
-    map.setView([pt.lat,pt.lng],default_map_zoom);
-
-    // update form + URL
-    const d=new Date(pt.timestamp);
-    dateInput.value=d.toISOString().split('T')[0];
-    timeInput.value=d.toISOString().split('T')[1].split('.')[0];
-    updateURLParams(dateInput.value,timeInput.value);
-
-    // highlight point + red line on chart
-    if(speedChart){
-        speedChart.series[0].points.forEach(p=>p.select(false,false));
-        const chartPt=speedChart.series[0].points.find(p=>p.id==id);
-        if(chartPt) chartPt.select(true,false);
-        speedChart.xAxis[0].removePlotLine('selected');
-        speedChart.xAxis[0].addPlotLine({id:'selected',color:'red',width:2,
-                                         value:Date.parse(pt.timestamp)});
-    }
-
-    // pagination
-    const idx=gpsCoordinates.findIndex(c=>c.id==id);
-    if(idx<10||idx>gpsCoordinates.length-10) fetchGPSData();
-}
-
-/* -------------------- Colour scale --------------------- */
-const colorStops=[
- {speed:0,color:'#00ff00'},{speed:15,color:'#00ffff'},
- {speed:30,color:'#ff00ff'},{speed:50,color:'#ffff00'},
- {speed:100,color:'#ff3300'}];
-colorStops.forEach(s=>s.rgb={
-  r:parseInt(s.color.slice(1,3),16),
-  g:parseInt(s.color.slice(3,5),16),
-  b:parseInt(s.color.slice(5,7),16)});
-function getSpeedColor(s){
-  const kmh=s*3.6;
-  for(let i=1;i<colorStops.length;i++){
-    if(kmh<=colorStops[i].speed){
-      const f=(kmh-colorStops[i-1].speed)/(colorStops[i].speed-colorStops[i-1].speed);
-      const c1=colorStops[i-1].rgb,c2=colorStops[i].rgb;
-      return `rgb(${Math.round(c1.r+(c2.r-c1.r)*f)},
-                  ${Math.round(c1.g+(c2.g-c1.g)*f)},
-                  ${Math.round(c1.b+(c2.b-c1.b)*f)})`;
-    }}
-  return colorStops[colorStops.length-1].color;
-}
-
-/* ------------------- Highcharts ----------------------- */
-function initSpeedChart(){
-  speedChart=Highcharts.chart('speedChart',{
-    chart:{ backgroundColor:'transparent',
-            zoomType:'x',
-            panning:{enabled:true,type:'x',modifierKey:'ctrl'}},
-    title:{text:null},
-    xAxis:{type:'datetime',breaks:[],plotLines:[
-        {id:'selected',color:'red',width:2,value:0}]},
-    yAxis:{title:{text:'Speed (km/h)'}},
-    tooltip:{xDateFormat:'%Y-%m-%d %H:%M:%S',valueSuffix:' km/h'},
-    plotOptions:{series:{
-        connectNulls:false, turboThreshold:0, allowPointSelect:true,
-        marker:{radius:4,states:{select:{fillColor:'#ff0000',lineColor:'#000',lineWidth:1}}},
-        point:{events:{click:function(){
-            this.series.points.forEach(p=>p.select(false,false));
-            this.select(true,false); updateSelectedPoint(this.id);}}}}},
-    series:[{name:'Speed',data:[]}]
-  });
-}
-
-/* ---------- gap compression + null breaks ------------- */
-function updateSpeedChart(){
-  if(!speedChart) return;
-  const MAX_GAP=3*60*1000, BREAK_SIZE=5*60*1000;
-  const data=[], gaps=[]; let prev=null;
-  gpsCoordinates.forEach(pt=>{
-    const t=Date.parse(pt.timestamp),
-          y=pt.speed?+(pt.speed*3.6).toFixed(2):null;
-    if(prev && t-prev>MAX_GAP){
-        gaps.push({from:prev,to:t-1,breakSize:BREAK_SIZE});
-        data.push({x:prev+1,y:null});          // disconnect line
-    }
-    data.push({x:t,y:y,id:pt.id});
-    prev=t;
-  });
-  speedChart.series[0].setData(data,false);
-  speedChart.xAxis[0].update({breaks:gaps},false);
-
-  // refresh red line
-  const sel=gpsCoordinates.find(c=>c.id==selectedPointID);
-  speedChart.xAxis[0].removePlotLine('selected');
-  if(sel) speedChart.xAxis[0].addPlotLine({id:'selected',color:'red',width:2,
-                                           value:Date.parse(sel.timestamp)});
-  speedChart.redraw();
-}
-
-/* --------------------- Boot --------------------------- */
-const dateInput=document.getElementById('date');
-const timeInput=document.getElementById('time');
-const spinner  =document.getElementById('loading-spinner');
-
-document.addEventListener('DOMContentLoaded',()=>{initMap();initSpeedChart();});
-dateInput.addEventListener('change',()=>{updateURLParams(dateInput.value,timeInput.value);fetchGPSData();});
-timeInput.addEventListener('change',()=>{updateURLParams(dateInput.value,timeInput.value);fetchGPSData();});
-
-function viewOnRealMap(id){
-  const d=dateInput.value;
-  location.href=`/map?point_id=${id}&start_date=${d}&end_date=${d}`;
-}
+})();
 </script>
 {% endblock %}

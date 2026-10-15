@@ -1,11 +1,10 @@
 {% extends "base.jinja" %}
+{% from "_macros.jinja" import icon %}
 
-{% block heading %}
-GPS Map
-{% endblock %}
+{% block page_title %}Map{% endblock %}
+{% block body_class %}layout-full{% endblock %}
 
 {% block head %}
-<!-- Leaflet.js CSS & JS -->
 <link rel="stylesheet" href="/static/third_party/css/leaflet.css" />
 <link rel="stylesheet" href="/static/third_party/css/leaflet.fullscreen.css" />
 <link rel="stylesheet" href="/static/third_party/css/leaflet.draw.css" />
@@ -13,1156 +12,608 @@ GPS Map
 <script src="/static/third_party/js/leaflet.fullscreen.js"></script>
 <script src="/static/third_party/js/leaflet-heat.js"></script>
 <script src="/static/third_party/js/leaflet.draw.js"></script>
+{% endblock %}
 
-<style>
-    #map {
-        height: 600px;
-        width: 100%;
-        position: relative;
-    }
-
-    .loading-spinner-text {
-        position: absolute;
-        top: 45%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        display: none;
-        color: #2c2c2c;
-        z-index: 1000;
-    }
-
-    .loading-spinner {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        border: 5px solid rgba(255, 255, 255, 0.3);
-        border-top: 5px solid #3498db;
-        border-radius: 50%;
-        width: 40px;
-        height: 40px;
-        animation: spin 1s linear infinite;
-        display: none;
-        z-index: 1000;
-    }
-
-    @keyframes spin {
-        0% { transform: translate(-50%, -50%) rotate(0deg); }
-        100% { transform: translate(-50%, -50%) rotate(360deg); }
-    }
-
-    .date-selector {
-        margin-bottom: 10px;
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-        align-items: center;
-        justify-content: center;
-    }
-    .date-selector button, .date-selector input {
-        flex: 1 1 auto;
-        min-width: 100px;
-    }
-
-    .arrow-button {
-        flex: 0 0 auto !important;
-        width: auto !important;
-        min-width: auto !important;
-    }
-
-    .map-legend {
-        color: #333;
-        background: rgba(255, 255, 255, 0.8);
-        padding: 8px 12px;
-    }
-    
-    .calendar-popup-button {
-        background: rgba(255, 255, 255, 0.8);
-        margin-top: 5px;
-        width: 100%;
-    }
-
-    .calendar-popup {
-        position: absolute;
-        top: 160px;   /* leave room below the "📅" button */
-        right: 0;
-        background: #fff;
-        border: 1px solid #ccc;
-        padding: 8px;
-        z-index: 1000;
-        width: 120%;
-    }
-    .calendar-popup button {
-        margin: 4px;
-    }
-    .calendar-popup select {
-        margin-right: 4px;
-    }
-    .calendar-popup.hidden {
-        display: none !important;
-    }
-</style>
+{% block actions %}
+<div class="speed-legend" id="speed-legend" title="Track color by speed">
+    <span>0</span><span class="scale" id="speed-scale"></span><span>100+ km/h</span>
+</div>
 {% endblock %}
 
 {% block content %}
-<div class="container mt-4">
-    <!-- Date range controls -->
-    <div class="date-selector">
-        <button onclick="setDateRange('all')">All</button>
-        <button onclick="setDateRange('last_month')">Last Month</button>
-        <button onclick="setDateRange('last_week')">Last Week</button>
-        <button onclick="setDateRange('yesterday')">Yesterday</button>
-        <button onclick="setDateRange('today')">Today</button>
-        <button class="arrow-button" title="Move back one day" onclick="adjustDate(-1)">&lt;&lt;</button>
-        <div>
-            <input type="date" id="start-date"> to
-            <input type="date" id="end-date">
+<section class="panel map-toolbar" aria-label="Time range">
+    <div class="segmented" role="group" aria-label="Range presets">
+        <button type="button" data-range="today">Today</button>
+        <button type="button" data-range="yesterday">Yesterday</button>
+        <button type="button" data-range="week">7 days</button>
+        <button type="button" data-range="month">30 days</button>
+        <button type="button" data-range="all">All</button>
+    </div>
+
+    <div class="date-range">
+        <button type="button" class="button icon" id="prev-range" title="Back one day" aria-label="Back one day">{{ icon("left") }}</button>
+        <input type="date" id="start-date" aria-label="From">
+        <span class="muted">–</span>
+        <input type="date" id="end-date" aria-label="To">
+        <button type="button" class="button icon" id="next-range" title="Forward one day" aria-label="Forward one day">{{ icon("right") }}</button>
+    </div>
+
+    <div class="dropdown">
+        <button type="button" class="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">{{ icon("calendar") }}Month</button>
+        <div class="dropdown-menu month-picker">
+            <div class="form-row">
+                <select id="year-select" aria-label="Year" style="flex: 1;"></select>
+                <button type="button" class="button sm" id="whole-year">Whole year</button>
+            </div>
+            <div class="months" id="months"></div>
         </div>
-        <button class="arrow-button" title="Move forward one day" onclick="adjustDate(1)">&gt;&gt;</button>
-        <button onclick="manualSearch()">Search</button>
-    </div>
-    
-    <!-- Accuracy-based delete controls, hidden by default unless Edit Mode is active -->
-    <div id="edit-actions" style="margin-bottom: 10px; text-align: center; display: none;">
-        <label>Delete if Accuracy &gt;
-            <input type="number" id="accuracyThreshold" style="width: 60px;" value="20" />
-        </label>
-        <button onclick="filterAndDeleteByAccuracy()">Delete in Selection</button>
     </div>
 
-    <div id="map">
-        <div id="loading-spinner" class="loading-spinner"></div>
-        <div id="download-percentage" class="loading-spinner-text"></div>
+    <div id="edit-actions" class="form-row hidden" style="margin-left: auto;">
+        <label class="small" for="accuracyThreshold">In the drawn rectangle, delete points less accurate than</label>
+        <input type="number" id="accuracyThreshold" value="20" min="0" style="width: 80px;"> <span class="small muted">m</span>
+        <button type="button" class="button sm danger" id="delete-in-rectangle">{{ icon("trash") }}Delete</button>
     </div>
+</section>
+
+<div class="map-frame">
+    <div id="map"></div>
+    <div class="map-loading" id="map-loading" role="status"><span class="spinner"></span><span id="map-loading-text">Loading…</span></div>
 </div>
+{% endblock %}
 
+{% block scripts %}
 <script>
-    // -----------------------
-    // Global Variables
-    // -----------------------
-    var map;
-    var polylineLayer;
-    var markerLayer;
-    var radiusLayer;
-    var heatLayer = null;
-    var heatmapData = [];
-    var heatmapLoaded = false;       // track if heatmap data is already fetched
-    var heatmapActive = false;
-    var totalmapActive = false;
+(function () {
+    "use strict";
 
-    var lastGpsData = [];
-    var last_point = {{ last_point }};
-    var currentDataIsInterpolated = false;
-    var lastBounds = null;
-    var fetchTimeout = null;
-    var preventFetch = false;
-    var activateFitBounds = false;
+    const INITIAL_POINT = {{ last_point | tojson }};
+    const EARLIEST_YEAR = {{ (earliest_year or none) | tojson }};
+    const REFETCH_DELAY = 500;
+    const MAX_MARKERS = 300;
+    const FAR_DISTANCE_M = 1000;
+    const ACCURACY_LIMIT_M = 20;
 
-    const delay = 500;
-    const max_points_for_markers = 300;
-    const max_points_for_colored_path = 1000;
+    const SPEED_STOPS = [
+        { kmh: 0, color: [0, 200, 83] },
+        { kmh: 15, color: [0, 184, 212] },
+        { kmh: 30, color: [170, 0, 255] },
+        { kmh: 50, color: [255, 193, 7] },
+        { kmh: 100, color: [255, 61, 0] },
+    ];
+    const TRACK_COLOR = "#3a7bf7";
 
-    // Toggles
-    var fetchInterpolated = true;
-    var accuracyFilter = true;
-    var connectFarPoints = true;
-    var farThreshold = 1000; // meters
-    var showSpeedPolyline = true;
-    var editMode = false; // for rectangle selection
+    const settings = {
+        interpolated: true,       // let the server thin out points for the visible area
+        speedColors: true,
+        connectFar: true,
+        hideInaccurate: true,
+        heatmap: false,
+        totalMap: false,
+        editMode: false,
+    };
 
-    // For rectangle selection / edit mode
-    var drawnItems;       // A featureGroup to hold the drawn rectangle
-    var drawControl;      // The Leaflet draw control
-    var selectedBounds = null; // We'll store the bounding box here
+    const startInput = document.getElementById("start-date");
+    const endInput = document.getElementById("end-date");
+    const loading = document.getElementById("map-loading");
+    const loadingText = document.getElementById("map-loading-text");
 
-    // ---------------
-    // Map Init
-    // ---------------
-    function initMap() {
-        // 1) Check if lat/lng/zoom were provided in the URL
-        const params = new URLSearchParams(window.location.search);
-        let lat  = parseFloat(params.get('lat'));
-        let lng  = parseFloat(params.get('lng'));
-        let zoom = parseInt(params.get('zoom'));
+    let map, renderer, trackLayer, markerLayer, accuracyLayer, totalMapLayer, heatLayer = null;
+    let drawnItems, drawControl, selectedBounds = null;
+    let points = [];
+    let lastBounds = null;
+    let dataIsInterpolated = false;
+    let fitAfterLoad = false;
+    let ignoreNextMove = false;
+    let fetchTimer = null;
+    let requestId = 0;
 
-        // Fallback to last_point if missing or invalid
-        if (isNaN(lat) || isNaN(lng) || isNaN(zoom)) {
-            lat = last_point.lat;
-            lng = last_point.lng;
-            zoom = 14;
+    // ---------- Helpers ----------
+
+    function distanceM(a, b) {
+        const R = 6371e3, rad = Math.PI / 180;
+        const dLat = (b.lat - a.lat) * rad, dLng = (b.lng - a.lng) * rad;
+        const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dLng / 2) ** 2;
+        return 2 * R * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+    }
+
+    function speedColor(speed) {
+        const kmh = Math.max(0, (speed || 0) * 3.6);
+        for (let i = 1; i < SPEED_STOPS.length; i++) {
+            if (kmh <= SPEED_STOPS[i].kmh) {
+                const a = SPEED_STOPS[i - 1], b = SPEED_STOPS[i];
+                const f = (kmh - a.kmh) / (b.kmh - a.kmh);
+                const c = a.color.map((v, k) => Math.round(v + (b.color[k] - v) * f));
+                return `rgb(${c[0]},${c[1]},${c[2]})`;
+            }
         }
-
-        // Create the map
-        map = L.map('map').setView([lat, lng], zoom);
-
-        // Add tile layer
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; OpenStreetMap contributors',
-            maxZoom: 19,
-        }).addTo(map);
-
-        // if (!totalmapActive) {
-        //     L.tileLayer('/tiles/{z}/{x}/{y}.png', { maxZoom: 20 }).addTo(map);
-        // }
-        // Fullscreen control
-        L.control.fullscreen().addTo(map);
-
-        // Prepare layer groups
-        polylineLayer = L.layerGroup().addTo(map);
-        markerLayer   = L.layerGroup().addTo(map);
-        radiusLayer   = L.layerGroup().addTo(map);
-
-        // 2) Create a layer group to store drawn shapes
-        drawnItems = new L.FeatureGroup();
-        map.addLayer(drawnItems);
-
-        // 3) Create the draw control (only rectangle)
-        drawControl = new L.Control.Draw({
-            draw: {
-                marker: false,
-                polygon: false,
-                polyline: false,
-                circle: false,
-                circlemarker: false,
-                rectangle: true
-            },
-            edit: {
-                featureGroup: drawnItems
-            }
-        });
-        // We'll add/remove this control dynamically when Edit Mode is toggled.
-
-        // 4) On rectangle created, keep it and store its bounds
-        map.on('draw:created', function (e) {
-            var layer = e.layer;
-            drawnItems.clearLayers(); // remove old rectangle, if any
-            drawnItems.addLayer(layer);
-
-            // Save the bounding box
-            selectedBounds = layer.getBounds();
-            console.log("Rectangle bounds: ", selectedBounds);
-        });
-
-        // Map move/zoom => fetch data
-        map.on('moveend', () => {
-            if (preventFetch) {
-                preventFetch = false;
-                return;
-            }
-            updateMapPositionInURL();
-            clearTimeout(fetchTimeout);
-            if (fetchInterpolated) {
-                fetchTimeout = setTimeout(fetchGPSData, delay);
-            }
-        });
-        map.on('zoomend', () => {
-            if (preventFetch) {
-                return;
-            }
-            updateMapPositionInURL();
-            clearTimeout(fetchTimeout);
-            if (fetchInterpolated) {
-                fetchTimeout = setTimeout(fetchGPSData, delay);
-            }
-        });
-        map.on('movestart', () => {
-            clearTimeout(fetchTimeout);
-        });
-
-        // Load date range from URL or set a default
-        loadDateFromURL();
-
-        // Create the custom year/month calendar control
-        createCalendarControl();
+        const last = SPEED_STOPS[SPEED_STOPS.length - 1].color;
+        return `rgb(${last[0]},${last[1]},${last[2]})`;
     }
 
-    // Keep the map center/zoom in the URL
-    function updateMapPositionInURL() {
-        const center = map.getCenter();
-        const zoom   = map.getZoom();
-
-        const params = new URLSearchParams(window.location.search);
-        params.set('lat', center.lat.toFixed(6));
-        params.set('lng', center.lng.toFixed(6));
-        params.set('zoom', zoom);
-
-        window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
+    function isoDate(date) {
+        return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
     }
 
-    function updateURLParams(startDate, endDate) {
-        const params = new URLSearchParams(window.location.search);
-        params.set('start_date', startDate);
-        params.set('end_date', endDate);
-        window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
+    function parseDate(value) {
+        const [y, m, d] = value.split("-").map(Number);
+        return new Date(y, m - 1, d);
     }
 
-    // -----------------------
-    // Fetch & Progress
-    // -----------------------
-    function fetchGPSData(forced = false, full_date_range = false, forced_redraw = false) {
-        var bounds = map.getBounds();
-        if (!bounds) return;
+    function setUrlParams(params) {
+        const url = new URLSearchParams(location.search);
+        for (const [key, value] of Object.entries(params)) {
+            if (value === null || value === undefined) url.delete(key);
+            else url.set(key, value);
+        }
+        history.replaceState({}, "", `${location.pathname}?${url}`);
+    }
 
-        var zoomLevel = map.getZoom();
-        var northEast = bounds.getNorthEast();
-        var southWest = bounds.getSouthWest();
+    function showLoading(text) {
+        loadingText.textContent = text;
+        loading.classList.add("visible");
+    }
 
-        // If the map hasn't changed significantly, skip re-fetch
-        if (!forced && lastBounds && (
-              lastBounds.equals(bounds) ||
-              (!currentDataIsInterpolated && lastBounds.contains(northEast) && lastBounds.contains(southWest))
-           )) {
-            if (lastGpsData.length > 0) {
-                updateMap(lastGpsData, !forced_redraw);
-            }
+    function hideLoading() {
+        loading.classList.remove("visible");
+    }
+
+    // Read a response body while reporting progress from the Content-Original-Length header.
+    async function readWithProgress(response, label) {
+        const total = parseInt(response.headers.get("Content-Original-Length") || "0", 10);
+        if (!total || !response.body) return response.text();
+        const reader = response.body.getReader();
+        const chunks = [];
+        let loaded = 0;
+        for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            chunks.push(value);
+            loaded += value.byteLength;
+            showLoading(`${label} ${Math.min(100, Math.floor(loaded / total * 100))}%`);
+        }
+        return new TextDecoder().decode(await new Blob(chunks).arrayBuffer());
+    }
+
+    // ---------- Date range ----------
+
+    function setRange(start, end, fit = true) {
+        startInput.value = start;
+        endInput.value = end;
+        setUrlParams({ start_date: start, end_date: end });
+        updatePresetButtons();
+        loadPoints({ force: true, wholeRange: fit });
+    }
+
+    function presetRange(name) {
+        const today = new Date();
+        const daysAgo = n => { const d = new Date(today); d.setDate(d.getDate() - n); return isoDate(d); };
+        switch (name) {
+            case "today": return [isoDate(today), isoDate(today)];
+            case "yesterday": return [daysAgo(1), daysAgo(1)];
+            case "week": return [daysAgo(7), isoDate(today)];
+            case "month": return [daysAgo(30), isoDate(today)];
+            case "all": return [`${EARLIEST_YEAR || 1970}-01-01`, isoDate(today)];
+        }
+    }
+
+    function updatePresetButtons() {
+        document.querySelectorAll("[data-range]").forEach(button => {
+            const [start, end] = presetRange(button.dataset.range);
+            button.classList.toggle("active", start === startInput.value && end === endInput.value);
+        });
+    }
+
+    function shiftRange(days) {
+        const start = parseDate(startInput.value), end = parseDate(endInput.value);
+        start.setDate(start.getDate() + days);
+        end.setDate(end.getDate() + days);
+        setRange(isoDate(start), isoDate(end));
+    }
+
+    function buildMonthPicker() {
+        const yearSelect = document.getElementById("year-select");
+        const thisYear = new Date().getFullYear();
+        for (let y = thisYear; y >= (EARLIEST_YEAR || thisYear); y--) {
+            yearSelect.add(new Option(y, y));
+        }
+        document.getElementById("whole-year").addEventListener("click", () => {
+            setRange(`${yearSelect.value}-01-01`, `${yearSelect.value}-12-31`);
+        });
+        const months = document.getElementById("months");
+        ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"].forEach((name, i) => {
+            const button = Object.assign(document.createElement("button"), { type: "button", className: "button sm", textContent: name });
+            button.addEventListener("click", () => {
+                const y = parseInt(yearSelect.value, 10);
+                setRange(isoDate(new Date(y, i, 1)), isoDate(new Date(y, i + 1, 0)));
+            });
+            months.appendChild(button);
+        });
+    }
+
+    // ---------- Data ----------
+
+    function scheduleLoad() {
+        clearTimeout(fetchTimer);
+        if (settings.interpolated) fetchTimer = setTimeout(() => loadPoints(), REFETCH_DELAY);
+    }
+
+    async function loadPoints({ force = false, wholeRange = false } = {}) {
+        const bounds = map.getBounds();
+
+        // Without thinned-out data, everything in the date range is already loaded.
+        if (!force && lastBounds && (lastBounds.equals(bounds) || (!dataIsInterpolated && lastBounds.contains(bounds)))) {
+            drawMarkers();
             return;
         }
-
         lastBounds = bounds;
 
-        document.getElementById("loading-spinner").style.display = "block";
-        document.getElementById("download-percentage").style.display = "block";
-        document.getElementById("download-percentage").innerText = "0%";
+        const body = { start_date: startInput.value, end_date: endInput.value, fetch_interpolated: settings.interpolated };
+        if (wholeRange) {
+            fitAfterLoad = true;
+        } else {
+            Object.assign(body, {
+                ne_lat: bounds.getNorth(), ne_lng: bounds.getEast(),
+                sw_lat: bounds.getSouth(), sw_lng: bounds.getWest(),
+                zoom: map.getZoom(),
+            });
+        }
 
-        let startDate = document.getElementById("start-date").value;
-        let endDate   = document.getElementById("end-date").value;
+        const thisRequest = ++requestId;
+        showLoading("Loading points…");
+        try {
+            const response = await fetch(location.pathname, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(body),
+            });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            dataIsInterpolated = (response.headers.get("Is-Interpolated") || "").toLowerCase() === "true";
+            const data = JSON.parse(await readWithProgress(response, "Loading points"));
+            if (thisRequest !== requestId) return;  // a newer request superseded this one
 
-        var body = {
-            start_date: startDate,
-            end_date: endDate,
-            fetch_interpolated: fetchInterpolated,
+            points = data.map(r => ({ id: r.id, lat: r.lat, lng: r.lng, accuracy: r.ha, speed: r.s, altitude: r.a, timestamp: r.t }));
+            drawTrack();
+            drawMarkers();
+
+            if (fitAfterLoad) {
+                fitAfterLoad = false;
+                if (points.length) {
+                    ignoreNextMove = true;
+                    map.fitBounds(L.latLngBounds(points.map(p => [p.lat, p.lng])), { padding: [30, 30], maxZoom: 17 });
+                }
+            }
+            if (!points.length) WP.notify("No points in this time range", "info", 2500);
+        } catch (error) {
+            console.error("Could not load points:", error);
+            WP.notify("Could not load points", "error");
+        } finally {
+            if (thisRequest === requestId) hideLoading();
+        }
+    }
+
+    function visiblePoints() {
+        return settings.hideInaccurate ? points.filter(p => p.accuracy == null || p.accuracy < ACCURACY_LIMIT_M) : points;
+    }
+
+    // ---------- Drawing ----------
+
+    function drawTrack() {
+        trackLayer.clearLayers();
+        const pts = visiblePoints();
+        if (pts.length < 2) return;
+
+        // Consecutive segments with the same color are merged into one polyline.
+        let current = null;
+        const flush = () => {
+            if (current && current.latlngs.length > 1) {
+                L.polyline(current.latlngs, { color: current.color, weight: settings.speedColors ? 4 : 3, opacity: 0.9, renderer }).addTo(trackLayer);
+            }
+            current = null;
         };
 
-        if (!full_date_range) {
-            body.ne_lat = northEast.lat;
-            body.ne_lng = northEast.lng;
-            body.sw_lat = southWest.lat;
-            body.sw_lng = southWest.lng;
-            body.zoom   = zoomLevel;
-        } else {
-            activateFitBounds = true;
+        for (let i = 0; i < pts.length - 1; i++) {
+            const a = pts[i], b = pts[i + 1];
+            if (!settings.connectFar && distanceM(a, b) > FAR_DISTANCE_M) {
+                flush();
+                continue;
+            }
+            const color = settings.speedColors ? speedColor(a.speed) : TRACK_COLOR;
+            if (!current || current.color !== color) {
+                flush();
+                current = { color, latlngs: [[a.lat, a.lng]] };
+            }
+            current.latlngs.push([b.lat, b.lng]);
         }
-
-        fetch("", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(body)
-        })
-        .then(response => {
-            // Is-Interpolated header
-            currentDataIsInterpolated = response.headers.get('Is-Interpolated').toLowerCase() === 'true';
-
-            // Track progress from custom header if provided
-            const contentLength = response.headers.get('Content-Original-Length');
-            if (!contentLength) {
-                return response.json();
-            }
-            const total = parseInt(contentLength, 10);
-            let loaded = 0;
-            const reader = response.body.getReader();
-
-            return new Response(new ReadableStream({
-                start(controller) {
-                    function push() {
-                        reader.read().then(({ done, value }) => {
-                            if (done) {
-                                controller.close();
-                                return;
-                            }
-                            loaded += value.byteLength;
-                            const percentage = Math.floor((loaded / total) * 100);
-                            document.getElementById("download-percentage").innerText = percentage + '%';
-                            controller.enqueue(value);
-                            push();
-                        }).catch(error => {
-                            console.error("Error reading data:", error);
-                            controller.error(error);
-                        });
-                    }
-                    push();
-                }
-            })).json();
-        })
-        .then(data => {
-            // If the data truly changed, update
-            if (data.length !== lastGpsData.length ||
-                data.some((item, index) => item.id !== lastGpsData[index]?.id)) {
-                lastGpsData = data;
-                updateMap(data);
-            }
-        })
-        .catch(error => console.error("Error fetching GPS data:", error))
-        .finally(() => {
-            document.getElementById("loading-spinner").style.display = "none";
-            document.getElementById("download-percentage").style.display = "none";
-            document.getElementById("download-percentage").innerText = "";
-        });
+        flush();
     }
 
-    // -----------------------
-    // REBUILD the map entirely
-    // -----------------------
-    function updateMap(gpsData, softReload = false) {
-        // If empty data, just clear layers or do nothing special
-        if (!gpsData || gpsData.length === 0) {
-            polylineLayer.clearLayers();
-            markerLayer.clearLayers();
-            radiusLayer.clearLayers();
+    function pointPopup(point) {
+        const fmt = (value, unit, digits = 1) => value == null || value < 0 ? "–" : `${value.toFixed(digits)} ${unit}`;
+        const wrapper = document.createElement("div");
+        wrapper.className = "point-popup";
+        wrapper.innerHTML = `
+            <dl>
+                <dt>Time</dt><dd>${WP.formatDateTime(point.timestamp)}</dd>
+                <dt>Speed</dt><dd>${point.speed == null || point.speed < 0 ? "–" : (point.speed * 3.6).toFixed(1) + " km/h"}</dd>
+                <dt>Altitude</dt><dd>${fmt(point.altitude, "m", 0)}</dd>
+                <dt>Accuracy</dt><dd>${fmt(point.accuracy, "m")}</dd>
+            </dl>
+            <div class="button-group">
+                <button type="button" class="button sm" data-action="day">Show day</button>
+                <a class="button sm" href="/map/speed?point_id=${point.id}">Speed map</a>
+                <button type="button" class="button sm danger" data-action="delete">Delete</button>
+            </div>`;
+        wrapper.querySelector('[data-action="day"]').addEventListener("click", () => {
+            const day = isoDate(new Date(point.timestamp));
+            setRange(day, day, false);
+        });
+        wrapper.querySelector('[data-action="delete"]').addEventListener("click", () => {
+            if (confirm("Delete this point?")) deletePoints([point.id]);
+        });
+        return wrapper;
+    }
+
+    function drawMarkers() {
+        markerLayer.clearLayers();
+        accuracyLayer.clearLayers();
+        const pts = visiblePoints();
+        const highlighted = pts.find(p => p.id === INITIAL_POINT.id);
+
+        const center = map.getCenter(), bounds = map.getBounds();
+        const nearest = pts
+            .filter(p => bounds.contains([p.lat, p.lng]))
+            .sort((a, b) => ((a.lat - center.lat) ** 2 + (a.lng - center.lng) ** 2) - ((b.lat - center.lat) ** 2 + (b.lng - center.lng) ** 2))
+            .slice(0, MAX_MARKERS);
+
+        if (map.getZoom() > 15 || nearest.length <= 50) {
+            for (const p of nearest) {
+                if (p.accuracy >= 5) {
+                    L.circle([p.lat, p.lng], { radius: p.accuracy, stroke: false, fillColor: TRACK_COLOR, fillOpacity: 0.08, renderer, interactive: false }).addTo(accuracyLayer);
+                }
+                if (p !== highlighted) addMarker(p, false);
+            }
+        }
+        if (highlighted) addMarker(highlighted, true);
+    }
+
+    function addMarker(point, highlight) {
+        L.circleMarker([point.lat, point.lng], {
+            radius: highlight ? 7 : 5,
+            fillColor: highlight ? "#e5484d" : TRACK_COLOR,
+            color: "#ffffff",
+            weight: 2,
+            fillOpacity: 1,
+            renderer,
+        }).bindPopup(() => pointPopup(point)).addTo(markerLayer);
+    }
+
+    // ---------- Editing ----------
+
+    async function deletePoints(ids) {
+        try {
+            const response = await fetch("/map", {
+                method: "DELETE",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ ids }),
+            });
+            if (!response.ok) throw new Error(await response.text());
+            map.closePopup();
+            WP.notify(`Deleted ${ids.length} point${ids.length === 1 ? "" : "s"}`, "success", 2500);
+            loadPoints({ force: true });
+        } catch (error) {
+            WP.notify("Could not delete: " + error.message, "error");
+        }
+    }
+
+    function deleteInRectangle() {
+        if (!selectedBounds) {
+            WP.notify("Draw a rectangle on the map first", "error");
             return;
         }
-
-        // Convert raw data to a simpler "coordinates" array
-        var coordinates = gpsData.map(record => ({
-            id:        record.id,
-            lat:       record.lat,
-            lng:       record.lng,
-            accuracy:  record.ha,
-            speed:     record.s,
-            altitude:  record.a,
-            timestamp: record.t
-        }));
-
-        // Optionally filter out poor-accuracy points
-        if (accuracyFilter) {
-            coordinates = coordinates.filter(coord => coord.accuracy < 20);
+        const threshold = parseFloat(document.getElementById("accuracyThreshold").value);
+        const matches = points.filter(p => selectedBounds.contains([p.lat, p.lng]) && p.accuracy > (isNaN(threshold) ? Infinity : threshold));
+        if (!matches.length) {
+            WP.notify("No points in the rectangle match", "info");
+            return;
         }
-
-        if (!softReload) {
-            // 1) Save current center & zoom
-            let oldCenter = map.getCenter();
-            let oldZoom   = map.getZoom();
-
-            // 2) Remove the old map instance but keep the spinners
-            map.remove();
-            document.getElementById("map").innerHTML =
-                '<div id="loading-spinner" class="loading-spinner"></div>' +
-                '<div id="download-percentage" class="loading-spinner-text"></div>';
-
-            // 3) Recreate the Leaflet map at same position
-            map = L.map('map').setView([oldCenter.lat, oldCenter.lng], oldZoom);
-
-            // 4) Re-add tile layer & controls
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '&copy; OpenStreetMap contributors',
-                maxZoom: 19,
-            }).addTo(map);
-
-            if (totalmapActive) {
-                L.tileLayer('/tiles/{z}/{x}/{y}.png', { maxZoom: 20 }).addTo(map);
-            }
-
-            L.control.fullscreen().addTo(map);
-
-            // 5) Recreate layer groups
-            polylineLayer = L.layerGroup().addTo(map);
-            markerLayer   = L.layerGroup().addTo(map);
-            radiusLayer   = L.layerGroup().addTo(map);
-
-            // Recreate the draw layer & re-bind events
-            if (!drawnItems) {
-                drawnItems = new L.FeatureGroup();
-            }
-            map.addLayer(drawnItems);
-
-            // If Edit Mode is currently on, add the draw control again
-            var editModeCheckbox = document.getElementById("editModeCheckbox");
-            if (editModeCheckbox && editModeCheckbox.checked) {
-                map.addControl(drawControl);
-            }
-
-            // Re-listen for new rectangle draws
-            map.on('draw:created', function (e) {
-                var layer = e.layer;
-                drawnItems.clearLayers();
-                drawnItems.addLayer(layer);
-                selectedBounds = layer.getBounds();
-                console.log("Rectangle bounds: ", selectedBounds);
-            });
-
-            // If heatmap is on, re-add it
-            if (heatmapActive && heatLayer) {
-                map.addLayer(heatLayer);
-            }
-
-            // 6) Re-bind map movement events
-            map.on('moveend', () => {
-                if (preventFetch) {
-                    preventFetch = false;
-                    return;
-                }
-                updateMapPositionInURL();
-                clearTimeout(fetchTimeout);
-                if (fetchInterpolated) {
-                    fetchTimeout = setTimeout(fetchGPSData, delay);
-                }
-            });
-            map.on('zoomend', () => {
-                if (preventFetch) {
-                    return;
-                }
-                updateMapPositionInURL();
-                clearTimeout(fetchTimeout);
-                if (fetchInterpolated) {
-                    fetchTimeout = setTimeout(fetchGPSData, delay);
-                }
-            });
-            map.on('movestart', () => {
-                clearTimeout(fetchTimeout);
-            });
-
-            // Rebuild the calendar control
-            createCalendarControl();
-
-            // Draw polylines (optionally with speed-based colors)
-            if (showSpeedPolyline) {
-                for (let i = 0; i < coordinates.length - 1; i++) {
-                    if (!connectFarPoints) {
-                        const dist = getCoordinateDistance(
-                            coordinates[i].lat, coordinates[i].lng,
-                            coordinates[i+1].lat, coordinates[i+1].lng
-                        );
-                        if (dist > farThreshold) continue;
-                    }
-                    let color = getSpeedColor(coordinates[i].speed || 0);
-                    L.polyline([coordinates[i], coordinates[i+1]], {
-                        color: color,
-                        weight: 4
-                    }).addTo(polylineLayer);
-                }
-            }
-            else if (!connectFarPoints) {
-                // Only connect "close" points in small segments
-                var segment = [];
-                for (let i = 0; i < coordinates.length; i++) {
-                    if (i === coordinates.length - 1) {
-                        // finalize last segment
-                        if (segment.length > 1) {
-                            L.polyline(segment.map(c => [c.lat, c.lng]), {
-                                color: "#369eff",
-                                weight: 3
-                            }).addTo(polylineLayer);
-                        }
-                        break;
-                    }
-                    const dist = getCoordinateDistance(
-                        coordinates[i].lat, coordinates[i].lng,
-                        coordinates[i+1].lat, coordinates[i+1].lng
-                    );
-                    if (dist > farThreshold) {
-                        if (segment.length > 1) {
-                            L.polyline(segment.map(c => [c.lat, c.lng]), {
-                                color: "#369eff",
-                                weight: 3
-                            }).addTo(polylineLayer);
-                        }
-                        segment = [];
-                    } else {
-                        segment.push(coordinates[i]);
-                    }
-                }
-            }
-            else {
-                // Single big polyline for all points
-                L.polyline(coordinates.map(c => [c.lat, c.lng]), {
-                    color: "#369eff",
-                    weight: 3
-                }).addTo(polylineLayer);
-            }
-        }
-
-        // Render markers
-        doMarkers(coordinates);
-
-        // Optionally fit bounds to the entire dataset
-        if (activateFitBounds) {
-            activateFitBounds = false;
-            preventFetch = true;
-            var b = new L.LatLngBounds(gpsData.map(c => [c.lat, c.lng]));
-            map.fitBounds(b);
-        }
+        if (confirm(`Delete ${matches.length} points in the rectangle?`)) deletePoints(matches.map(p => p.id));
     }
 
-    function doMarkers(coordinates) {
-        // Clear old markers
-        markerLayer.clearLayers();
-        radiusLayer.clearLayers();
-
-        const center = map.getCenter();
-        const mapBounds = map.getBounds();
-
-        // Sort so that points near the center appear first
-        var newCoords = coordinates.sort((a, b) => {
-            if (!mapBounds.contains([a.lat, a.lng])) return 1;
-            const distA = (a.lat - center.lat)**2 + (a.lng - center.lng)**2;
-            const distB = (b.lat - center.lat)**2 + (b.lng - center.lng)**2;
-            return distA - distB;
-        }).slice(0, max_points_for_markers);
-
-        let selected_point = coordinates.find(coord => coord.id === last_point.id);
-
-        // Only show many markers if zoom is high, or if data set is small
-        if (map.getZoom() > 15 || newCoords.length <= 50) {
-            // Accuracy circle
-            newCoords.forEach(coord => {
-                if (coord.accuracy < 5) return;
-                L.circle([coord.lat, coord.lng], {
-                    radius: coord.accuracy,
-                    color: "blue",
-                    weight: 0,
-                    opacity: 0,
-                    fillOpacity: 0.07
-                }).addTo(radiusLayer);
-            });
-
-            // Dot markers
-            newCoords.forEach(coord => {
-                if (selected_point &&
-                    coord.lat === selected_point.lat &&
-                    coord.lng === selected_point.lng
-                ) {
-                    return; // highlight separately
-                }
-                createMarker(coord, markerLayer);
-            });
-        }
-
-        // Highlight a “selected” point if one exists
-        if (selected_point) {
-            createMarker(selected_point, markerLayer, true);
-        }
-    }
-
-    // -----------------------
-    // Helper: distance in meters
-    // -----------------------
-    function getCoordinateDistance(lat1, lng1, lat2, lng2) {
-        const R = 6371e3; // Earth radius in meters
-        const phi1 = lat1 * Math.PI / 180;
-        const phi2 = lat2 * Math.PI / 180;
-        const deltaPhi = (lat2 - lat1) * Math.PI / 180;
-        const deltaLambda = (lng2 - lng1) * Math.PI / 180;
-
-        const a = Math.sin(deltaPhi/2)**2 +
-                  Math.cos(phi1)*Math.cos(phi2)*
-                  Math.sin(deltaLambda/2)**2;
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-        return R * c;
-    }
-
-    // -----------------------
-    // Helper: speed colors
-    // -----------------------
-    function hexToRGB(hex) {
-        const r = parseInt(hex.slice(1, 3), 16);
-        const g = parseInt(hex.slice(3, 5), 16);
-        const b = parseInt(hex.slice(5, 7), 16);
-        return { r, g, b };
-    }
-    const colorStops = [
-        { speed: 0,   color: '#00ff00' },
-        { speed: 15,  color: '#00ffff' },
-        { speed: 30,  color: '#ff00ff' },
-        { speed: 50,  color: '#ffff00' },
-        { speed: 100, color: '#ff3300' }
-    ].map(stop => ({ ...stop, rgb: hexToRGB(stop.color) }));
-
-    function getSpeedColor(speed) {
-        let speedKmh = speed * 3.6;
-        for (let i = 1; i < colorStops.length; i++) {
-            if (speedKmh <= colorStops[i].speed) {
-                const ratio = (speedKmh - colorStops[i-1].speed) /
-                              (colorStops[i].speed - colorStops[i-1].speed);
-                const c1 = colorStops[i-1].rgb;
-                const c2 = colorStops[i].rgb;
-                const r = Math.round(c1.r + (c2.r - c1.r)*ratio);
-                const g = Math.round(c1.g + (c2.g - c1.g)*ratio);
-                const b = Math.round(c1.b + (c2.b - c1.b)*ratio);
-                return `rgb(${r}, ${g}, ${b})`;
-            }
-        }
-        return colorStops[colorStops.length - 1].color;
-    }
-
-    // -----------------------
-    // Helper: create markers
-    // -----------------------
-    function createMarker(coord, layer, highlight = false) {
-        let marker = L.circleMarker([coord.lat, coord.lng], {
-            radius: 5,
-            fillColor: highlight ? "red" : "#369eff",
-            color: "#c7c7cb",
-            weight: 3,
-            opacity: 1,
-            fillOpacity: 1
-        }).addTo(layer);
-
-        // convert timestamp iso to local date
-        let date = new Date(coord.timestamp);
-        let formattedDate = date.toLocaleString('en-US', {
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit'
-        });
-
-        marker.bindPopup(`
-            <b>Timestamp:</b> ${formattedDate} <br>
-            <b>Speed:</b> ${coord.speed ? (coord.speed * 3.6).toFixed(2) + " km/h" : "N/A"} <br>
-            <b>Altitude:</b> ${coord.altitude ? coord.altitude.toFixed(2) + " m" : "N/A"} <br>
-            <b>Accuracy:</b> ${coord.accuracy ? coord.accuracy.toFixed(2) + " m" : "N/A"} <br>
-            <button onclick="deletePoints([${coord.id}], this)">Delete</button>
-            <button onclick="setDateToPoint('${coord.timestamp}')">Set Date</button>
-            <button onclick="goToSpeedMap('${coord.id}')">View on Speed Map</button>
-        `);
-    }
-
-    // -----------------------
-    // Single Delete using the same /map JSON-based approach
-    // -----------------------
-    function deletePoints(pointIds, button) {
-        fetch("/map", {
-            method: "DELETE",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ ids: pointIds })
-        })
-        .then(response => {
-            if (!response.ok) {
-                return response.text().then(text => { throw new Error(text); });
-            }
-            return response.text();
-        })
-        .then(msg => {
-            console.log("Delete success:", msg);
-            map.closePopup();
-            fetchGPSData(true);
-        })
-        .catch(error => {
-            console.error("Error deleting point:", error);
-            alert("Failed to delete point: " + error.message);
-        });
-    }
-
-    function goToSpeedMap(pointId) {
-        window.location.href = `/map/speed?point_id=${pointId}`;
-    }
-
-    // -----------------------
-    // Date Range & Searching
-    // -----------------------
-    function adjustDate(days) {
-        let startDateInput = document.getElementById("start-date");
-        let endDateInput   = document.getElementById("end-date");
-        
-        function parseAsUTC(dateStr) {
-            const [y, m, d] = dateStr.split('-').map(Number);
-            return new Date(Date.UTC(y, m - 1, d));
-        }
-
-        let startDate = parseAsUTC(startDateInput.value);
-        let endDate   = parseAsUTC(endDateInput.value);
-
-        startDate.setUTCDate(startDate.getUTCDate() + days);
-        endDate.setUTCDate(endDate.getUTCDate() + days);
-
-        let newStart = startDate.toISOString().substring(0, 10);
-        let newEnd   = endDate.toISOString().substring(0, 10);
-
-        startDateInput.value = newStart;
-        endDateInput.value   = newEnd;
-
-        updateURLParams(newStart, newEnd);
-        fetchGPSData(true, true);
-    }
-
-    function setDateToPoint(timestamp) {
-        let date = new Date(timestamp);
-        let formattedDate = date.toISOString().split('T')[0];
-
-        document.getElementById("start-date").value = formattedDate;
-        document.getElementById("end-date").value = formattedDate;
-        updateURLParams(formattedDate, formattedDate);
-        fetchGPSData(true);
-    }
-
-    function setDateRange(range, fetch_after = true, full_date_range = true) {
-        let today = new Date();
-        let startDate, endDate;
-
-        if (range === 'today') {
-            startDate = endDate = today;
-        } else if (range === 'yesterday') {
-            today.setDate(today.getDate() - 1);
-            startDate = endDate = today;
-        } else if (range === 'last_week') {
-            startDate = new Date(today);
-            startDate.setDate(today.getDate() - 7);
-            endDate = today;
-        } else if (range === 'last_month') {
-            startDate = new Date(today);
-            startDate.setMonth(today.getMonth() - 1);
-            endDate = today;
-        } else if (range === 'all') {
-            startDate = new Date(0);
-            endDate = today;
-        }
-
-        startDate = startDate.toISOString().split('T')[0];
-        endDate   = endDate.toISOString().split('T')[0];
-
-        document.getElementById("start-date").value = startDate;
-        document.getElementById("end-date").value   = endDate;
-
-        updateURLParams(startDate, endDate);
-
-        if (fetch_after) {
-            fetchGPSData(true, full_date_range);
-        }
-    }
-
-    function manualSearch() {
-        let start = document.getElementById("start-date").value;
-        let end   = document.getElementById("end-date").value;
-        updateURLParams(start, end);
-        fetchGPSData(true, true);
-    }
-
-    function loadDateFromURL() {
-        const params = new URLSearchParams(window.location.search);
-        const startDate = params.get('start_date');
-        const endDate   = params.get('end_date');
-        const prevent_auto_move = (params.get('view_location') === 'true');
-
-        if (startDate && endDate) {
-            document.getElementById("start-date").value = startDate;
-            document.getElementById("end-date").value   = endDate;
-            fetchGPSData(true, false);
-        } else if (prevent_auto_move) {
-            params.delete('view_location');
-            window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
-            setDateRange('all', true, false);
-        } else {
-            setDateRange('today');
-        }
-    }
-
-    function toggleTotalMap(checkbox) {
-        totalmapActive = checkbox.checked;
-
-        updateMap(lastGpsData);
-    }
-
-    // -----------------------
-    // Heatmap
-    // -----------------------
-    function toggleHeatmap(checkbox) {
-        heatmapActive = checkbox.checked;
-        if (checkbox.checked) {
-            if (!heatmapLoaded) {
-                fetchHeatmapData().then(() => {
-                    heatLayer = L.heatLayer(heatmapData).addTo(map);
-                    heatmapLoaded = true;
-                }).catch(err => console.error("Error fetching heatmap data:", err));
-            } else {
-                if (heatLayer) map.addLayer(heatLayer);
-            }
-        } else {
-            if (heatLayer) map.removeLayer(heatLayer);
-        }
-    }
-
-    function fetchHeatmapData() {
-        document.getElementById("loading-spinner").style.display = "block";
-        document.getElementById("download-percentage").style.display = "block";
-        document.getElementById("download-percentage").innerText = "0%";
-
-        return fetch("/map/heatmap_data.csv")
-            .then(response => {
-                const contentLength = response.headers.get('Content-Original-Length');
-                if (!contentLength) {
-                    return response.text();
-                }
-                const total = parseInt(contentLength, 10);
-                let loaded  = 0;
-                const reader = response.body.getReader();
-
-                return new Response(new ReadableStream({
-                    start(controller) {
-                        function push() {
-                            reader.read().then(({ done, value }) => {
-                                if (done) {
-                                    controller.close();
-                                    return;
-                                }
-                                loaded += value.byteLength;
-                                const percentage = Math.floor((loaded / total) * 100);
-                                document.getElementById("download-percentage").innerText = percentage + '%';
-                                controller.enqueue(value);
-                                push();
-                            }).catch(error => {
-                                console.error("Error reading data:", error);
-                                controller.error(error);
-                            });
-                        }
-                        push();
-                    }
-                })).text();
-            })
-            .then(data => {
-                heatmapData = data.split('\n').map(line => {
-                    const [lat, lng] = line.split(',').map(Number);
-                    return [lat / 10000, lng / 10000];
-                }).filter(coord => coord.length === 2);
-
-                // If the last line was blank, remove it
-                if (heatmapData.length && isNaN(heatmapData[heatmapData.length - 1][0])) {
-                    heatmapData.pop();
-                }
-            })
-            .finally(() => {
-                document.getElementById("loading-spinner").style.display = "none";
-                document.getElementById("download-percentage").style.display = "none";
-                document.getElementById("download-percentage").innerText = "";
-            });
-    }
-
-    // -----------------------
-    // Toggling Interpolated, etc.
-    // -----------------------
-    function toggleFetchInterpolated(checkbox) {
-        fetchInterpolated = checkbox.checked;
-        let showSpeedPolylineElement = document.getElementById("toggleSpeedPolyline");
-        if (showSpeedPolylineElement.checked && !fetchInterpolated) {
-            // If "speed colors" is on but interpolation is off, disable speed
-            showSpeedPolylineElement.checked = false;
-            showSpeedPolyline = false;
-        }
-        fetchGPSData(true);
-    }
-
-    function toggleAccuracy(checkbox) {
-        accuracyFilter = checkbox.checked;
-        fetchGPSData(false, false, true);
-    }
-
-    function toggleConnectFarPoints(checkbox) {
-        connectFarPoints = checkbox.checked;
-        fetchGPSData(false, false, true);
-    }
-
-    function toggleSpeedPolyline(checkbox) {
-        showSpeedPolyline = checkbox.checked;
-        let fetchInterpolatedElement = document.getElementById("fetchInterpolated");
-        if (!fetchInterpolatedElement.checked && showSpeedPolyline) {
-            fetchInterpolatedElement.checked = true;
-            fetchInterpolated = true;
-        }
-        fetchGPSData(false, false, true);
-    }
-
-    // -----------------------
-    // Edit Mode Toggle
-    // -----------------------
-    function toggleEditMode(checkbox) {
-        editMode = checkbox.checked;
-        // Show/hide the rectangle-drawing control
-        if (checkbox.checked) {
+    function setEditMode(on) {
+        settings.editMode = on;
+        document.getElementById("edit-actions").classList.toggle("hidden", !on);
+        if (on) {
             map.addControl(drawControl);
-            // Also show the accuracy-based delete UI
-            document.getElementById("edit-actions").style.display = "block";
         } else {
             map.removeControl(drawControl);
             drawnItems.clearLayers();
             selectedBounds = null;
-            // Hide the accuracy-based delete UI
-            document.getElementById("edit-actions").style.display = "none";
         }
     }
 
-    // -----------------------
-    // Filter & Delete by Accuracy (Bulk)
-    // -----------------------
-    function filterAndDeleteByAccuracy() {
-        if (!selectedBounds) {
-            alert("No rectangle is drawn yet!");
+    // ---------- Overlays ----------
+
+    async function setHeatmap(on) {
+        settings.heatmap = on;
+        if (!on) {
+            if (heatLayer) map.removeLayer(heatLayer);
             return;
         }
-
-        // Gather accuracy threshold from the UI
-        const accThr = parseFloat(document.getElementById('accuracyThreshold').value) || 999999;
-
-        // Among lastGpsData, find points within the rectangle and with accuracy above threshold
-        const toDelete = lastGpsData.filter(pt => {
-            const withinRect = selectedBounds.contains([pt.lat, pt.lng]);
-            if (!withinRect) return false;
-            return (pt.ha > accThr);
-        });
-
-        if (!toDelete.length) {
-            alert("No points match the accuracy condition in the selected area.");
-            return;
-        }
-
-        if (!confirm("Delete " + toDelete.length + " points in this rectangle?")) {
-            return;
-        }
-
-        // Send { "ids": [...] } to the unified DELETE /map endpoint
-        const ids = toDelete.map(pt => pt.id);
-        deletePoints(ids);
-    }
-
-    // -----------------------
-    // Build Custom Calendar Control
-    // -----------------------
-    function createCalendarControl() {
-        var CalendarControl = L.Control.extend({
-            options: { position: 'topright' },
-            onAdd: function(map) {
-                var container = L.DomUtil.create('div', 'leaflet-control leaflet-bar map-legend');
-                var legend = L.DomUtil.create('div', '', container);
-
-                legend.innerHTML = `
-                    <label>
-                        <input 
-                            type="checkbox" 
-                            id="fetchInterpolated" 
-                            onchange="toggleFetchInterpolated(this)" 
-                            ${fetchInterpolated ? 'checked' : ''}
-                        />
-                        Interpolated Trace
-                    </label>
-                    <br>
-                    <label>
-                        <input 
-                            type="checkbox" 
-                            id="toggleTotalMap" 
-                            onchange="toggleTotalMap(this)" 
-                            ${totalmapActive ? 'checked' : ''}
-                        />
-                        Enable Total Map
-                    </label>
-                    <br>
-                    <label>
-                        <input 
-                            type="checkbox" 
-                            id="toggleHeatmap" 
-                            onchange="toggleHeatmap(this)" 
-                            ${heatmapActive ? 'checked' : ''}
-                        />
-                        Enable Heatmap
-                    </label>
-                    <br>
-                    <label>
-                        <input 
-                            type="checkbox" 
-                            id="toggleAccuracy" 
-                            onchange="toggleAccuracy(this)" 
-                            ${accuracyFilter ? 'checked' : ''}
-                        />
-                        Filter Accuracy (&lt; 20m)
-                    </label>
-                    <br>
-                    <label>
-                        <input 
-                            type="checkbox" 
-                            onchange="toggleConnectFarPoints(this)" 
-                            ${connectFarPoints ? 'checked' : ''}
-                        />
-                        Connect Far Points
-                    </label>
-                    <br>
-                    <label>
-                        <input 
-                            type="checkbox" 
-                            id="toggleSpeedPolyline" 
-                            onchange="toggleSpeedPolyline(this)" 
-                            ${showSpeedPolyline ? 'checked' : ''}
-                        />
-                        Speed Colors
-                    </label>
-                    <br>
-                    <!-- Renamed to "Edit Mode" -->
-                    <label>
-                        <input 
-                            type="checkbox" 
-                            id="editModeCheckbox"
-                            onchange="toggleEditMode(this)"
-                            ${editMode ? 'checked' : ''}
-                        />
-                        Edit Mode
-                    </label>
-                `;
-
-                // Toggle calendar button
-                var toggleBtn = L.DomUtil.create('button', 'calendar-popup-button', container);
-                toggleBtn.innerHTML = '📅';
-                toggleBtn.title = 'Select Year/Month';
-
-                var popup = L.DomUtil.create('div', 'calendar-popup hidden', container);
-
-                // Year select
-                var yearSelect = L.DomUtil.create('select', '', popup);
-                var currentYear = new Date().getFullYear();
-                for (var y = currentYear; y >= {{ earliest_year }}; y--) {
-                    var option = L.DomUtil.create('option', '', yearSelect);
-                    option.value = y;
-                    option.textContent = y;
-                }
-
-                // Whole year button
-                var wholeYearBtn = L.DomUtil.create('button', '', popup);
-                wholeYearBtn.innerHTML = 'Whole year';
-                wholeYearBtn.onclick = function() {
-                    var y = parseInt(yearSelect.value);
-                    var startDate = y + '-01-01';
-                    var endDate   = y + '-12-31';
-                    document.getElementById('start-date').value = startDate;
-                    document.getElementById('end-date').value   = endDate;
-                    updateURLParams(startDate, endDate);
-                    fetchGPSData(true, true);
-                };
-
-                // Month grid
-                var monthsContainer = L.DomUtil.create('div', '', popup);
-                monthsContainer.style.display = 'grid';
-                monthsContainer.style.gridTemplateColumns = 'repeat(3, auto)';
-                monthsContainer.style.gap = '4px';
-
-                var monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-                for (let m = 1; m <= 12; m++) {
-                    let btn = L.DomUtil.create('button', '', monthsContainer);
-                    btn.innerHTML = monthNames[m-1];
-                    btn.onclick = function() {
-                        var y = parseInt(yearSelect.value);
-                        var mm = String(m).padStart(2, '0');
-                        var startDate = y + '-' + mm + '-01';
-                        var lastDay = new Date(y, m, 0).getDate();
-                        var endDate  = y + '-' + mm + '-' + lastDay;
-                        document.getElementById('start-date').value = startDate;
-                        document.getElementById('end-date').value   = endDate;
-                        updateURLParams(startDate, endDate);
-                        fetchGPSData(true, true);
-                    };
-                }
-
-                // Toggle popup
-                toggleBtn.onclick = function() {
-                    popup.classList.toggle('hidden');
-                };
-
-                // Prevent clicks on the control from propagating
-                L.DomEvent.disableClickPropagation(container);
-
-                return container;
+        if (!heatLayer) {
+            showLoading("Loading heatmap…");
+            try {
+                const response = await fetch("/map/heatmap_data.csv");
+                const text = await readWithProgress(response, "Loading heatmap");
+                const data = text.split("\n").map(line => line.split(",").map(Number))
+                    .filter(pair => pair.length === 2 && !isNaN(pair[0]))
+                    .map(([lat, lng]) => [lat / 10000, lng / 10000]);
+                heatLayer = L.heatLayer(data);
+            } catch (error) {
+                WP.notify("Could not load the heatmap", "error");
+                return;
+            } finally {
+                hideLoading();
             }
-        });
-
-        map.addControl(new CalendarControl());
+        }
+        if (settings.heatmap) heatLayer.addTo(map);
     }
 
-    // Init everything
-    document.addEventListener("DOMContentLoaded", initMap);
+    function setTotalMap(on) {
+        settings.totalMap = on;
+        if (on) totalMapLayer.addTo(map);
+        else map.removeLayer(totalMapLayer);
+    }
+
+    function layersControl() {
+        const options = [
+            ["interpolated", "Adapt detail to view", "Load a simplified track for the visible area and refine it when zooming"],
+            ["speedColors", "Color by speed", ""],
+            ["connectFar", "Connect distant points", "Draw lines across gaps larger than 1 km"],
+            ["hideInaccurate", "Hide inaccurate points", `Hide points with accuracy worse than ${ACCURACY_LIMIT_M} m`],
+            ["heatmap", "Heatmap", "All points of the trace as a heatmap"],
+            ["totalMap", "All tracks", "Every point ever recorded, as a map layer"],
+            ["editMode", "Edit mode", "Draw a rectangle to delete inaccurate points in it"],
+        ];
+        const Control = L.Control.extend({
+            options: { position: "topright" },
+            onAdd() {
+                // Collapsed on small screens, where the panel would cover much of the map.
+                const collapsed = window.matchMedia("(max-width: 767.98px)").matches;
+                const panel = L.DomUtil.create("div", "leaflet-control map-panel" + (collapsed ? " collapsed" : ""));
+                panel.innerHTML = `<button type="button" class="map-panel-title" aria-expanded="${!collapsed}">Layers</button>
+                    <div class="map-panel-options">` + options.map(([key, label, title]) => `
+                    <div class="form-check form-switch" title="${title}">
+                        <input class="form-check-input" type="checkbox" role="switch" id="opt-${key}" ${settings[key] ? "checked" : ""}>
+                        <label class="form-check-label" for="opt-${key}">${label}</label>
+                    </div>`).join("") + `</div>`;
+                const toggle = panel.querySelector(".map-panel-title");
+                toggle.addEventListener("click", () => {
+                    toggle.setAttribute("aria-expanded", String(!panel.classList.toggle("collapsed")));
+                });
+                panel.addEventListener("change", event => onSettingChange(event.target.id.replace("opt-", ""), event.target.checked));
+                L.DomEvent.disableClickPropagation(panel);
+                L.DomEvent.disableScrollPropagation(panel);
+                return panel;
+            },
+        });
+        return new Control();
+    }
+
+    function onSettingChange(key, value) {
+        switch (key) {
+            case "interpolated":
+                settings.interpolated = value;
+                loadPoints({ force: true });
+                break;
+            case "heatmap": setHeatmap(value); break;
+            case "totalMap": setTotalMap(value); break;
+            case "editMode": setEditMode(value); break;
+            default:
+                settings[key] = value;
+                drawTrack();
+                drawMarkers();
+        }
+        document.getElementById("speed-legend").classList.toggle("hidden", !settings.speedColors);
+    }
+
+    // ---------- Setup ----------
+
+    function initMap() {
+        const params = new URLSearchParams(location.search);
+        let lat = parseFloat(params.get("lat")), lng = parseFloat(params.get("lng")), zoom = parseInt(params.get("zoom"), 10);
+        if (isNaN(lat) || isNaN(lng) || isNaN(zoom)) {
+            lat = INITIAL_POINT.lat;
+            lng = INITIAL_POINT.lng;
+            zoom = 14;
+        }
+
+        renderer = L.canvas({ padding: 0.5 });
+        map = L.map("map", { preferCanvas: true }).setView([lat, lng], zoom);
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            attribution: "&copy; OpenStreetMap contributors",
+            maxZoom: 19,
+        }).addTo(map);
+        L.control.fullscreen().addTo(map);
+
+        totalMapLayer = L.tileLayer("/tiles/{z}/{x}/{y}.png", { maxZoom: 20 });
+        accuracyLayer = L.layerGroup().addTo(map);
+        trackLayer = L.layerGroup().addTo(map);
+        markerLayer = L.layerGroup().addTo(map);
+
+        drawnItems = new L.FeatureGroup().addTo(map);
+        drawControl = new L.Control.Draw({
+            draw: { marker: false, polygon: false, polyline: false, circle: false, circlemarker: false, rectangle: true },
+            edit: { featureGroup: drawnItems },
+        });
+        map.on(L.Draw.Event.CREATED, event => {
+            drawnItems.clearLayers();
+            drawnItems.addLayer(event.layer);
+            selectedBounds = event.layer.getBounds();
+        });
+
+        layersControl().addTo(map);
+
+        map.on("movestart", () => clearTimeout(fetchTimer));
+        map.on("moveend", () => {
+            const center = map.getCenter();
+            setUrlParams({ lat: center.lat.toFixed(6), lng: center.lng.toFixed(6), zoom: map.getZoom() });
+            if (ignoreNextMove) {
+                ignoreNextMove = false;
+                return;
+            }
+            if (settings.interpolated) scheduleLoad();
+            else drawMarkers();
+        });
+
+        // Keep the map sized to its frame when the layout changes.
+        new ResizeObserver(() => map.invalidateSize()).observe(document.getElementById("map"));
+    }
+
+    function initRange() {
+        const params = new URLSearchParams(location.search);
+        const start = params.get("start_date"), end = params.get("end_date");
+        if (start && end) {
+            startInput.value = start;
+            endInput.value = end;
+            updatePresetButtons();
+            loadPoints({ force: true });
+        } else if (params.get("view_location") === "true") {
+            // Coming from a place search: show everything around that place without moving away.
+            setUrlParams({ view_location: null });
+            const [s, e] = presetRange("all");
+            startInput.value = s;
+            endInput.value = e;
+            setUrlParams({ start_date: s, end_date: e });
+            updatePresetButtons();
+            loadPoints({ force: true });
+        } else {
+            const [s, e] = presetRange("today");
+            setRange(s, e);
+        }
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+        const scale = SPEED_STOPS.map((stop, i) => `rgb(${stop.color.join(",")}) ${i / (SPEED_STOPS.length - 1) * 100}%`).join(", ");
+        document.getElementById("speed-scale").style.background = `linear-gradient(90deg, ${scale})`;
+
+        initMap();
+        buildMonthPicker();
+        initRange();
+
+        document.querySelectorAll("[data-range]").forEach(button => {
+            button.addEventListener("click", () => {
+                const [start, end] = presetRange(button.dataset.range);
+                setRange(start, end);
+            });
+        });
+        document.getElementById("prev-range").addEventListener("click", () => shiftRange(-1));
+        document.getElementById("next-range").addEventListener("click", () => shiftRange(1));
+        [startInput, endInput].forEach(input => input.addEventListener("change", () => {
+            if (startInput.value && endInput.value) setRange(startInput.value, endInput.value);
+        }));
+        document.getElementById("delete-in-rectangle").addEventListener("click", deleteInRectangle);
+    });
+})();
 </script>
 {% endblock %}

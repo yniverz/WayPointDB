@@ -1,106 +1,91 @@
 {% extends "base.jinja" %}
+{% from "_macros.jinja" import icon %}
 
-{% block heading %}
-GPS Imports
-{% endblock %}
+{% block page_title %}Imports{% endblock %}
+{% block subtitle %}Add points from a JSON file to the {% if g.current_trace %}“{{ g.current_trace.name }}” trace{% else %}main trace{% endif %}.{% endblock %}
 
 {% block content %}
-<div class="container mt-4">
-    <h2>Upload JSON File</h2>
-    <p>
-        Please upload a JSON file with a <strong>list of dictionaries</strong>. Each dictionary must
-        at least contain:
-        <code>timestamp</code>, <code>latitude</code>, and <code>longitude</code>.
-        <br>
-        Optional fields can be:
-        <code>horizontal_accuracy</code>, <code>altitude</code>, <code>vertical_accuracy</code>,
-        <code>heading</code>, <code>heading_accuracy</code>, <code>speed</code>, <code>speed_accuracy</code>, etc.
-    </p>
-    <p>Example JSON structure:
-    <pre>[
-    {
-      "timestamp": "2025-01-01T12:00:00Z",
-      "latitude": 52.5200,
-      "longitude": 13.4050,
-      "speed": 0.0
-    },
-    ...
+<div class="grid-2">
+    <section class="panel">
+        <div class="panel-header"><h2>Upload a file</h2></div>
+        <form method="POST" enctype="multipart/form-data" class="panel-body">
+            <input type="hidden" name="action" value="upload_json">
+            <div class="field">
+                <label for="json_file">JSON file</label>
+                <input type="file" name="json_file" id="json_file" accept=".json,application/json" required class="input">
+                <span class="hint">Uploading only stores the file. Start the import from the list afterwards.</span>
+            </div>
+            <div>
+                <button type="submit" class="button primary">{{ icon("upload") }}Upload</button>
+            </div>
+        </form>
+    </section>
+
+    <section class="panel">
+        <div class="panel-header"><h2>File format</h2></div>
+        <div class="panel-body">
+            <p class="small">A list of points. Each needs <code>timestamp</code>, <code>latitude</code> and <code>longitude</code>.
+                Optional: <code>horizontal_accuracy</code>, <code>altitude</code>, <code>vertical_accuracy</code>,
+                <code>heading</code>, <code>heading_accuracy</code>, <code>speed</code>, <code>speed_accuracy</code>.</p>
+<pre>[
+  { "timestamp": "2025-01-01T12:00:00Z",
+    "latitude": 52.52, "longitude": 13.405,
+    "speed": 0.0 }
 ]</pre>
-    </p>
+            <p class="small">Data from Google, Polarsteps, GPX or GeoJSON can be converted with the
+                <a href="/static/transform/" target="_blank" rel="noopener">conversion tool</a>.</p>
+        </div>
+    </section>
+</div>
 
-    <div>Note: A conversion tool can be found <a href="static/transform/" target="_blank">here</a>.</div>
-    <p>Just select the correct format, upload your file and get the converted JSON file which can then be uploaded here.</p>
-
-    <form method="POST" enctype="multipart/form-data" onsubmit="return validateFile();" style="border:1px solid #ccc; padding:10px;">
-        <input type="hidden" name="action" value="upload_json">
-        <label>Choose a JSON File:
-            <input type="file" name="json_file" id="json_file" accept=".json">
-        </label>
-        <button type="submit">Upload</button>
-    </form>
-
-    <br>
-    <h2>Existing Imports</h2>
+<section class="panel">
+    <div class="panel-header"><h2>Uploaded files</h2></div>
     {% if imports %}
-        <table border="1" cellpadding="5" cellspacing="0">
+    <div class="table-wrap">
+        <table class="data">
             <thead>
                 <tr>
-                    <th>Filename</th>
-                    <th>Created At</th>
-                    <th>Total Entries</th>
-                    <th>Total Imported</th>
-                    <th>Actions</th>
+                    <th>File</th>
+                    <th>Uploaded</th>
+                    <th class="num">Entries</th>
+                    <th class="num">Imported</th>
+                    <th>Status</th>
+                    <th></th>
                 </tr>
             </thead>
             <tbody>
                 {% for imp in imports %}
                 <tr>
                     <td>{{ imp.name }}</td>
-                    <td>{{ imp.created_at }}</td>
-                    <td>{{ imp.total_entries }}</td>
-                    <td>{{ imp.total_imported }}</td>
+                    <td class="muted nowrap">{{ imp.created_at.strftime("%Y-%m-%d %H:%M") if imp.created_at else "–" }}</td>
+                    <td class="num">{{ "{:,}".format(imp.total_entries or 0) }}</td>
+                    <td class="num">{{ "{:,}".format(imp.total_imported) }}</td>
                     <td>
-                        {% if not imp.done_importing %}
-                            <!-- Start Import Job -->
-                            <form method="POST" style="display:inline;">
-                                <input type="hidden" name="action" value="start_import">
-                                <input type="hidden" name="import_id" value="{{ imp.id }}">
-                                <button type="submit">Start Import Job (For current Trace)</button>
-                            </form>
+                        {% if imp.importing %}<span class="badge-status running">Importing</span>
+                        {% elif imp.done_importing %}<span class="badge-status done">Imported</span>
+                        {% else %}<span class="badge-status">Not started</span>{% endif %}
+                    </td>
+                    <td class="actions">
+                        {% if not imp.done_importing and not imp.importing %}
+                        <form method="POST">
+                            <input type="hidden" name="action" value="start_import">
+                            <input type="hidden" name="import_id" value="{{ imp.id }}">
+                            <button type="submit" class="button sm primary">{{ icon("play") }}Import</button>
+                        </form>
                         {% endif %}
-                        
-                        <!-- Delete Import (with confirmation) -->
-                        <form method="POST" style="display:inline;" onsubmit="return confirmDelete();">
+                        <form method="POST" data-confirm="Delete {{ imp.name }} and all {{ '{:,}'.format(imp.total_imported) }} points imported from it?">
                             <input type="hidden" name="action" value="delete_import">
                             <input type="hidden" name="import_id" value="{{ imp.id }}">
-                            <button type="submit">Delete</button>
+                            <button type="submit" class="button sm danger">Delete</button>
                         </form>
                     </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
+    </div>
     {% else %}
-        <p>No imports found.</p>
+        <div class="empty">No files uploaded yet.</div>
     {% endif %}
-</div>
-
-<script>
-function validateFile() {
-    const fileInput = document.getElementById("json_file");
-    if (!fileInput.value) {
-        alert("Please select a .json file before uploading.");
-        return false;
-    }
-    if (!fileInput.value.toLowerCase().endsWith(".json")) {
-        alert("Only .json files are allowed.");
-        return false;
-    }
-    return true;
-}
-
-function confirmDelete() {
-    return confirm("Are you sure you want to delete this import AND all associated GPS data?");
-}
-</script>
+</section>
 {% endblock %}

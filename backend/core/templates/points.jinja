@@ -1,265 +1,144 @@
 {% extends "base.jinja" %}
+{% from "_macros.jinja" import icon %}
 
-
-
-
-{% macro add_page_navigator() %}
-    <!-- Page Navigator -->
-    <div class="page-navigator">
-        {# First Page Button #}
-        <a onclick="goToPage(1)"><<<</a>
-
-        {# Previous Button #}
-        {% if current_page <= 1 %}
-            <span><<</span>
-        {% else %}
-            <a onclick="goToPage({{ current_page - 1 }})"><<</a>
-        {% endif %}
-
-        {% if current_page > 4 %}
-            <span>...</span>
-        {% endif %}
-
-        {# Page Number Buttons #}
-        {% for page_num in range(1, max_pages + 1) %}
-            {% if page_num >= current_page - 3 and page_num <= current_page + 3 %}
-                {% if page_num == current_page %}
-                    <strong>{{ page_num }}</strong>
-                {% else %}
-                    <a onclick="goToPage({{ page_num }})">{{ page_num }}</a>
-                {% endif %}
-            {% elif page_num == 1 or page_num == max_pages %}
-                {% if page_num == 1 and current_page <= 4 %}
-                    <a onclick="goToPage(1)">1</a>
-                    <span>...</span>
-                {% elif page_num == max_pages and current_page >= max_pages - 3 %}
-                    <span>...</span>
-                    <a onclick="goToPage({{ max_pages }})">{{ max_pages }}</a>
-                {% endif %}
-            {% endif %}
+{% macro pagination() %}
+    {% if max_pages > 1 %}
+    <nav class="pager" aria-label="Pages">
+        <button type="button" class="button sm" data-page="{{ current_page - 1 }}" {% if current_page <= 1 %}disabled{% endif %} aria-label="Previous page">{{ icon("left") }}</button>
+        {% set window = [1] + range([2, current_page - 2]|max, [max_pages, current_page + 2]|min + 1)|list + [max_pages] %}
+        {% set ns = namespace(last=0) %}
+        {% for page in window|unique|sort %}
+            {% if page - ns.last > 1 %}<span class="muted">…</span>{% endif %}
+            <button type="button" class="button sm {% if page == current_page %}primary{% endif %}" data-page="{{ page }}" {% if page == current_page %}aria-current="page"{% endif %}>{{ page }}</button>
+            {% set ns.last = page %}
         {% endfor %}
-
-        {% if current_page < max_pages - 3 %}
-            <span>...</span>
-        {% endif %}
-
-        {# Next Button #}
-        {% if current_page >= max_pages %}
-            <span>>></span>
-        {% else %}
-            <a onclick="goToPage({{ current_page + 1 }})">>></a>
-        {% endif %}
-
-        {# Last Page Button #}
-        <a onclick="goToPage({{ max_pages }})">>>></a>
-    </div>
+        <button type="button" class="button sm" data-page="{{ current_page + 1 }}" {% if current_page >= max_pages %}disabled{% endif %} aria-label="Next page">{{ icon("right") }}</button>
+    </nav>
+    {% endif %}
 {% endmacro %}
 
-
-
-
-{% block heading %}
-Points Overview
-{% endblock %}
+{% block page_title %}Points{% endblock %}
+{% block subtitle %}Inspect and delete individual points of a day or an import.{% endblock %}
 
 {% block head %}
 <style>
-    .page-navigator {
-        display: flex;
-        gap: 10px;
-        flex-wrap: wrap;
-    }
-
-    .page-navigator a {
-        text-decoration: underline !important;
-        cursor: pointer;
-    }
-
-    .page-navigator a:hover {
-        text-decoration: none !important;
-    }
+    .pager { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    .toolbar .spacer { flex: 1; }
 </style>
 {% endblock %}
 
 {% block content %}
-
-<div class="container mt-4">
-    <!-- Single Date Selector (same as before) -->
-    <div class="date-selector" style="display: flex; gap: 10px; justify-content: center; align-items: center; margin-bottom: 20px;">
-        <button onclick="adjustDate(-1)">&lt;&lt;</button>
-        <input type="date" id="date-input" onchange="submitDate(this.value)" />
-        <button onclick="adjustDate(1)">&gt;&gt;</button>
-        <button onclick="setDateRange('today')">Today</button>
-        <button onclick="setDateRange('yesterday')">Yesterday</button>
-        {# a selector from "imports" list variable #}
-        <select onchange="submitImport(this.value)">
-            <option value="">Select Import</option>
-            {% for imp in imports %}
-                <option value="{{ imp.id }}" {% if request.args.get('importid') == imp.id|string %}selected{% endif %}>{{ imp.name }}</option>
-            {% endfor %}
-        </select>
-    </div>
-
-    <!-- Hidden form to submit GET params for date selection -->
-    <form method="get" id="date-form" style="display: none;">
-        <input type="hidden" name="date" id="hidden-date-input" />
-    </form>
-
-    <!-- Wrap the table in a single POST form for batch delete -->
-    <form method="POST" action="{{ url_for('web.points', date=request.args.get('date', ''), importid=request.args.get('importid', ''), per_page=per_page, page=current_page ) }}">
-        <input type="hidden" name="action" value="batch_delete">
-
-        <!-- Submit button to delete all selected points -->
-        <div class="pagination-controls" style="display: flex; justify-content: space-between; align-items: center; margin-top: 20px; flex-wrap: wrap;">
-                <button type="submit">Delete Selected</button>
-
-                <!-- Page Navigator -->
-                {{ add_page_navigator() }}
-                
-            </div>
+<section class="panel">
+    <div class="panel-header toolbar">
+        <div class="toolbar">
+            <button type="button" class="button icon" id="prev-day" aria-label="Previous day">{{ icon("left") }}</button>
+            <input type="date" id="date-input" aria-label="Day">
+            <button type="button" class="button icon" id="next-day" aria-label="Next day">{{ icon("right") }}</button>
+            <button type="button" class="button sm" id="today">Today</button>
         </div>
-        <br>
-
-        <table border="1" cellpadding="5" cellspacing="0">
-            <thead>
-                <tr>
-                    <th>
-                        <!-- "Select All" checkbox -->
-                        <input type="checkbox" id="select-all" />
-                    </th>
-                    <th>Timestamp</th>
-                    <th>Latitude</th>
-                    <th>Longitude</th>
-                    <th>Speed (km/h)</th>
-                    {# <th>Actions</th> #}
-                </tr>
-            </thead>
-            <tbody>
-                {% if points %}
-                    {% for point in points %}
-                    <tr>
-                        <td>
-                            <!-- Checkbox for each row -->
-                            <input type="checkbox" name="selected_points" value="{{ point.id }}">
-                        </td>
-                        {% set date = point.timestamp.strftime("%Y-%m-%d") %}
-                        <td><a href="{{ url_for('web.map') }}?point_id={{ point.id }}&start_date={{ date }}&end_date={{ date }}">{{ point.timestamp }}</a></td>
-                        <td>{{ point.latitude|round(8) }}</td>
-                        <td>{{ point.longitude|round(8) }}</td>
-                        {% if point.speed is not none %}
-                            <td>{{ (point.speed * 3.6)|round(2) }}</td>
-                        {% else %}
-                            <td>-</td>
-                        {% endif %}
-                        
-                    </tr>
-                    {% endfor %}
-                {% else %}
-                    <tr><td colspan="6">No points found for this date.</td></tr>
-                {% endif %}
-            </tbody>
-        </table>
-    </form>
-
-    <!-- Pagination Controls -->
-    <div class="pagination-controls" style="display: flex; justify-content: space-between; align-items: center; margin-top: 20px; flex-wrap: wrap;">
-        <!-- Per-Page Selector -->
-        <div class="per-page-selector" style="margin-bottom: 10px;">
-            <label for="per-page">Points per page:</label>
-            <select id="per-page" onchange="changePerPage(this.value)">
-                <option value="10" {% if per_page == 10 %}selected{% endif %}>10</option>
-                <option value="20" {% if per_page == 20 %}selected{% endif %}>20</option>
-                <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
-                <option value="150" {% if per_page == 150 %}selected{% endif %}>150</option>
+        <div class="toolbar">
+            <label for="import-select" class="small muted">Show</label>
+            <select id="import-select">
+                <option value="">Points of the selected day</option>
+                {% for imp in imports %}
+                    <option value="{{ imp.id }}" {% if request.args.get('importid') == imp.id|string %}selected{% endif %}>All points of {{ imp.name }}</option>
+                {% endfor %}
             </select>
         </div>
-
-        <!-- Page Navigator -->
-        {{ add_page_navigator() }}
-        
     </div>
-</div>
 
+    <form method="POST" id="points-form" data-confirm="Delete the selected points? This cannot be undone."
+          action="{{ url_for('web.points', date=request.args.get('date', ''), importid=request.args.get('importid', ''), per_page=per_page, page=current_page) }}">
+        <input type="hidden" name="action" value="batch_delete">
+        <div class="table-wrap">
+            <table class="data">
+                <thead>
+                    <tr>
+                        <th class="check"><input type="checkbox" id="select-all" aria-label="Select all points on this page"></th>
+                        <th>Time</th>
+                        <th class="num">Latitude</th>
+                        <th class="num">Longitude</th>
+                        <th class="num">Speed</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for point in points %}
+                    {% set date = point.timestamp.strftime("%Y-%m-%d") %}
+                    <tr>
+                        <td class="check"><input type="checkbox" name="selected_points" value="{{ point.id }}" aria-label="Select point"></td>
+                        <td><a href="{{ url_for('web.map') }}?point_id={{ point.id }}&start_date={{ date }}&end_date={{ date }}" class="mono">{{ point.timestamp.strftime("%Y-%m-%d %H:%M:%S") }}</a></td>
+                        <td class="num">{{ "%.6f"|format(point.latitude) }}</td>
+                        <td class="num">{{ "%.6f"|format(point.longitude) }}</td>
+                        <td class="num">{% if point.speed is not none and point.speed >= 0 %}{{ "%.1f"|format(point.speed * 3.6) }} km/h{% else %}<span class="muted">–</span>{% endif %}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="5" class="empty">No points for this selection.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="panel-footer">
+            <div class="toolbar">
+                <button type="submit" class="button sm danger" id="delete-selected" disabled>{{ icon("trash") }}Delete selected</button>
+                <label for="per-page" class="small muted">Per page</label>
+                <select id="per-page">
+                    {% for n in [10, 20, 50, 150] %}
+                        <option value="{{ n }}" {% if per_page == n %}selected{% endif %}>{{ n }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            {{ pagination() }}
+        </div>
+    </form>
+</section>
+{% endblock %}
+
+{% block scripts %}
 <script>
-function submitDate(dateString) {
-    updateQueryParams({ date: dateString, page: 1 }); // Reset to page 1 on date change
-}
-
-function submitImport(importId) {
-    updateQueryParams({ importid: importId, page: 1 }); // Reset to page 1 on import change
-}
-
-function adjustDate(days) {
-    const dateInput = document.getElementById("date-input");
-    let currentDate = new Date(dateInput.value);
-    if (isNaN(currentDate.getTime())) {
-        currentDate = new Date();
-    }
-    currentDate.setDate(currentDate.getDate() + days);
-    submitDate(currentDate.toISOString().split('T')[0]);
-}
-
-function setDateRange(range) {
-    let today = new Date();
-    let chosenDate;
-
-    if (range === 'today') {
-        chosenDate = today;
-    } else if (range === 'yesterday') {
-        chosenDate = new Date(today);
-        chosenDate.setDate(chosenDate.getDate() - 1);
-    } else {
-        chosenDate = today;
-    }
-    submitDate(chosenDate.toISOString().split('T')[0]);
-}
-
-// Handle per-page change
-function changePerPage(perPage) {
-    updateQueryParams({ per_page: perPage, page: 1 }); // Reset to page 1 on per_page change
-}
-
-// Handle page navigation
-function goToPage(pageNum) {
-    updateQueryParams({ page: pageNum });
-}
-
-// Utility function to update query parameters and reload
-function updateQueryParams(params) {
-    const urlParams = new URLSearchParams(window.location.search);
-
-    for (const key in params) {
-        if (params[key] !== null && params[key] !== undefined && params[key] !== '') {
-            urlParams.set(key, params[key]);
-        } else {
-            urlParams.delete(key);
+    function updateQueryParams(params) {
+        const urlParams = new URLSearchParams(location.search);
+        for (const [key, value] of Object.entries(params)) {
+            if (value !== null && value !== undefined && value !== "") urlParams.set(key, value);
+            else urlParams.delete(key);
         }
+        location.search = urlParams.toString();
     }
 
-    window.location.search = urlParams.toString();
-}
+    function localDateString(date) {
+        return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+    }
 
-// "Select All" checkbox logic
-document.addEventListener("DOMContentLoaded", () => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const dateParam = urlParams.get("date");
     const dateInput = document.getElementById("date-input");
+    dateInput.value = new URLSearchParams(location.search).get("date") || localDateString(new Date());
 
-    if (dateParam) {
-        dateInput.value = dateParam;
-    } else {
-        // Default to today's date
-        let now = new Date();
-        dateInput.value = now.toISOString().split('T')[0];
+    function shiftDay(days) {
+        const [y, m, d] = dateInput.value.split("-").map(Number);
+        updateQueryParams({ date: localDateString(new Date(y, m - 1, d + days)), importid: null, page: 1 });
     }
 
-    const selectAllCheckbox = document.getElementById("select-all");
-    selectAllCheckbox.addEventListener('change', function() {
-        const checkboxes = document.querySelectorAll('input[name="selected_points"]');
-        checkboxes.forEach(cb => {
-            cb.checked = selectAllCheckbox.checked;
-        });
+    // Picking a day leaves the import view.
+    dateInput.addEventListener("change", () => updateQueryParams({ date: dateInput.value, importid: null, page: 1 }));
+    document.getElementById("prev-day").addEventListener("click", () => shiftDay(-1));
+    document.getElementById("next-day").addEventListener("click", () => shiftDay(1));
+    document.getElementById("today").addEventListener("click", () => updateQueryParams({ date: localDateString(new Date()), importid: null, page: 1 }));
+    document.getElementById("import-select").addEventListener("change", event => updateQueryParams({ importid: event.target.value, page: 1 }));
+    document.getElementById("per-page").addEventListener("change", event => updateQueryParams({ per_page: event.target.value, page: 1 }));
+    document.querySelectorAll("[data-page]").forEach(button => {
+        button.addEventListener("click", () => updateQueryParams({ page: button.dataset.page }));
     });
-});
+
+    const boxes = () => document.querySelectorAll('input[name="selected_points"]');
+    const deleteButton = document.getElementById("delete-selected");
+    function updateDeleteButton() {
+        const count = [...boxes()].filter(box => box.checked).length;
+        deleteButton.disabled = count === 0;
+        deleteButton.lastChild.textContent = count ? `Delete ${count} selected` : "Delete selected";
+    }
+    document.getElementById("select-all").addEventListener("change", event => {
+        boxes().forEach(box => { box.checked = event.target.checked; });
+        updateDeleteButton();
+    });
+    boxes().forEach(box => box.addEventListener("change", updateDeleteButton));
 </script>
 {% endblock %}

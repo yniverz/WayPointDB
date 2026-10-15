@@ -12,8 +12,12 @@ class Config:
     BACKGROUND_MAX_THREADS = int(os.getenv("BACKGROUND_MAX_THREADS", 1))
     MIN_COUNTRY_VISIT_DURATION_FOR_STATS = int(os.getenv("MIN_COUNTRY_VISIT_DURATION_FOR_STATS", 60 * 5))
     MIN_CITY_VISIT_DURATION_FOR_STATS = int(os.getenv("MIN_CITY_VISIT_DURATION_FOR_STATS", 60 * 60))
-    SQLALCHEMY_DATABASE_URI = f"postgresql://{DB_USER}:{DB_PASS}@{DB_HOST}/{DB_NAME}"
+    SQLALCHEMY_DATABASE_URI = f"postgresql+psycopg2://{DB_USER}:{DB_PASS}@{DB_HOST}/{DB_NAME}"
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    # Timestamps are stored as naive UTC, whatever timezone the database or server runs in.
+    SQLALCHEMY_ENGINE_OPTIONS = {"connect_args": {"options": "-c timezone=utc"}}
     PHOTON_SERVER_HOST = os.getenv("PHOTON_SERVER_HOST", "")
     PHOTON_SERVER_HTTPS = os.getenv("PHOTON_SERVER_HTTPS", "true").strip().lower() in ("1", "true", "yes")
     PHOTON_SERVER_API_KEY = os.getenv("PHOTON_SERVER_API_KEY", "")
+    # Parallel requests to the Photon server while geocoding.
+    PHOTON_SERVER_CONCURRENCY = max(1, int(os.getenv("PHOTON_SERVER_CONCURRENCY", 4)))

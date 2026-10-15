@@ -1,5 +1,5 @@
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timezone
 from flask import jsonify, redirect, request, g, session, url_for
 from flask_restx import Resource, fields, Namespace
 from flask_restx.reqparse import RequestParser
@@ -110,9 +110,9 @@ class GPSBatch(Resource):
             ts_str = entry.get("timestamp")
             try:
                 # Attempt to parse the timestamp as ISO 8601
-                ts = datetime.fromtimestamp(int(ts_str), tz=datetime.now().astimezone().tzinfo)  # handle UTC 'Z'
+                ts = datetime.fromtimestamp(int(ts_str), tz=timezone.utc)  # handle UTC 'Z'
             except:
-                ts = datetime.now()  # fallback if parse fails
+                ts = datetime.now(timezone.utc)  # fallback if parse fails
 
             gps_record = GPSData(
                 user_id=user_id,
@@ -280,7 +280,7 @@ class OverlandGPSBatch(Resource):
             try:
                 ts = datetime.fromisoformat(ts_str) # e.g. "2025-04-19T20:12:44Z"
             except Exception:
-                ts = datetime.now()
+                ts = datetime.now(timezone.utc)
 
             # Create a GPSData record
             gps_record = GPSData(
@@ -344,12 +344,12 @@ class OwntracksGPS(Resource):
         timestamp = None
         if "tst" in data:
             try:
-                timestamp = datetime.fromtimestamp(int(data["tst"]), tz=datetime.now().astimezone().tzinfo)
+                timestamp = datetime.fromtimestamp(int(data["tst"]), tz=timezone.utc)
             except:
-                timestamp = datetime.now()
+                timestamp = datetime.now(timezone.utc)
         else:
             # Optional fallback if "tst" is missing
-            timestamp = datetime.now()
+            timestamp = datetime.now(timezone.utc)
 
         # 2) Latitude / Longitude
         latitude = data.get("lat")

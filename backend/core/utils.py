@@ -136,6 +136,11 @@ def create_default_user():
 
     db.create_all()
 
+    # create_all only creates missing tables, so indexes added to existing tables are created here.
+    for table in db.metadata.sorted_tables:
+        for index in table.indexes:
+            index.create(bind=db.engine, checkfirst=True)
+
     # make sure the tables conform to the latest schema
     db.session.commit()
 

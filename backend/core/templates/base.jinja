@@ -1,357 +1,119 @@
+{%- from "_macros.jinja" import icon, nav_link with context -%}
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-bs-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="icon" type="image/png" href="/static/images/favicon.png">
-    <title>{% block title %}WayPointDB{% endblock %}</title>
+    <title>{% block title %}{{ self.page_title() | striptags | trim }}{% endblock %} · WayPointDB</title>
+
+    <script>
+        // Applied before first paint so the page never flashes in the wrong theme.
+        (function () {
+            var theme = "auto";
+            try { theme = localStorage.getItem("theme") || "auto"; } catch (e) {}
+            var dark = theme === "dark" || (theme === "auto" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+            document.documentElement.setAttribute("data-bs-theme", dark ? "dark" : "light");
+        })();
+    </script>
 
     <link href="/static/third_party/css/bootstrap.min.css" rel="stylesheet">
-
-    <style>
-        /* Existing styles from your original CSS */
-        @font-face {
-            font-family: 'Inter';
-            src: url("/static/third_party/fonts/inter.woff2") format('woff2');
-            font-weight: 300 600;
-            font-display: swap;
-        }
-
-        html, body {
-            height: 100%;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .container {
-            flex: 1;
-        }
-
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #f8f9fa;
-            color: #212529;
-        }
-
-        /* Dark Mode Styles */
-        body.dark-mode {
-            background-color: #121212;
-            color: #e0e0e0;
-            --bs-body-bg: #1e1e1e;
-        }
-
-        .dark-mode .content-container {
-            {# background: #1e1e1e; #}
-            background: rgba(47, 47, 47, 0.9);
-            color: #e0e0e0;
-        }
-
-        .dark-mode .navbar {
-            background-color: #333 !important;
-        }
-
-        .dark-mode .footer {
-            background-color: #1a1a1a;
-            color: #bbbbbb;
-        }
-
-        .navbar-brand {
-            font-weight: 600;
-            font-size: 1.5rem;
-        }
-
-        .content-container {
-            margin-top: 80px;
-            margin-bottom: 20px;
-            padding: 20px;
-            {# background: white; #}
-            background: rgba(255, 255, 255, 0.93);
-            border-radius: 12px;
-            box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
-        }
-
-        .footer {
-            margin-top: auto;
-            padding: 15px;
-            text-align: center;
-            font-size: 0.9rem;
-            background-color: #f8f9fa;
-            color: #6c757d;
-        }
-
-        /* Dark Mode Toggle Button */
-        .dark-mode-toggle {
-            border: none;
-            background: none;
-            color: white;
-            font-size: 1.2rem;
-            cursor: pointer;
-            margin-left: 15px;
-        }
-
-        /* ========================== */
-        /* New Modern Button & Input Styles */
-        /* ========================== */
-
-        button, .btn, .navbar .btn, .nav-item .btn {
-            font-size: 1rem;
-            font-weight: 500;
-            border-radius: 8px;
-            border: none !important;
-            cursor: pointer;
-            box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.15);
-        }
-
-        /* Override Bootstrap's default button styles */
-        button:hover, .btn:hover {
-            filter: brightness(90%);
-        }
-
-        /* Button Active State */
-        button:active, .btn:active {
-            transform: scale(0.98);
-            box-shadow: 0px 2px 6px rgba(0, 0, 0, 0.2);
-        }
-
-        input[type="text"], input[type="email"], input[type="password"], input[type="date"], select {
-            font-size: 1rem;
-            border-radius: 8px;
-            border: 1px solid #ced4da;
-        }
-
-        /* add basic code for tables */
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            border-left: 3px solid #ddd;
-            border-right: 3px solid #ddd;
-            border-top: 3px solid #ddd;
-        }
-
-        th, td {
-            padding: 8px;
-            border-bottom: 3px solid #ddd;
-        }
-
-        .full-bleed-bg {
-            background-position: center;
-            background-repeat: no-repeat;
-            background-size: cover;
-            /* If you do not want the dark-mode background to override the image,
-            you might have to either handle it differently or remove it from .dark-mode. */
-        }
-
-        .version-toast {
-            position: fixed;
-            top: 0;
-            left: 50%;
-            transform: translateX(-50%);
-            background-color: #323232;
-            color: white;
-            padding: 1em 2em;
-            border-radius: 0 0 8px 8px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
-            font-family: sans-serif;
-            font-size: 0.95em;
-            z-index: 9999;
-            display: flex;
-            gap: 0.5em;
-            align-items: center;
-        }
-
-        .version-toast a {
-            color: #ffd700;
-            text-decoration: underline;
-        }
-
-        .hidden {
-            display: none;
-        }
-    </style>
+    <link href="/static/css/app.css?v={{ VERSION }}" rel="stylesheet">
     {% block head %}{% endblock %}
 </head>
-<body>
+<body class="{% block body_class %}{% endblock %}">
 
-    <!-- Navbar -->
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
-        <div class="container">
-            <a class="navbar-brand" href="{{ url_for('web.home') }}">WayPointDB</a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav ms-auto">
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" id="mapDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                            Map
-                        </a>
-                        <ul class="dropdown-menu" aria-labelledby="mapDropdown">
-                            <li><a style="color: #bebebe" class="nav-link dropdown-item" href="{{ url_for('web.map') }}">Map</a></li>
-                            <li><a style="color: #bebebe" class="nav-link dropdown-item" href="{{ url_for('web.speed_map') }}">Speed Map</a></li>
-                        </ul>
-                    </li>
-                    <li class="nav-item"><a class="nav-link" href="{{ url_for('web.stats') }}">Stats</a></li>
-                    <li class="nav-item"><a class="nav-link" href="{{ url_for('web.points') }}">Points</a></li>
-                    <li class="nav-item"><a class="nav-link" href="{{ url_for('web.account') }}">Account</a></li>
-                    {% if current_user is not none %}
-                        {% if current_user.is_admin %}
-                            <li class="nav-item"><a class="nav-link" href="{{ url_for('web.manage_users') }}">Manage Users</a></li>
-                        {% endif %}
-                        <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle" href="#" id="traceDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                {% if g.current_trace is none %}Trace{% else %}{{ g.current_trace.name }}{% endif %}
-                            </a>
-                            <ul class="dropdown-menu" aria-labelledby="traceDropdown">
-                                <li><button style="color: #bebebe" class="dropdown-item" onclick="setTraceId('')" {% if g.current_trace is none %}disabled{% endif %}>Main Trace</button></li>
-                                {% for trace in g.available_traces %}
-                                    <li><button style="color: #bebebe" class="dropdown-item" onclick="setTraceId('{{ trace.id }}')" {% if trace.id == g.current_trace.id %}disabled{% endif %}>{{ trace.name }}</button></li>
-                                {% endfor %}
-                            </ul>
-                        </li>
-                    {% endif %}
-                    <li class="nav-item"><a class="nav-link btn btn-danger text-white px-3" href="{{ url_for('web.logout') }}">Logout</a></li>
-                    <!-- Dark Mode Toggle -->
-                    <li class="nav-item">
-                        <button id="darkModeToggle" class="dark-mode-toggle">🌙</button>
-                    </li>
-                </ul>
+{% if current_user is not none %}
+    {% if self.body_class() | trim != "layout-full" %}
+        <div class="backdrop" data-src="{{ url_for('web.full_bleed_background') }}" aria-hidden="true"></div>
+    {% endif %}
+
+    <div class="app">
+        <header class="topbar">
+            <button class="button ghost icon" type="button" data-sidebar-toggle aria-label="Open menu">{{ icon("menu") }}</button>
+            <a class="sidebar-brand" href="{{ url_for('web.home') }}"><img src="/static/images/favicon.png" alt="">WayPointDB</a>
+        </header>
+
+        <nav class="sidebar" aria-label="Main">
+            <a class="sidebar-brand" href="{{ url_for('web.home') }}"><img src="/static/images/favicon.png" alt="">WayPointDB</a>
+
+            {% if g.get('available_traces') %}
+            <div class="trace-switch">
+                <label for="traceSelect">Viewing</label>
+                <select id="traceSelect" class="w-100">
+                    <option value="" {% if g.current_trace is none %}selected{% endif %}>Main trace</option>
+                    {% for trace in g.available_traces %}
+                        <option value="{{ trace.id }}" {% if g.current_trace is not none and trace.id == g.current_trace.id %}selected{% endif %}>{{ trace.name }}</option>
+                    {% endfor %}
+                </select>
             </div>
-        </div>
-    </nav>
+            {% endif %}
 
-    <!-- Page Content -->
-    <div class="container">
-        <div class="content-container">
-            <h1 class="mb-4">{% block heading %}{% endblock %}</h1>
-            {% block content %}{% endblock %}
-        </div>
+            <div class="nav-section">
+                <div class="nav-section-title">Explore</div>
+                {{ nav_link("web.map", "Map", "map") }}
+                {{ nav_link("web.speed_map", "Speed map", "speed") }}
+                {{ nav_link("web.stats", "Statistics", "stats") }}
+                {{ nav_link("web.points", "Points", "points") }}
+            </div>
+
+            <div class="nav-section">
+                <div class="nav-section-title">Data</div>
+                {{ nav_link("web.imports", "Imports", "upload") }}
+                {{ nav_link("web.exports", "Export", "download") }}
+                {{ nav_link("web.jobs", "Jobs", "jobs") }}
+                {{ nav_link("web.manage_traces", "Traces", "traces") }}
+            </div>
+
+            <div class="nav-section">
+                <div class="nav-section-title">Settings</div>
+                {{ nav_link("web.account", "Account", "account") }}
+                {% if current_user.is_admin %}
+                    {{ nav_link("web.manage_users", "Users", "users") }}
+                {% endif %}
+            </div>
+
+            <div class="sidebar-footer">
+                <div class="sidebar-user" title="{{ current_user.email }}">{{ icon("account") }}<span>{{ current_user.email }}</span></div>
+                <div class="sidebar-actions">
+                    <button class="button sm" type="button" data-theme-toggle>{{ icon("theme") }}Theme</button>
+                    <a class="button sm" href="{{ url_for('web.logout') }}">{{ icon("logout") }}Log out</a>
+                </div>
+                <div class="version"><span id="versionText">{{ VERSION }}</span></div>
+            </div>
+        </nav>
+        <div class="sidebar-scrim" data-sidebar-toggle></div>
+
+        <main class="main">
+            <div class="content">
+                <div class="page-header">
+                    <div>
+                        <h1>{% block page_title %}{% endblock %}</h1>
+                        {% if self.subtitle() | trim %}<p class="subtitle">{% block subtitle %}{% endblock %}</p>{% endif %}
+                    </div>
+                    <div class="page-actions">{% block actions %}{% endblock %}</div>
+                </div>
+                {% block content %}{% endblock %}
+            </div>
+        </main>
     </div>
+{% else %}
+    {% block standalone %}{% endblock %}
+{% endif %}
 
-    <!-- Footer -->
-    <div class="footer">
-        &copy; 2025 WayPointDB | <span id="versionText">{{ VERSION }}</span> | Built with ❤️ and Flask |
-        Icon created by <a href="https://www.flaticon.com/authors/freepik" title="visit icons" target="_blank">Freepik</a>
-    </div>
-
-    <div id="version-toast" class="version-toast hidden">
-        A new version is available! <a href="https://github.com/yniverz/WayPointDB/releases/latest" target="_blank">Click here to update.</a>
-    </div>
-
-    <!-- Bootstrap JS -->
     <script src="/static/third_party/js/bootstrap.bundle.min.js"></script>
-
-    <!-- Dark Mode Toggle Script -->
+    <script src="/static/js/app.js?v={{ VERSION }}"></script>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
     <script>
-
-        // Function to set the trace_id session variable
-        function setTraceId(traceId) {
-            fetch("{{ url_for('web.set_trace_id') }}", {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: "trace_id=" + traceId,
-            }).then(() => {
-                location.reload();
-            });
-        }
-
-        document.addEventListener("DOMContentLoaded", function () {
-            const toggleButton = document.getElementById("darkModeToggle");
-            const body = document.body;
-
-            // Check for saved user preference
-            if (localStorage.getItem("darkMode") === "enabled") {
-                body.classList.add("dark-mode");
-                toggleButton.textContent = "☀️"; // Change icon to sun
+        document.addEventListener("DOMContentLoaded", () => {
+            for (const [category, message] of {{ messages | tojson }}) {
+                WP.notify(message, category === "message" ? "success" : category);
             }
-
-            toggleButton.addEventListener("click", function () {
-                if (body.classList.contains("dark-mode")) {
-                    body.classList.remove("dark-mode");
-                    localStorage.setItem("darkMode", "disabled");
-                    toggleButton.textContent = "🌙"; // Change icon to moon
-                } else {
-                    body.classList.add("dark-mode");
-                    localStorage.setItem("darkMode", "enabled");
-                    toggleButton.textContent = "☀️"; // Change icon to sun
-                }
-            });
-        });
-
-        document.addEventListener("DOMContentLoaded", function () {
-            fetch("https://api.github.com/repos/yniverz/WayPointDB/releases/latest")
-                .then(response => {
-                    if (!response.ok) throw new Error("GitHub API error");
-                    return response.json();
-                })
-                .then(data => {
-                    const remoteVersion = data.tag_name.trim(); // e.g., "v1.2.3"
-                    const versionElem = document.getElementById("versionText");
-                    const localVersion = versionElem.textContent.trim(); // e.g., "v1.0.0"
-
-                    if (isVersionNewer(remoteVersion, localVersion)) {
-                        // Convert version text to a link
-                        const link = document.createElement("a");
-                        link.href = "https://github.com/yniverz/WayPointDB/releases/latest";
-                        link.target = "_blank";
-                        link.textContent = localVersion;
-                        versionElem.innerHTML = "";
-                        versionElem.appendChild(link);
-
-                        // Show the toast
-                        const toast = document.getElementById("version-toast");
-                        toast.classList.remove("hidden");
-
-                        // Hide the toast after 5 seconds
-                        setTimeout(() => {
-                            toast.classList.add("hidden");
-                        }, 5000);
-                    } else if (localVersion !== remoteVersion) {
-                        // If the versions are different but not newer, just update the text
-                        versionElem.textContent += " (unreleased)";
-                    }
-                })
-                .catch(error => {
-                    console.error("Error fetching latest release:", error);
-                });
-
-            function isVersionNewer(remote, local) {
-                const parse = (v) => v.replace(/^v/, '').split('.').map(Number);
-
-                const [rMajor, rMinor, rPatch] = parse(remote);
-                const [lMajor, lMinor, lPatch] = parse(local);
-
-                if (rMajor > lMajor) return true;
-                if (rMajor < lMajor) return false;
-
-                if (rMinor > lMinor) return true;
-                if (rMinor < lMinor) return false;
-
-                return rPatch > lPatch;
-            }
-        });
-        
-        document.addEventListener("DOMContentLoaded", function () {
-            // If you only want the background for light mode (for example),
-            // you could skip setting it when dark-mode is active.
-            // Otherwise, remove the condition:
-            const body = document.body;
-            const imageUrl = "/full_bleed_background.png";
-
-            // Create an in-memory image to trigger the load
-            const bgImage = new Image();
-            bgImage.src = imageUrl;
-
-            // When the image is fully loaded, set as background
-            bgImage.onload = function() {
-                // Add the CSS class that sets background properties
-                body.classList.add("full-bleed-bg");
-
-                // Dynamically set the background image via inline style
-                body.style.backgroundImage = `url(${imageUrl})`;
-            };
         });
     </script>
+    {% endif %}
+    {% endwith %}
+    {% block scripts %}{% endblock %}
 </body>
 </html>

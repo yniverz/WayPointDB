@@ -1,81 +1,109 @@
 {% extends "base.jinja" %}
+{% from "_macros.jinja" import icon %}
 
-{% block heading %}
-    Account
-{% endblock %}
+{% block page_title %}Account{% endblock %}
+{% block subtitle %}Signed in as {{ g.current_user.email }}{% endblock %}
 
 {% block content %}
-    <h2>Settings</h2>
-    <p>
-        <strong>Current Email:</strong> {{ g.current_user.email }}
-    </p>
-
-    <h3>API Keys</h3>
-    {% if g.current_user.api_keys %}
-        <table>
+<section class="panel">
+    <div class="panel-header">
+        <div>
+            <h2>API keys</h2>
+            <p>Tracking apps send points with an API key. Each key writes to one trace.</p>
+        </div>
+    </div>
+    {% if api_keys %}
+    <div class="table-wrap">
+        <table class="data">
             <thead>
-                <tr>
-                    <th>API Key</th>
-                    <th>Trace</th>
-                    <th>Action</th>
-                </tr>
+                <tr><th>Key</th><th>Trace</th><th></th></tr>
             </thead>
             <tbody>
             {% for key, trace_id, trace_name in api_keys %}
                 <tr>
-                    <td>{{ key }}</td>
-                    <td>
-                        {{ trace_name }}
-                    </td>
-                    <td>
-                        <form method="POST" style="display:inline;">
+                    <td><code class="mono">{{ key }}</code></td>
+                    <td>{{ trace_name }}</td>
+                    <td class="actions">
+                        <button type="button" class="button sm" data-copy="{{ key }}">Copy</button>
+                        <form method="POST" data-confirm="Delete this API key? Apps using it will stop sending points.">
                             <input type="hidden" name="api_key" value="{{ key }}">
-                            <button 
-                                type="submit" 
-                                name="delete_key" 
-                                value="1" 
-                                onclick="return confirm('Are you sure you want to delete this API key?');"
-                            >
-                                Delete
-                            </button>
+                            <button type="submit" name="delete_key" value="1" class="button sm danger">Delete</button>
                         </form>
                     </td>
                 </tr>
             {% endfor %}
             </tbody>
         </table>
+    </div>
     {% else %}
-        <p><em>You have no API keys yet.</em></p>
+        <div class="empty">You have no API keys yet.</div>
     {% endif %}
-    <br/>
-    <h4>Generate New API Key</h4>
-    <form method="POST" onsubmit="return confirm('Are you sure you want to generate a new API key?');">
-        <label for="trace_id">Select Trace:</label>
-        <select id="trace_id" name="trace_id">
-            <option value="">Main Trace</option>
-            {% for trace in available_traces %}
-                <option value="{{ trace.id }}">{{ trace.name }}</option>
-            {% endfor %}
-        </select>
-        <button type="submit" name="generate_key" value="1">Generate New API Key</button>
+    <div class="panel-footer">
+        <form method="POST" class="form-row">
+            <div class="field">
+                <label for="trace_id">New key for</label>
+                <select id="trace_id" name="trace_id">
+                    <option value="">Main trace</option>
+                    {% for trace in available_traces %}
+                        <option value="{{ trace.id }}">{{ trace.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" name="generate_key" value="1" class="button primary">{{ icon("plus") }}Generate key</button>
+        </form>
+    </div>
+</section>
+
+<section class="panel">
+    <div class="panel-header">
+        <div>
+            <h2>Connecting a tracking app</h2>
+            <p>Use one of these URLs in the app, with <code>KEY</code> replaced by an API key.</p>
+        </div>
+    </div>
+    <div class="panel-body">
+        <div class="field">
+            <span class="field-label">Overland</span>
+            <code>{{ request.host_url }}api/v1/gps/overland?api_key=KEY</code>
+        </div>
+        <div class="field">
+            <span class="field-label">OwnTracks (HTTP mode)</span>
+            <code>{{ request.host_url }}api/v1/gps/owntracks?api_key=KEY</code>
+        </div>
+    </div>
+</section>
+
+<section class="panel">
+    <div class="panel-header">
+        <div>
+            <h2>Sign-in details</h2>
+            <p>Leave a field empty to keep it unchanged.</p>
+        </div>
+    </div>
+    <form method="POST" class="panel-body form-stack">
+        <div class="field">
+            <label for="new_email">Email</label>
+            <input type="email" id="new_email" name="new_email" placeholder="{{ g.current_user.email }}" autocomplete="email">
+        </div>
+        <div class="field">
+            <label for="new_password">New password</label>
+            <input type="password" id="new_password" name="new_password" autocomplete="new-password">
+        </div>
+        <div>
+            <button type="submit" name="update_account" value="1" class="button primary">Save changes</button>
+        </div>
     </form>
+</section>
+{% endblock %}
 
-    <br/>
-    <button onclick="window.location.href='{{ url_for('web.manage_traces') }}'">Manage Traces</button><br/><br/>
-    <button onclick="window.location.href='{{ url_for('web.jobs') }}'">Manage Jobs</button><br/><br/>
-    <button onclick="window.location.href='{{ url_for('web.imports') }}'">Manage Imports</button><br/><br/>
-    <button onclick="window.location.href='{{ url_for('web.exports') }}'">Exports</button><br/>
-
-    <hr/>
-
-    <h3>Change Email / Password</h3>
-    <form method="POST">
-        <label for="new_email">New Email (optional):</label><br/>
-        <input type="text" id="new_email" name="new_email"><br/>
-        <br/>
-        <label for="new_password">New Password (optional):</label><br/>
-        <input type="password" id="new_password" name="new_password"><br/>
-        <br/>
-        <button type="submit" name="update_account" value="1">Update Account</button>
-    </form>
+{% block scripts %}
+<script>
+    document.querySelectorAll("[data-copy]").forEach(button => {
+        button.addEventListener("click", () => {
+            navigator.clipboard.writeText(button.dataset.copy)
+                .then(() => WP.notify("API key copied", "success", 2500))
+                .catch(() => WP.notify("Could not copy; select the key and copy it manually", "error"));
+        });
+    });
+</script>
 {% endblock %}

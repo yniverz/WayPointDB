@@ -113,6 +113,8 @@ PHOTON_SERVER_HTTPS=true
 # optional, only if the server requires an api key
 PHOTON_SERVER_API_KEY='your-api-key'
 ```
+Geocoding sends up to 4 requests to the Photon server in parallel. Set `PHOTON_SERVER_CONCURRENCY` to change this, e.g. to `1` for a public server with rate limits.
+
 Wrap the API key in single quotes if it contains special characters such as `\`, `$`, `#` or spaces. After changing ```.env```, recreate the backend container with ```docker-compose up -d --force-recreate backend```.
 
 <hr>

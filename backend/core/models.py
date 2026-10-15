@@ -55,7 +55,7 @@ class Import(db.Model):
     trace_id = db.Column(UUID(as_uuid=True), db.ForeignKey("additional_trace.id"), nullable=True)
     filename = db.Column(db.String(255), nullable=False)
     original_filename = db.Column(db.String(255), nullable=True)
-    created_at = db.Column(db.DateTime, nullable=False, default=datetime.now(timezone.utc))
+    created_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
     total_entries = db.Column(db.Integer, default=0)
     done_importing = db.Column(db.Boolean, default=False)
 
@@ -73,7 +73,7 @@ class GPSData(db.Model):
     trace_id = db.Column(UUID(as_uuid=True), db.ForeignKey("additional_trace.id"), nullable=True)
     import_id = db.Column(UUID(as_uuid=True), db.ForeignKey("import.id"), nullable=True)
 
-    timestamp = db.Column(db.DateTime, nullable=False, default=datetime.now(timezone.utc))
+    timestamp = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
     latitude = db.Column(db.Float, nullable=False)
     longitude = db.Column(db.Float, nullable=False)
     horizontal_accuracy = db.Column(db.Float)
@@ -95,6 +95,9 @@ class GPSData(db.Model):
 
     __table_args__ = (
         db.CheckConstraint("user_id IS NOT NULL OR trace_id IS NOT NULL"),
+        db.Index("ix_gps_data_user_id_timestamp", "user_id", "timestamp"),
+        db.Index("ix_gps_data_trace_id_timestamp", "trace_id", "timestamp"),
+        db.Index("ix_gps_data_import_id", "import_id"),
     )
 
 
@@ -116,6 +119,8 @@ class DailyStatistic(db.Model):
 
     __table_args__ = (
         db.CheckConstraint("user_id IS NOT NULL OR trace_id IS NOT NULL"),
+        db.Index("ix_daily_statistic_user_id", "user_id"),
+        db.Index("ix_daily_statistic_trace_id", "trace_id"),
     )
 
 class ScheduledJob(db.Model):
