@@ -1547,11 +1547,13 @@ class FullBleedBackground(MethodView):
     RADIUS_M = 5000.0
     # Longer steps between points are gaps in tracking, not travelled lines.
     MAX_SEGMENT_M = 100.0
+    # The same speed colors as the map.
     SPEED_STOPS = [
-        (0, (0, 0, 255)),
-        (30, (0, 255, 0)),
-        (60, (255, 255, 0)),
-        (90, (255, 0, 0)),
+        (0, (0, 200, 83)),
+        (15, (0, 184, 212)),
+        (30, (170, 0, 255)),
+        (50, (255, 193, 7)),
+        (100, (255, 61, 0)),
     ]
 
     def get(self):
