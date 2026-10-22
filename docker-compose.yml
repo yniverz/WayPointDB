@@ -3,7 +3,11 @@ services:
     image: postgres:15
     restart: always
     env_file:
-      - .env
+      - path: .env
+        required: false
+      # Portainer writes the stack's environment variables to stack.env
+      - path: stack.env
+        required: false
     volumes:
       - pg_data:/var/lib/postgresql/data
 
@@ -15,7 +19,11 @@ services:
     depends_on:
       - db
     env_file:
-      - .env
+      - path: .env
+        required: false
+      # Portainer writes the stack's environment variables to stack.env
+      - path: stack.env
+        required: false
     environment:
       - UPLOAD_FOLDER=/app/imports
       - BACKGROUND_MAX_THREADS=5
@@ -23,7 +31,6 @@ services:
       - MIN_CITY_VISIT_DURATION_FOR_STATS=3600
     volumes:
       - imports:/app/imports
-      - ./VERSION:/app/VERSION
 
   nginx:
     build: ./nginx

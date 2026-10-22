@@ -30,17 +30,19 @@ WayPointDB is focused on fast and efficient data collection and retrieval, so th
 ## Prerequisites
 To run this project, you could use the following tools:
 - [Docker](https://www.docker.com/)
-- [Docker Compose Standalone](https://docs.docker.com/compose/install/standalone/)
+- [Docker Compose](https://docs.docker.com/compose/install/) v2.24 or newer
 
 ## Installation
 To install the project, clone the repository, change directory to the project folder, build the Docker image, and run the Docker container (```-d``` for detached mode)
 ```bash
 git clone https://github.com/yniverz/WayPointDB
 cd WayPointDB
-docker-compose build
-docker-compose up -d
+docker compose build
+docker compose up -d
 ```
-**Note:** Using Portainer to deploy this repo might not work. in that case just use the above manual deployment.
+
+### Portainer
+The repo can also be deployed as a Portainer stack from Git: Stacks → Add stack → Repository, URL `https://github.com/yniverz/WayPointDB`, reference `refs/heads/main` (or a release tag such as `refs/tags/v0.3.4`), compose path `docker-compose.yml`. Set your settings (`POSTGRES_PASSWORD`, `PHOTON_SERVER_*`, `TZ`, ...) as the stack's environment variables; Portainer stores them in `stack.env`, which overrides the defaults from `.env`. To update, use "Pull and redeploy" (with re-build) or enable Portainer's automatic updates.
 
 ## Configuration
 The project can be configured by modifying variables in the ```docker-compose.yml``` file. The following variables are commonly modified:
@@ -115,7 +117,7 @@ PHOTON_SERVER_API_KEY='your-api-key'
 ```
 Geocoding sends up to 4 requests to the Photon server in parallel. Set `PHOTON_SERVER_CONCURRENCY` to change this, e.g. to `1` for a public server with rate limits.
 
-Wrap the API key in single quotes if it contains special characters such as `\`, `$`, `#` or spaces. After changing ```.env```, recreate the backend container with ```docker-compose up -d --force-recreate backend```.
+Wrap the API key in single quotes if it contains special characters such as `\`, `$`, `#` or spaces. After changing ```.env```, recreate the backend container with ```docker compose up -d --force-recreate backend```.
 
 <hr>
 
